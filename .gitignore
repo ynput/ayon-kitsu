@@ -1,0 +1,6 @@
+__pycache__
+frontend/node_modules
+frontend/dist
+frontend/.env
+frontend/yarn.lock
+frontend/yarn-error.log
