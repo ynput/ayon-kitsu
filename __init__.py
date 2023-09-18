@@ -1,7 +1,7 @@
 from typing import Type
 
 from ayon_server.addons import BaseServerAddon
-from ayon_server.api.dependecies import CurrentUser
+from ayon_server.api.dependencies import CurrentUser
 from ayon_server.api.responses import EmptyResponse
 from ayon_server.exceptions import InvalidSettingsException, ForbiddenException
 from ayon_server.secrets import Secrets
@@ -10,25 +10,28 @@ from .version import __version__
 from .settings import KitsuSettings, DEFAULT_VALUES
 
 from .kitsu import Kitsu
-from .init_pairing import init_pairing, InitPairingRequest
+from .kitsu.init_pairing import init_pairing, InitPairingRequest
 from .kitsu.pairing_list import get_pairing_list, PairingItemModel
 
 
 #
-# Events
-# kitsu.sync_request 
-# - when a sync request is received, worker enrolls to this event to perform full sync
+# Events:
 #
-# kitsu.sync 
-# - child event of kitsu.sync_request, actuall sync should be performed here
+# kitsu.import
+# - created when a project is imported.
+# - worker enrolls to this event to perform full sync
 #
-# kitsu.event 
+# kitsu.sync
+# - child event of kitsu.import, actuall sync should be performed here
+# - when restarted, it is an equivalent to full-sync request.
+#
+# kitsu.event
 # - when an event is received from Kitsu
+# - use "sequential"
 #
-# kitsu.proc 
+# kitsu.proc
 # - child event of kitsu.event, processing of the event
 #
-
 
 
 class KitsuAddon(BaseServerAddon):
@@ -50,9 +53,9 @@ class KitsuAddon(BaseServerAddon):
     #
 
     def initialize(self):
-        self.add_endpoint("/pairing", self.pairing, methods=["GET"])
-        self.add_endpoint("/init", self.init_pairing, methods=["POST"])
-        self.add_endpoint("/sync/{kitsu_id}", self.sync, methods=["POST"])
+        self.add_endpoint("/pairing", self.list_pairings, method="GET")
+        self.add_endpoint("/pairing", self.init_pairing, method="POST")
+        # self.add_endpoint("/sync/{kitsu_id}", self.sync, methods=["POST"])
 
     async def setup(self):
         pass
@@ -61,12 +64,9 @@ class KitsuAddon(BaseServerAddon):
     # Endpoints
     #
 
-    async def pairing(self) -> list[PairingItemModel]:
+    async def list_pairings(self) -> list[PairingItemModel]:
         await self.ensure_kitsu()
         return await get_pairing_list(self)
-
-    async def sync(self, kitsu_id: str):
-        await self.ensure_kitsu()
 
     async def init_pairing(
         self,
@@ -78,6 +78,9 @@ class KitsuAddon(BaseServerAddon):
         await self.ensure_kitsu()
         await init_pairing(self, user, request)
         return EmptyResponse(status_code=201)
+
+    async def sync(self, kitsu_id: str):
+        await self.ensure_kitsu()
 
     #
     # Helpers

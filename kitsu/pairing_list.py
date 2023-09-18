@@ -9,9 +9,10 @@ if TYPE_CHECKING:
 
 
 class PairingItemModel(OPModel):
-    kitsu_project_name: str = Field(title="Kitsu project name")
-    kitsu_project_id: str = Field(title="Kitsu project ID")
-    ayon_project_name: str | None = Field(title="Ayon project name")
+    kitsu_project_id: str = Field(..., title="Kitsu project ID")
+    kitsu_project_name: str = Field(..., title="Kitsu project name")
+    kitsu_project_code: str | None = Field(None, title="Kitsu project code")
+    ayon_project_name: str | None = Field(..., title="Ayon project name")
 
 
 async def get_pairing_list(addon: "KitsuAddon") -> list[PairingItemModel]:
@@ -39,7 +40,7 @@ async def get_pairing_list(addon: "KitsuAddon") -> list[PairingItemModel]:
         """
         SELECT 
             name, 
-            data->>'kitsuProjectId kitsu_project_id 
+            data->>'kitsuProjectId' AS kitsu_project_id 
         FROM projects 
         WHERE data->>'kitsuProjectId' IS NOT NULL
         """
@@ -55,8 +56,9 @@ async def get_pairing_list(addon: "KitsuAddon") -> list[PairingItemModel]:
     for project in kitsu_projects:
         result.append(
             PairingItemModel(
-                kitsu_project_name=project["name"],
                 kitsu_project_id=project["id"],
+                kitsu_project_name=project["name"],
+                kitsu_project_code=project.get("code"),
                 ayon_project_name=ayon_projects.get(project["id"]),
             )
         )
