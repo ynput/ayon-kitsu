@@ -1,6 +1,10 @@
 __pycache__
+.venv
+poetry.lock
+
 frontend/node_modules
 frontend/dist
 frontend/.env
 frontend/yarn.lock
 frontend/yarn-error.log
+

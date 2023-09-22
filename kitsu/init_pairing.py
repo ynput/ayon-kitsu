@@ -75,5 +75,3 @@ async def init_pairing(
             "kitsuProjectId": request.kitsu_project_id,
         }
     )
-        
-

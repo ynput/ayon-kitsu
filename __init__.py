@@ -1,5 +1,8 @@
 from typing import Type
 
+# from fastapi import BackgroundTasks
+
+
 from ayon_server.addons import BaseServerAddon
 from ayon_server.api.dependencies import CurrentUser
 from ayon_server.api.responses import EmptyResponse
@@ -10,8 +13,10 @@ from .version import __version__
 from .settings import KitsuSettings, DEFAULT_VALUES
 
 from .kitsu import Kitsu
+
 from .kitsu.init_pairing import init_pairing, InitPairingRequest
 from .kitsu.pairing_list import get_pairing_list, PairingItemModel
+from .kitsu.sync import sync_entities, SyncEntitiesRequestModel
 
 
 #
@@ -55,7 +60,7 @@ class KitsuAddon(BaseServerAddon):
     def initialize(self):
         self.add_endpoint("/pairing", self.list_pairings, method="GET")
         self.add_endpoint("/pairing", self.init_pairing, method="POST")
-        # self.add_endpoint("/sync/{kitsu_id}", self.sync, methods=["POST"])
+        self.add_endpoint("/sync", self.sync, method="POST")
 
     async def setup(self):
         pass
@@ -63,6 +68,21 @@ class KitsuAddon(BaseServerAddon):
     #
     # Endpoints
     #
+
+    async def sync(
+        self,
+        user: CurrentUser,
+        # background_tasks: BackgroundTasks,
+        payload: SyncEntitiesRequestModel,
+    ):
+        if not user.is_manager:
+            raise ForbiddenException("Only managers can sync Kitsu projects")
+        await sync_entities(
+            self,
+            user=user,
+            # background_tasks=background_tasks,
+            payload=payload,
+        )
 
     async def list_pairings(self) -> list[PairingItemModel]:
         await self.ensure_kitsu()
@@ -78,9 +98,6 @@ class KitsuAddon(BaseServerAddon):
         await self.ensure_kitsu()
         await init_pairing(self, user, request)
         return EmptyResponse(status_code=201)
-
-    async def sync(self, kitsu_id: str):
-        await self.ensure_kitsu()
 
     #
     # Helpers
