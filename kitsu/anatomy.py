@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from ayon_server.exceptions import AyonException
 from ayon_server.settings.anatomy import Anatomy
@@ -130,12 +130,36 @@ async def parse_statuses(addon: "KitsuAddon", kitsu_project_id: str) -> list[Sta
 # Load kitsu project and create ayon anatomy object
 #
 
+def parse_attrib(source: dict[str, Any] | None = None):
+    result = {}
+    if source is None:
+        return result
+    for key, value in source.items():
+        if key == "fps":
+            result["fps"] = float(value)
+        elif key == "frame_in":
+            result["frameStart"] = int(value)
+        elif key == "frame_out":
+            result["frameEnd"] = int(value)
+        elif key == "resolution":
+            try:
+                result["resolutionWidth"] = int(value.split("x")[0])
+                result["resolutionHeight"] = int(value.split("x")[1])
+            except (IndexError, ValueError):
+                pass
+        elif key == "description":
+            result["description"] = value
+        elif key == "start_date":
+            result["startDate"] = value + "T00:00:00Z"
+        elif key == "end_date":
+            result["endDate"] = value + "T00:00:00Z"
+
+    return result
 
 async def get_kitsu_project_anatomy(
     addon: "KitsuAddon",
     kitsu_project_id: str,
 ) -> Anatomy:
-    print("get_kitsu_project_anatomy")
 
     kitsu_project_response = await addon.kitsu.get(f"data/projects/{kitsu_project_id}")
     if kitsu_project_response.status_code != 200:
@@ -147,15 +171,7 @@ async def get_kitsu_project_anatomy(
         int(x) for x in kitsu_project.get("resolution", "1920x1080").split("x")
     ]
 
-    attributes = {
-        "description": kitsu_project.get("description", ""),
-        "fps": kitsu_project.get("fps", 25),
-        "resolutionWidth": resolution_width,
-        "resolutionHeight": resolution_height,
-        "startDate": kitsu_project.get("start_date") + "T00:00:00Z",
-        "endDate": kitsu_project.get("end_date") + "T00:00:00Z",
-    }
-
+    attributes = parse_attrib(kitsu_project)
     statuses = await parse_statuses(addon, kitsu_project_id)
     task_types = await parse_task_types(addon, kitsu_project_id)
 

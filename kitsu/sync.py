@@ -1,11 +1,21 @@
+import json
+import time
+
 from typing import Any, Literal, get_args, TYPE_CHECKING
 
 from nxtools import logging
 
-from ayon_server.entities import FolderEntity
-from ayon_server.events import dispatch_event
+from ayon_server.entities import FolderEntity, TaskEntity
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import OPModel, Field
+
+from .anatomy import parse_attrib
+from .utils import (
+    get_folder_by_kitsu_id,
+    get_task_by_kitsu_id,
+    create_folder,
+    create_task,
+)
 
 
 if TYPE_CHECKING:
@@ -27,52 +37,6 @@ KitsuEntityType = Literal[
 class SyncEntitiesRequestModel(OPModel):
     project_name: str
     entities: list[EntityDict] = Field(..., title="List of entities to sync")
-
-
-def parse_attrib(source: dict[str, Any] | None = None):
-    result = {}
-    if source is None:
-        return result
-    for key, value in source.items():
-        if key == "fps":
-            result["fps"] = value
-        if key == "frame_in":
-            result["frameStart"] = value
-        if key == "frame_out":
-            result["frameEnd"] = value
-        if key == "resolution":
-            try:
-                result["resolutionWidth"] = int(value.split("x")[0])
-                result["resolutionHeight"] = int(value.split("x")[1])
-            except (IndexError, ValueError):
-                pass
-    return result
-
-
-async def create_folder(
-    project_name: str,
-    attrib: dict[str, Any] | None = None,
-    **kwargs,
-) -> FolderEntity:
-    """
-    TODO: This is a re-implementation of create folder, which does not
-    require background tasks. Maybe just use the similar function from
-    api.folders.folders.py?
-    """
-    folder = FolderEntity(
-        project_name=project_name,
-        payload=kwargs,
-    )
-    await folder.save()
-    event = {
-        "topic": "entity.folder.created",
-        "description": f"Folder {folder.name} created",
-        "summary": {"entityId": folder.id, "parentId": folder.parent_id},
-        "project": project_name,
-    }
-
-    await dispatch_event(**event)
-    return folder
 
 
 async def get_root_folder_id(
@@ -129,35 +93,7 @@ async def get_root_folder_id(
     return sub_id
 
 
-async def get_folder_by_kitsu_id(
-    project_name: str,
-    kitsu_id: str,
-    existing_folders: dict[str, str] | None = None,
-) -> FolderEntity:
-    """Get an Ayon FolderEndtity by its Kitsu ID"""
-
-    if existing_folders and (kitsu_id in existing_folders):
-        folder_id = existing_folders[kitsu_id]
-
-    else:
-        res = await Postgres.fetch(
-            f"""
-            SELECT id FROM project_{project_name}.folders
-            WHERE data->>'kitsuId' = $1
-            """,
-            kitsu_id,
-        )
-        if not res:
-            return None
-        folder_id = res[0]["id"]
-        existing_folders[kitsu_id] = folder_id
-
-    return await FolderEntity.load(project_name, folder_id)
-
-    return None
-
-
-async def sync_folder(addon, user, project_name, existing_folders, entity_dict):
+async def sync_folder(addon, user, project_name, existing_folders, entity_dict,):
     target_folder = await get_folder_by_kitsu_id(
         project_name,
         entity_dict["id"],
@@ -194,9 +130,9 @@ async def sync_folder(addon, user, project_name, existing_folders, entity_dict):
                     parent_folder = await get_folder_by_kitsu_id(
                         project_name,
                         entity_dict["parent_id"],
+                        existing_folders,
                     )
                     parent_id = parent_folder.id
-                    existing_folders[entity_dict["parent_id"]] = parent_id
 
         elif entity_dict["type"] == "Sequence":
             if entity_dict.get("parent_id") is None:
@@ -211,10 +147,9 @@ async def sync_folder(addon, user, project_name, existing_folders, entity_dict):
                     parent_id = existing_folders[entity_dict["parent_id"]]
                 else:
                     parent_folder = await get_folder_by_kitsu_id(
-                        project_name, entity_dict["parent_id"]
+                        project_name, entity_dict["parent_id"], existing_folders
                     )
                     parent_id = parent_folder.id
-                    existing_folders[entity_dict["parent_id"]] = parent_id
 
         elif entity_dict["type"] == "Shot":
             if entity_dict.get("parent_id") is None:
@@ -229,10 +164,9 @@ async def sync_folder(addon, user, project_name, existing_folders, entity_dict):
                     parent_id = existing_folders[entity_dict["parent_id"]]
                 else:
                     parent_folder = await get_folder_by_kitsu_id(
-                        project_name, entity_dict["parent_id"]
+                        project_name, entity_dict["parent_id"], existing_folders
                     )
                     parent_id = parent_folder.id
-                    existing_folders[entity_dict["parent_id"]] = parent_id
 
         else:
             return
@@ -248,17 +182,72 @@ async def sync_folder(addon, user, project_name, existing_folders, entity_dict):
         )
 
     else:
-        logging.info(f"Updating {entity_dict['type']} {entity_dict['name']}")
         folder = await FolderEntity.load(project_name, target_folder.id)
         changed = False
         for key, value in parse_attrib(entity_dict.get("data", {})).items():
             if getattr(folder.attrib, key) != value:
+                print(
+                    key,
+                    json.dumps(value),
+                    "changed from",
+                    json.dumps(getattr(folder.attrib, key)),
+                )
                 setattr(folder.attrib, key, value)
                 if key not in folder.own_attrib:
                     folder.own_attrib.append(key)
                 changed = True
         if changed:
+            logging.info(f"Updating {entity_dict['type']} {entity_dict['name']}")
             await folder.save()
+
+
+async def sync_task(
+    addon,
+    user,
+    project_name,
+    existing_tasks,
+    existing_folders,
+    entity_dict,
+):
+    target_task = await get_task_by_kitsu_id(
+        project_name,
+        entity_dict["id"],
+        existing_tasks,
+    )
+
+    if target_task is None:
+        # Sync task
+        if entity_dict.get("entity_id") in existing_folders:
+            parent_id = existing_folders[entity_dict["entity_id"]]
+        else:
+            parent_folder = await get_folder_by_kitsu_id(
+                project_name, entity_dict["entity_id"], existing_folders
+            )
+            parent_id = parent_folder.id
+
+        logging.info(f"Creating {entity_dict['type']} {entity_dict['name']}")
+        target_task = await create_task(
+            project_name=project_name,
+            folder_id=parent_id,
+            status=entity_dict["task_status_name"],
+            task_type=entity_dict["task_type_name"],
+            name=entity_dict["name"],
+            data={"kitsuId": entity_dict["id"]},
+            # TODO: assignees
+        )
+
+    else:
+        task = await TaskEntity.load(project_name, target_task.id)
+        changed = False
+        for key, value in parse_attrib(entity_dict.get("data", {})).items():
+            if getattr(task.attrib, key) != value:
+                setattr(task.attrib, key, value)
+                if key not in task.own_attrib:
+                    task.own_attrib.append(key)
+                changed = True
+        if changed:
+            logging.info(f"Updating {entity_dict['type']} {entity_dict['name']}")
+            await task.save()
 
 
 async def sync_entities(
@@ -266,6 +255,7 @@ async def sync_entities(
     user: "UserEntity",
     payload: SyncEntitiesRequestModel,
 ) -> None:
+    start_time = time.time()
     project_name = payload.project_name
 
     # A mapping of kitsu entity ids to folder ids
@@ -273,14 +263,15 @@ async def sync_entities(
     # and speeds up the process of finding folders
     # if multiple entities are requested to sync
     existing_folders = {}
+    existing_tasks = {}
 
     for entity_dict in payload.entities:
-        assert entity_dict.get("type") in get_args(
-            KitsuEntityType
-        ), f"Invalid kitsu entity type: {entity_dict.get('type')}"
+        if entity_dict["type"] not in get_args(KitsuEntityType):
+            logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")
+            continue
 
+        # we need to sync folders first
         if entity_dict["type"] != "Task":
-            # Sync folder
             await sync_folder(
                 addon,
                 user,
@@ -290,12 +281,15 @@ async def sync_entities(
             )
 
         else:
-            # Sync task
-            if entity_dict.get("entity_id") in existing_folders:
-                parent_id = existing_folders[entity_dict["entity_id"]]
-            else:
-                parent_folder = await get_folder_by_kitsu_id(
-                    project_name, entity_dict["entity_id"]
-                )
-                parent_id = parent_folder.id
-                existing_folders[entity_dict["entity_id"]] = parent_id
+            await sync_task(
+                addon,
+                user,
+                project_name,
+                existing_tasks,
+                existing_folders,
+                entity_dict,
+            )
+
+    logging.info(
+        f"Synced {len(payload.entities)} entities in {time.time() - start_time}s"
+    )
