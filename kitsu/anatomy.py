@@ -100,9 +100,7 @@ async def parse_statuses(addon: "KitsuAddon", kitsu_project_id: str) -> list[Sta
 
     """
 
-    task_status_response = await addon.kitsu.get(
-        f"data/projects/{kitsu_project_id}/settings/task-status"
-    )
+    task_status_response = await addon.kitsu.get("data/task-status")
     if task_status_response.status_code != 200:
         raise AyonException("Could not get Kitsu statuses")
 
@@ -115,7 +113,9 @@ async def parse_statuses(addon: "KitsuAddon", kitsu_project_id: str) -> list[Sta
             return "in_progress"
 
     result: list[Status] = []
-    for kitsu_status in task_status_response.json():
+    kitsu_statuses = task_status_response.json()
+    kitsu_statuses.sort(key=lambda x: not x.get("is_default"))
+    for kitsu_status in kitsu_statuses:
         status = Status(
             name=kitsu_status["name"],
             shortName=kitsu_status["short_name"],
@@ -129,6 +129,7 @@ async def parse_statuses(addon: "KitsuAddon", kitsu_project_id: str) -> list[Sta
 #
 # Load kitsu project and create ayon anatomy object
 #
+
 
 async def get_kitsu_project_anatomy(
     addon: "KitsuAddon",

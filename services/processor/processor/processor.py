@@ -43,6 +43,7 @@ class KitsuProcessor:
         self.addon_name = ayon_api.get_service_addon_name()
         self.addon_version = ayon_api.get_service_addon_version()
         self.settings = ayon_api.get_service_addon_settings()
+        self.entrypoint = f"/addons/{self.addon_name}/{self.addon_version}"
 
         #
         # Get Kitsu server credentials from settings

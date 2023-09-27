@@ -4,6 +4,7 @@ import ayon_api
 import gazu
 
 from nxtools import logging
+from pprint import pprint
 
 if TYPE_CHECKING:
     from .kitsu import KitsuProcessor
@@ -18,7 +19,13 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
     raw_episodes = gazu.shot.all_episodes_for_project(kitsu_project_id)
     raw_seqs = gazu.shot.all_sequences_for_project(kitsu_project_id)
     raw_shots = gazu.shot.all_shots_for_project(kitsu_project_id)
+    raw_tasks = gazu.task.all_tasks_for_project(kitsu_project_id)
 
+    #
+    # Postprocess data
+    #
+
+    # add asset_type_name to assets
     kitsu_asset_types = {}
     for asset_type in raw_asset_types:
         kitsu_asset_types[asset_type["id"]] = asset_type["name"]
@@ -28,36 +35,26 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
         for asset in raw_assets
     ]
 
-    entities = assets + raw_episodes + raw_seqs + raw_shots
-
     #
-    # Ensure ayon root structure exists and retrieve list of targets
+    # Tasks
     #
 
-    # entrypoint = f"/addons/{parent.addon_name}/{parent.addon_version}"
-    # endpoint = f"{entrypoint}/targets/{project_name}"
-    #
-    # payload = {
-    #     "assetTypes": {i["id"]: i["name"] for i in all_asset_types},
-    #     "hasEpisodes": bool(all_episodes),
-    #     "hasSequences": bool(all_seqs),
-    # }
-    #
-    # response = ayon_api.post(endpoint, **payload)
-    # response.raise_for_status()
+    # TODO: replace user uuids in task.assigness with emails
+    # which can be used to pair with ayon users
 
-    # print(response.data)
+    # compile list of entities
 
-    print("***************")
+    # TODO: split folders and tasks if the list is huge
 
-    for e in entities:
-        print(e)
-        print()
+    entities = assets + raw_episodes + raw_seqs + raw_shots  # + raw_tasks
 
+    # for e in entities:
+    #     if e["name"] == "sh0010":
+    #         print(e)
+    #         print()
 
-    entrypoint = f"/addons/{parent.addon_name}/{parent.addon_version}/sync"
     ayon_api.post(
-        entrypoint,
+        f"{parent.entrypoint}/sync",
         project_name=project_name,
         entities=entities,
     )
