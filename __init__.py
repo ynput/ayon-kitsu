@@ -16,26 +16,15 @@ from .kitsu import Kitsu
 
 from .kitsu.init_pairing import init_pairing, InitPairingRequest
 from .kitsu.pairing_list import get_pairing_list, PairingItemModel
-from .kitsu.sync import sync_entities, SyncEntitiesRequestModel
+from .kitsu.push import push_entities, PushEntitiesRequestModel
 
 
 #
 # Events:
 #
-# kitsu.import
+# kitsu.sync_request
 # - created when a project is imported.
 # - worker enrolls to this event to perform full sync
-#
-# kitsu.sync
-# - child event of kitsu.import, actuall sync should be performed here
-# - when restarted, it is an equivalent to full-sync request.
-#
-# kitsu.event
-# - when an event is received from Kitsu
-# - use "sequential"
-#
-# kitsu.proc
-# - child event of kitsu.event, processing of the event
 #
 
 
@@ -60,7 +49,8 @@ class KitsuAddon(BaseServerAddon):
     def initialize(self):
         self.add_endpoint("/pairing", self.list_pairings, method="GET")
         self.add_endpoint("/pairing", self.init_pairing, method="POST")
-        self.add_endpoint("/sync", self.sync, method="POST")
+        self.add_endpoint("/sync/{project_name}", self.sync, method="POST")
+        self.add_endpoint("/push", self.push, method="POST")
 
     async def setup(self):
         pass
@@ -69,18 +59,19 @@ class KitsuAddon(BaseServerAddon):
     # Endpoints
     #
 
-    async def sync(
+    async def sync(self, user: CurrentUser, project_name: str) -> EmptyResponse:
+        pass
+
+    async def push(
         self,
         user: CurrentUser,
-        # background_tasks: BackgroundTasks,
-        payload: SyncEntitiesRequestModel,
+        payload: PushEntitiesRequestModel,
     ):
         if not user.is_manager:
             raise ForbiddenException("Only managers can sync Kitsu projects")
-        await sync_entities(
+        await push_entities(
             self,
             user=user,
-            # background_tasks=background_tasks,
             payload=payload,
         )
 

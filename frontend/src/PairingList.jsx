@@ -1,7 +1,7 @@
 import axios from 'axios'
 import {BASE_URL} from '/src/common'
 import { useState, useEffect } from 'react'
-import { Panel, ScrollPanel, FormLayout, FormRow } from '@ynput/ayon-react-components'
+import { Panel, ScrollPanel } from '@ynput/ayon-react-components'
 
 import PairingButton from './PairingButton'
 
@@ -14,6 +14,31 @@ const PairingListPanel = styled(Panel)`
   min-height: 300px;
   max-height: 90%;
 `
+
+const Warn = styled.span`
+  color: red;
+  font-weight: bold;
+`
+
+const Table = styled.table`
+  border-collapse: collapse;
+  width: 100%;
+
+  thead {
+    border-bottom: 1px solid #ccc;
+  }
+
+  th, td {
+    padding: 0.5rem;
+    height: 48px;
+  }
+
+  th {
+    font-weight: bold;
+    text-align: left;
+  }
+`
+
 
 
 
@@ -38,15 +63,25 @@ const PairingList = () => {
 
   return (
     <PairingListPanel>
-      <h1>Kitsu project pairings</h1>
       <ScrollPanel style={{flexGrow: 1}}>
-        <FormLayout style={{width: '90%'}}>
+        <Table>
+          <thead>
+            <tr>
+              <th>Kitsu project name</th>
+              <th>Ayon project name</th>
+              <th style={{width:1}}></th>
+            </tr>
+          </thead>
+          <tbody>
         {pairings.map((pairing) => (
-          <FormRow label={pairing.kitsuProjectName} key={pairing.kitsuProjectId}>
-            {pairing.ayonProjectName || <PairingButton onPair={loadPairings} pairing={pairing} />}
-          </FormRow>
+          <tr>
+            <td>{pairing.kitsuProjectName}</td>
+            <td>{pairing.ayonProjectName || <Warn>Not paired</Warn>}</td>
+            <td><PairingButton onPair={loadPairings} pairing={pairing} /></td>
+          </tr>
         ))}
-        </FormLayout>
+          </tbody>
+        </Table>
       </ScrollPanel>
     </PairingListPanel>
   )

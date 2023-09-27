@@ -96,8 +96,8 @@ class KitsuProcessor:
 
             EPISODIC = ("0d49b788-d73f-4014-85d4-f84452dfce46", "Episodic")
             CGDEMO = ("736f0027-bd72-4972-9bca-08bd51d7afee", "AY_CG_Demo")
-
-            full_sync(self, *EPISODIC)
+            SYNCTEST = ("4ce7834c-3056-4cb1-ae4b-2d4c94cf4303", "Sync_test")
+            full_sync(self, *SYNCTEST)
 
             break
 

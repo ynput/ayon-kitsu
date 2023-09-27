@@ -16,6 +16,10 @@ const ErrorContainer = styled.div`
 
 `
 
+const ActionButton = styled(Button)`
+  width: 120px;
+`
+
 
 const PairingDialog = ({pairing, onHide}) => {
   const [ayonProjectName, setAyonProjectName] = useState()
@@ -97,7 +101,7 @@ const PairingDialog = ({pairing, onHide}) => {
           {error}
         </ErrorContainer>
       )}
-      {loading && "Doing something..."}
+      {loading && "Please wait..."}
     </Dialog>
   )
 }
@@ -106,24 +110,40 @@ const PairingDialog = ({pairing, onHide}) => {
 const PairingButton = ({onPair, pairing}) => {
   const [showPairingDialog, setShowPairingDialog] = useState(false)
 
-  return (
-    <>
-      {showPairingDialog && (
-        <PairingDialog
-          pairing={pairing}
-          onHide={() => {
-            setShowPairingDialog(false)
-            onPair()
-          }}
+  const onSync = () => {
+  }
+
+  // project is not paired yet show pairing button
+  if (!pairing.ayonProjectName){
+    return (
+      <>
+        {showPairingDialog && (
+          <PairingDialog
+            pairing={pairing}
+            onHide={() => {
+              setShowPairingDialog(false)
+              onPair()
+            }}
+          />
+        )}
+        <ActionButton 
+          label={`Pair project`} 
+          icon="link"
+          onClick={() => {
+            setShowPairingDialog(true)
+          }} 
         />
-      )}
-      <Button 
-        label={`Pair ${pairing.kitsuProjectName}`} 
-        onClick={() => {
-          setShowPairingDialog(true)
-        }} 
-      />
-    </>
+      </>
+    )
+  }
+
+
+  return (
+        <ActionButton 
+          label={`Sync now`} 
+          icon="sync"
+          onClick={() => onSync}
+        />
   )
 
 }

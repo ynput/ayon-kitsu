@@ -34,7 +34,7 @@ KitsuEntityType = Literal[
 ]
 
 
-class SyncEntitiesRequestModel(OPModel):
+class PushEntitiesRequestModel(OPModel):
     project_name: str
     entities: list[EntityDict] = Field(..., title="List of entities to sync")
 
@@ -93,7 +93,13 @@ async def get_root_folder_id(
     return sub_id
 
 
-async def sync_folder(addon, user, project_name, existing_folders, entity_dict,):
+async def sync_folder(
+    addon,
+    user,
+    project_name,
+    existing_folders,
+    entity_dict,
+):
     target_folder = await get_folder_by_kitsu_id(
         project_name,
         entity_dict["id"],
@@ -250,10 +256,10 @@ async def sync_task(
             await task.save()
 
 
-async def sync_entities(
+async def push_entities(
     addon: "KitsuAddon",
     user: "UserEntity",
-    payload: SyncEntitiesRequestModel,
+    payload: PushEntitiesRequestModel,
 ) -> None:
     start_time = time.time()
     project_name = payload.project_name
