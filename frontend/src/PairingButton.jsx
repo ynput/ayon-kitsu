@@ -109,8 +109,23 @@ const PairingDialog = ({pairing, onHide}) => {
 
 const PairingButton = ({onPair, pairing}) => {
   const [showPairingDialog, setShowPairingDialog] = useState(false)
+  const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(false)
 
   const onSync = () => {
+    axios
+      .post( `${BASE_URL}/sync/${pairing.ayonProjectName}` )
+      .then((response) => {
+        setError(null)
+        onHide()
+      })
+      .catch((error) => {
+        console.log(error)
+        setError(error.response.data?.detail || "error")
+      })
+      .finally(() => {
+        setLoading(false)
+      })
   }
 
   // project is not paired yet show pairing button
@@ -142,7 +157,7 @@ const PairingButton = ({onPair, pairing}) => {
         <ActionButton 
           label={`Sync now`} 
           icon="sync"
-          onClick={() => onSync}
+          onClick={onSync}
         />
   )
 

@@ -1,6 +1,6 @@
 import sys
+import socket
 import time
-
 
 import ayon_api
 import gazu
@@ -8,6 +8,9 @@ import gazu
 from nxtools import logging, log_traceback
 
 from .fullsync import full_sync
+
+
+SENDER = f"kitsu-processor-{socket.gethostname()}"
 
 
 class KitsuServerError(Exception):
@@ -90,16 +93,52 @@ class KitsuProcessor:
 
     def start_processing(self):
         while True:
-            #
-            # Get the next task
-            #
+            job = ayon_api.enroll_event_job(
+                source_topic="kitsu.sync_request",
+                target_topic="kitsu.sync",
+                sender=SENDER,
+                description="Syncing Kitsu to Ayon",
+            )
 
-            EPISODIC = ("0d49b788-d73f-4014-85d4-f84452dfce46", "Episodic")
-            CGDEMO = ("736f0027-bd72-4972-9bca-08bd51d7afee", "AY_CG_Demo")
-            SYNCTEST = ("4ce7834c-3056-4cb1-ae4b-2d4c94cf4303", "Sync_test")
-            full_sync(self, *SYNCTEST)
+            if not job:
+                time.sleep(2)
+                continue
 
-            break
+            src_job = ayon_api.get_event(job["dependsOn"])
+
+
+            kitsu_project_id = src_job["summary"]["kitsuProjectId"]
+            ayon_project_name = src_job["project"]
+
+            ayon_api.update_event(
+                job["id"],
+                sender=SENDER,
+                status="in_progress",
+                project_name=ayon_project_name,
+                description="Syncing Kitsu project...",
+            )
+
+            try:
+                full_sync(self, kitsu_project_id, ayon_project_name)
+            except Exception:
+                log_traceback(f"Unable to sync kitsu project {ayon_project_name}")
+                
+                ayon_api.update_event(
+                    job["id"],
+                    sender=SENDER,
+                    status="failed",
+                    project_name=ayon_project_name,
+                    description="Sync failed",
+                )
+
+            else:
+                ayon_api.update_event(
+                    job["id"],
+                    sender=SENDER,
+                    status="finished",
+                    project_name=ayon_project_name,
+                    description="Kitsu sync finished",
+                )
 
         logging.info("KitsuProcessor finished processing")
         gazu.log_out()

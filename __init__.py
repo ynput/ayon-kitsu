@@ -14,7 +14,7 @@ from .settings import KitsuSettings, DEFAULT_VALUES
 
 from .kitsu import Kitsu
 
-from .kitsu.init_pairing import init_pairing, InitPairingRequest
+from .kitsu.init_pairing import init_pairing, InitPairingRequest, sync_request
 from .kitsu.pairing_list import get_pairing_list, PairingItemModel
 from .kitsu.push import push_entities, PushEntitiesRequestModel
 
@@ -34,7 +34,9 @@ class KitsuAddon(BaseServerAddon):
     version = __version__
     settings_model: Type[KitsuSettings] = KitsuSettings
     frontend_scopes = {"settings": {}}
-    services = {}
+    services = {
+        "processor": {"image": f"ynput/ayon-kitsu-processor:{__version__}"}
+    }
 
     kitsu: Kitsu | None = None
 
@@ -60,7 +62,7 @@ class KitsuAddon(BaseServerAddon):
     #
 
     async def sync(self, user: CurrentUser, project_name: str) -> EmptyResponse:
-        pass
+        await sync_request(project_name, user)
 
     async def push(
         self,
