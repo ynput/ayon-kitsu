@@ -1,3 +1,4 @@
+import os
 import sys
 import socket
 import time
@@ -9,6 +10,9 @@ from nxtools import logging, log_traceback
 
 from .fullsync import full_sync
 
+
+if service_name := os.environ.get("AYON_SERVICE_NAME"):
+    logging.user = service_name
 
 SENDER = f"kitsu-processor-{socket.gethostname()}"
 
@@ -92,6 +96,7 @@ class KitsuProcessor:
             raise KitsuServerError(f"Kitsu login failed: {e}") from e
 
     def start_processing(self):
+        logging.info("KitsuProcessor started")
         while True:
             job = ayon_api.enroll_event_job(
                 source_topic="kitsu.sync_request",
@@ -101,7 +106,7 @@ class KitsuProcessor:
             )
 
             if not job:
-                time.sleep(2)
+                time.sleep(5)
                 continue
 
             src_job = ayon_api.get_event(job["dependsOn"])
