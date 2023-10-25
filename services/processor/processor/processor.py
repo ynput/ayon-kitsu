@@ -103,6 +103,7 @@ class KitsuProcessor:
                 target_topic="kitsu.sync",
                 sender=SENDER,
                 description="Syncing Kitsu to Ayon",
+                max_retries=3,
             )
 
             if not job:

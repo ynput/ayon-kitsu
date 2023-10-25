@@ -57,10 +57,14 @@ async def parse_task_types(
                 result.append(default_task_type)
                 break
         else:
+            short_name = kitsu_task_type.get("short_name")
+            if not short_name:
+                short_name = name_slug.replace("_", "")[:3]
+
             result.append(
                 TaskType(
                     name=kitsu_task_type["name"],
-                    shortName=kitsu_task_type["short_name"],
+                    shortName=short_name,
                 )
             )
 
@@ -130,6 +134,7 @@ async def parse_statuses(addon: "KitsuAddon", kitsu_project_id: str) -> list[Sta
 # Load kitsu project and create ayon anatomy object
 #
 
+
 def parse_attrib(source: dict[str, Any] | None = None):
     result = {}
     if source is None:
@@ -156,11 +161,11 @@ def parse_attrib(source: dict[str, Any] | None = None):
 
     return result
 
+
 async def get_kitsu_project_anatomy(
     addon: "KitsuAddon",
     kitsu_project_id: str,
 ) -> Anatomy:
-
     kitsu_project_response = await addon.kitsu.get(f"data/projects/{kitsu_project_id}")
     if kitsu_project_response.status_code != 200:
         raise AyonException("Could not get Kitsu project")

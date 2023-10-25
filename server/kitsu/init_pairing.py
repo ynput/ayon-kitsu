@@ -125,4 +125,4 @@ async def init_pairing(
         request.ayon_project_name,
     )
 
-    await sync_request(project_name=request.ayon_project_name, user=user, kitsu_project_id=request.kitsu_project_id)
+    await sync_request(project_name=request.ayon_project_name, user=user, kitsu_project_id=request.kitsu_project_id,)
