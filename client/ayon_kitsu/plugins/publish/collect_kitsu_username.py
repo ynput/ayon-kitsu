@@ -12,17 +12,14 @@ class CollectKitsuUsername(pyblish.api.ContextPlugin):
     label = "Kitsu username"
 
     def process(self, context):
-        kitsu_login = os.environ.get('KITSU_LOGIN')
-
+        kitsu_login = os.environ.get("KITSU_LOGIN")
         if not kitsu_login:
             return
 
-        kitsu_username = kitsu_login.split("@")[0].replace('.', ' ')
-        new_username = re.sub('[^a-zA-Z]', ' ', kitsu_username).title()
+        kitsu_username = kitsu_login.split("@")[0].replace(".", " ")
+        new_username = re.sub("[^a-zA-Z]", " ", kitsu_username).title()
 
         for instance in context:
             # Don't override customData if it already exists
-            if 'customData' not in instance.data:
-                instance.data['customData'] = {}
-
-            instance.data['customData']["kitsuUsername"] = new_username
+            custom_data = instance.data.setdefault("customData", {})
+            custom_data["kitsuUsername"] = new_username

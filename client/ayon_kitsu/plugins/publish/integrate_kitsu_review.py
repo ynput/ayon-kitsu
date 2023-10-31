@@ -13,15 +13,20 @@ class IntegrateKitsuReview(pyblish.api.InstancePlugin):
 
     def process(self, instance):
         # Check comment has been created
-        comment_id = instance.data.get("kitsu_comment", {}).get("id")
+        comment_id = instance.data.get("kitsuComment", {}).get("id")
         if not comment_id:
             self.log.debug(
                 "Comment not created, review not pushed to preview."
             )
             return
 
+        kitsu_task = instance.data.get("kitsuTask")
+        if not kitsu_task:
+            self.log.debug("No kitsu task found, skipping review upload.")
+            return
+
         # Add review representations as preview of comment
-        task_id = instance.data["kitsu_task"]["id"]
+        task_id = kitsu_task["id"]
         for representation in instance.data.get("representations", []):
             # Skip if not tagged as review
             if "kitsureview" not in representation.get("tags", []):

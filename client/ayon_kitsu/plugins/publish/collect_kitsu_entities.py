@@ -16,7 +16,7 @@ class CollectKitsuEntities(pyblish.api.ContextPlugin):
         if not kitsu_project:
             raise ValueError("Project not found in kitsu!")
 
-        context.data["kitsu_project"] = kitsu_project
+        context.data["kitsuProject"] = kitsu_project
         self.log.debug("Collect kitsu project: {}".format(kitsu_project))
 
         kitsu_entities_by_id = {}
@@ -74,5 +74,5 @@ class CollectKitsuEntities(pyblish.api.ContextPlugin):
 
             if not kitsu_task:
                 raise ValueError("Task not found in kitsu!")
-            instance.data["kitsu_task"] = kitsu_task
+            instance.data["kitsuTask"] = kitsu_task
             self.log.debug("Collect kitsu task: {}".format(kitsu_task))

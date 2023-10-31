@@ -58,7 +58,7 @@ class IntegrateKitsuNote(pyblish.api.ContextPlugin):
             if "review" not in families:
                 continue
 
-            kitsu_task = instance.data.get("kitsu_task")
+            kitsu_task = instance.data.get("kitsuTask")
             if not kitsu_task:
                 continue
 
@@ -133,4 +133,4 @@ class IntegrateKitsuNote(pyblish.api.ContextPlugin):
                 kitsu_task, note_status, comment=publish_comment
             )
 
-            instance.data["kitsu_comment"] = kitsu_comment
+            instance.data["kitsuComment"] = kitsu_comment
