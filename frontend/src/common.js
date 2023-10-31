@@ -1,5 +1,5 @@
 const addonName = 'kitsu'
-const addonVersion = '0.1.2'
+const addonVersion = '0.1.3-dev.1'
 
 const BASE_URL = `${window.location.origin}/api/addons/${addonName}/${addonVersion}`
 
