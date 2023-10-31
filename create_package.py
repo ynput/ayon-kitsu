@@ -190,20 +190,30 @@ def copy_server_content(
     src_version_path: str = os.path.join(current_dir, "version.py")
     filepaths_to_copy.append((src_version_path, "version.py"))
 
+    frontend_dirpath: str = os.path.join(server_dirpath, "frontend", "dist")
+    if not os.path.exists(frontend_dirpath):
+        raise RuntimeError(
+            "Build frontend first with `yarn install && yarn build`"
+        )
+
+    for item in find_files_in_subdir(frontend_dirpath):
+        src_path, dst_subpath = item
+        filepaths_to_copy.append(
+            (src_path, os.path.join("frontend", "dist", dst_subpath))
+        )
+
     for name in os.listdir(server_dirpath):
+        if name == "frontend":
+            continue
         src_dir = os.path.join(server_dirpath, name)
         if not os.path.isdir(src_dir):
             filepaths_to_copy.append((src_dir, name))
             continue
 
-        subdir = name
-        if name == "frontend":
-            subdir = os.path.join(name, "dist")
-
         for item in find_files_in_subdir(src_dir):
             src_path, dst_subpath = item
             filepaths_to_copy.append(
-                (src_path, os.path.join(subdir, dst_subpath))
+                (src_path, os.path.join(name, dst_subpath))
             )
 
     # Copy files
@@ -391,9 +401,16 @@ def main(
     if not os.path.exists(addon_output_dir):
         os.makedirs(addon_output_dir)
 
-    copy_server_content(addon_output_dir, current_dir, log)
+    failed = True
+    try:
+        copy_server_content(addon_output_dir, current_dir, log)
 
-    # zip_client_side(addon_output_dir, current_dir, log)
+        # zip_client_side(addon_output_dir, current_dir, log)
+        failed = False
+    finally:
+        if failed and os.path.isdir(addon_output_dir):
+            log.info(f"Purging output dir after failed package creation")
+            shutil.rmtree(output_dir)
 
     # Skip server zipping
     if not skip_zip:
