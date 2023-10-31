@@ -1,19 +1,17 @@
 from qtpy import QtWidgets, QtCore, QtGui
 
 from openpype import style
-from openpype.modules.kitsu.utils.credentials import (
+from openpype.resources import get_resource
+from openpype.settings import get_system_settings
+from openpype.widgets.password_dialog import PressHoverButton
+
+from ayon_kitsu.credentials import (
     clear_credentials,
     load_credentials,
     save_credentials,
     set_credentials_envs,
     validate_credentials,
 )
-from openpype.resources import get_resource
-from openpype.settings.lib import (
-    get_system_settings,
-)
-
-from openpype.widgets.password_dialog import PressHoverButton
 
 
 class KitsuPasswordDialog(QtWidgets.QDialog):

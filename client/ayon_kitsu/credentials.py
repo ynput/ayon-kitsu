@@ -21,6 +21,7 @@ def validate_credentials(
     Returns:
         bool: Are credentials valid?
     """
+
     if kitsu_url is None:
         kitsu_url = os.environ.get("KITSU_SERVER")
 
