@@ -43,7 +43,7 @@ class KitsuAddon(OpenPypeModule, IPluginPaths, ITrayAction):
     def tray_init(self):
         """Tray init."""
 
-        self._create_dialog()
+        pass
 
     def tray_start(self):
         """Tray start."""
@@ -63,25 +63,26 @@ class KitsuAddon(OpenPypeModule, IPluginPaths, ITrayAction):
 
     def get_global_environments(self):
         """Kitsu's global environments."""
-        return {"KITSU_SERVER": self.server_url}
+        return {
+            "KITSU_SERVER": self.server_url
+        }
 
-    def _create_dialog(self):
-        # Don't recreate dialog if already exists
-        if self._dialog is not None:
-            return
+    def _get_dialog(self):
+        if self._dialog is None:
+            from .kitsu_widgets import KitsuPasswordDialog
 
-        from .kitsu_widgets import KitsuPasswordDialog
+            self._dialog = KitsuPasswordDialog()
 
-        self._dialog = KitsuPasswordDialog()
+        return self._dialog
 
     def show_dialog(self):
         """Show dialog to log-in."""
 
         # Make sure dialog is created
-        self._create_dialog()
+        dialog = self._get_dialog()
 
         # Show dialog
-        self._dialog.open()
+        dialog.open()
 
     def on_action_trigger(self):
         """Implementation of abstract method for `ITrayAction`."""
