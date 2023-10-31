@@ -191,20 +191,19 @@ def copy_server_content(
     filepaths_to_copy.append((src_version_path, "version.py"))
 
     for name in os.listdir(server_dirpath):
+        src_dir = os.path.join(server_dirpath, name)
+        if not os.path.isdir(src_dir):
+            filepaths_to_copy.append((src_dir, name))
+            continue
+
         subdir = name
         if name == "frontend":
             subdir = os.path.join(name, "dist")
 
-        src_dir = os.path.join(server_dirpath, name)
-        if os.path.isdir(src_dir):
-            for item in find_files_in_subdir(src_dir):
-                src_path, dst_subpath = item
-                filepaths_to_copy.append(
-                    (src_path, os.path.join(subdir, dst_subpath))
-                )
-        else:
+        for item in find_files_in_subdir(src_dir):
+            src_path, dst_subpath = item
             filepaths_to_copy.append(
-                (src_dir, os.path.join(subdir, name))
+                (src_path, os.path.join(subdir, dst_subpath))
             )
 
     # Copy files
