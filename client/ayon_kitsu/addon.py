@@ -21,9 +21,6 @@ class KitsuAddon(OpenPypeModule, IPluginPaths, ITrayAction):
         """Initialization of module."""
         module_settings = settings[self.name]
 
-        # Enabled by settings
-        self.enabled = module_settings.get("enabled", False)
-
         # Add API URL schema
         kitsu_url = module_settings["server"].strip()
         if kitsu_url:
@@ -37,6 +34,7 @@ class KitsuAddon(OpenPypeModule, IPluginPaths, ITrayAction):
                     kitsu_url, "" if kitsu_url.endswith("/") else "/"
                 )
 
+        self.enabled = True
         self.server_url = kitsu_url
 
         # UI which must not be created at this time
