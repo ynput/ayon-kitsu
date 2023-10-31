@@ -196,10 +196,15 @@ def copy_server_content(
             subdir = os.path.join(name, "dist")
 
         src_dir = os.path.join(server_dirpath, name)
-        for item in find_files_in_subdir(src_dir):
-            src_path, dst_subpath = item
+        if os.path.isdir(src_dir):
+            for item in find_files_in_subdir(src_dir):
+                src_path, dst_subpath = item
+                filepaths_to_copy.append(
+                    (src_path, os.path.join(subdir, dst_subpath))
+                )
+        else:
             filepaths_to_copy.append(
-                (src_path, os.path.join(subdir, dst_subpath))
+                (src_dir, os.path.join(subdir, name))
             )
 
     # Copy files
