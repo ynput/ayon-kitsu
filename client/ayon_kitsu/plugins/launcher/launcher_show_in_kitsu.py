@@ -1,8 +1,8 @@
 import webbrowser
+import ayon_api
 
 from openpype.pipeline import LauncherAction
 from openpype.modules import ModulesManager
-from openpype.client import get_project, get_asset_by_name
 
 
 class ShowInKitsu(LauncherAction):
@@ -19,7 +19,6 @@ class ShowInKitsu(LauncherAction):
     def is_compatible(self, session):
         if not session.get("AVALON_PROJECT"):
             return False
-
         return True
 
     def process(self, session, **kwargs):
@@ -28,9 +27,7 @@ class ShowInKitsu(LauncherAction):
         asset_name = session.get("AVALON_ASSET", None)
         task_name = session.get("AVALON_TASK", None)
 
-        project = get_project(
-            project_name=project_name, fields=["data.zou_id"]
-        )
+        project = ayon_api.get_project(project_name)
         if not project:
             raise RuntimeError("Project {} not found.".format(project_name))
 

@@ -1,6 +1,5 @@
 """Kitsu module."""
 
-import click
 import os
 
 from openpype.modules import (
@@ -8,6 +7,8 @@ from openpype.modules import (
     IPluginPaths,
     ITrayAction,
 )
+
+KITSU_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
 class KitsuAddon(OpenPypeModule, IPluginPaths, ITrayAction):
@@ -90,10 +91,11 @@ class KitsuAddon(OpenPypeModule, IPluginPaths, ITrayAction):
 
     def get_plugin_paths(self):
         """Implementation of abstract method for `IPluginPaths`."""
-        current_dir = os.path.dirname(os.path.abspath(__file__))
 
         return {
-            "publish": [os.path.join(current_dir, "plugins", "publish")],
-            "actions": [os.path.join(current_dir, "actions")],
+            "publish": self.get_publish_plugin_paths(),
+            "actions": [os.path.join(KITSU_ROOT, "plugins", "launcher")],
         }
 
+    def get_publish_plugin_paths(self, host_name):
+        return [os.path.join(KITSU_ROOT, "plugins", "publish")]
