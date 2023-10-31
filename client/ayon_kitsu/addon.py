@@ -10,7 +10,7 @@ from openpype.modules import (
 )
 
 
-class KitsuModule(OpenPypeModule, IPluginPaths, ITrayAction):
+class KitsuAddon(OpenPypeModule, IPluginPaths, ITrayAction):
     """Kitsu module class."""
 
     label = "Kitsu Connect"
@@ -101,7 +101,7 @@ class KitsuModule(OpenPypeModule, IPluginPaths, ITrayAction):
         click_group.add_command(cli_main)
 
 
-@click.group(KitsuModule.name, help="Kitsu dynamic cli commands.")
+@click.group(KitsuAddon.name, help="Kitsu dynamic cli commands.")
 def cli_main():
     pass
 

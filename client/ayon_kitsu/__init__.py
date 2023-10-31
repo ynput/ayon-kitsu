@@ -4,6 +4,8 @@ If addon class or settings definition won't be here their definition won't
 be found by OpenPype discovery.
 """
 
-from .kitsu_module import KitsuModule
+from .addon import KitsuAddon
 
-__all__ = ("KitsuModule",)
+__all__ = (
+    "KitsuAddon",
+)
