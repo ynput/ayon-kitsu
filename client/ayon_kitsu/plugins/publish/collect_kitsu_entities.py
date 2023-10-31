@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import gazu
 import pyblish.api
+import ayon_api
+
+from openpype.pipeline import KnownPublishError
 
 
 class CollectKitsuEntities(pyblish.api.ContextPlugin):
@@ -10,11 +13,12 @@ class CollectKitsuEntities(pyblish.api.ContextPlugin):
     label = "Kitsu entities"
 
     def process(self, context):
-        kitsu_project = gazu.project.get_project_by_name(
-            context.data["projectName"]
-        )
+        project_name = context.data["projectName"]
+        kitsu_project = gazu.project.get_project_by_name(project_name)
         if not kitsu_project:
-            raise ValueError("Project not found in kitsu!")
+            raise KnownPublishError(
+                "Project '{}' not found in kitsu!".format(project_name)
+            )
 
         context.data["kitsuProject"] = kitsu_project
         self.log.debug("Collect kitsu project: {}".format(kitsu_project))
@@ -25,54 +29,59 @@ class CollectKitsuEntities(pyblish.api.ContextPlugin):
             if not asset_doc:
                 continue
 
-            zou_asset_data = asset_doc["data"].get("zou")
-            if not zou_asset_data:
-                raise ValueError("Zou asset data not found in OpenPype!")
+            asset_path_parts = list(asset_doc["data"]["parents"])
+            asset_path_parts.append(asset_doc["name"])
+            asset_path = "/" + "/".join(asset_path_parts)
+            kitsu_id = asset_doc["data"].get("kitsuId")
+            if not kitsu_id:
+                raise KnownPublishError((
+                    "Kitsu id not available in AYON for '{}'"
+                ).format(asset_path))
 
-            task_name = instance.data.get("task", context.data.get("task"))
+            kitsu_entity = kitsu_entities_by_id.get(kitsu_id)
+            if not kitsu_entity:
+                kitsu_entity = gazu.entity.get_entity(kitsu_id)
+                if not kitsu_entity:
+                    raise KnownPublishError((
+                        "{} was not found in kitsu!"
+                    ).format(asset_path))
+                kitsu_entities_by_id[kitsu_id] = kitsu_entity
+
+            instance.data["kitsuEntity"] = kitsu_entity
+
+            # Task entity
+            task_name = instance.data.get("task")
             if not task_name:
                 continue
 
-            zou_task_data = asset_doc["data"]["tasks"][task_name].get("zou")
-            self.log.debug(
-                "Collected zou task data: {}".format(zou_task_data)
+            task = ayon_api.get_task_by_name(
+                project_name, asset_doc["_id"], task_name
             )
+            kitsu_task_id = task["attrib"].get("kitsuId")
 
-            entity_id = zou_asset_data["id"]
-            entity = kitsu_entities_by_id.get(entity_id)
-            if not entity:
-                entity = gazu.entity.get_entity(entity_id)
-                if not entity:
-                    raise ValueError(
-                        "{} was not found in kitsu!".format(
-                            zou_asset_data["name"]
-                        )
-                    )
+            self.log.debug("Collect kitsu: {}".format(kitsu_entity))
 
-            kitsu_entities_by_id[entity_id] = entity
-            instance.data["entity"] = entity
-            self.log.debug(
-                "Collect kitsu {}: {}".format(zou_asset_data["type"], entity)
-            )
-
-            if zou_task_data:
-                kitsu_task_id = zou_task_data["id"]
+            if kitsu_task_id:
                 kitsu_task = kitsu_entities_by_id.get(kitsu_task_id)
                 if not kitsu_task:
-                    kitsu_task = gazu.task.get_task(zou_task_data["id"])
-                    kitsu_entities_by_id[kitsu_task_id] = kitsu_task
+                    kitsu_task = gazu.task.get_task(kitsu_task_id)
             else:
                 kitsu_task_type = gazu.task.get_task_type_by_name(task_name)
                 if not kitsu_task_type:
-                    raise ValueError(
+                    raise KnownPublishError(
                         "Task type {} not found in Kitsu!".format(task_name)
                     )
 
                 kitsu_task = gazu.task.get_task_by_name(
-                    entity, kitsu_task_type
+                    kitsu_entity, kitsu_task_type
                 )
 
             if not kitsu_task:
-                raise ValueError("Task not found in kitsu!")
+                raise KnownPublishError(
+                    "Task {} not found in kitsu!".format(task_name)
+                )
+
+            kitsu_entities_by_id[kitsu_task["id"]] = kitsu_task
+
             instance.data["kitsuTask"] = kitsu_task
             self.log.debug("Collect kitsu task: {}".format(kitsu_task))
