@@ -99,8 +99,9 @@ def load_credentials() -> Tuple[str, str]:
     # Get user registry
     user_registry = OpenPypeSecureRegistry("kitsu_user")
 
-    return user_registry.get_item("login", None), user_registry.get_item(
-        "password", None
+    return (
+        user_registry.get_item("login", None),
+        user_registry.get_item("password", None)
     )
 
 
