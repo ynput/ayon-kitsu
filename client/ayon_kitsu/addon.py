@@ -50,7 +50,7 @@ class KitsuAddon(OpenPypeModule, IPluginPaths, ITrayAction):
 
     def tray_start(self):
         """Tray start."""
-        from .utils.credentials import (
+        from .credentials import (
             load_credentials,
             validate_credentials,
             set_credentials_envs,
