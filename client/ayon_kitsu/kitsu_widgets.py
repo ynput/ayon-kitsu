@@ -1,5 +1,7 @@
 from qtpy import QtWidgets, QtCore, QtGui
 
+import ayon_api
+
 from openpype import style
 from openpype.resources import get_resource
 from openpype.settings import get_system_settings
@@ -13,6 +15,8 @@ from ayon_kitsu.credentials import (
     validate_credentials,
 )
 
+from .version import __version__
+
 
 class KitsuPasswordDialog(QtWidgets.QDialog):
     """Kitsu login dialog."""
@@ -25,49 +29,37 @@ class KitsuPasswordDialog(QtWidgets.QDialog):
         self.setWindowTitle("Kitsu Credentials")
         self.resize(300, 120)
 
-        system_settings = get_system_settings()
+        addon_settings = ayon_api.get_addon_settings("kitsu", __version__)
+        server_url = addon_settings["server"]
+
         user_login, user_pwd = load_credentials()
         remembered = bool(user_login or user_pwd)
 
-        self._final_result = None
-        self._connectable = bool(
-            system_settings["modules"].get("kitsu", {}).get("server")
-        )
-
         # Server label
-        server_message = (
-            system_settings["modules"]["kitsu"]["server"]
-            if self._connectable
-            else "no server url set in Studio Settings..."
-        )
-        server_label = QtWidgets.QLabel(
-            f"Server: {server_message}",
-            self,
-        )
+        server_message = server_url
+        if not server_url:
+            server_message = "Server url is not set in Settings..."
+
+        inputs_widget = QtWidgets.QWidget(self)
+
+        server_label = QtWidgets.QLabel("Server:", inputs_widget)
+        server_url_label = QtWidgets.QLabel(server_message, inputs_widget)
 
         # Login input
-        login_widget = QtWidgets.QWidget(self)
-
-        login_label = QtWidgets.QLabel("Login:", login_widget)
+        login_label = QtWidgets.QLabel("Login:", inputs_widget)
 
         login_input = QtWidgets.QLineEdit(
-            login_widget,
+            inputs_widget,
             text=user_login if remembered else None,
         )
         login_input.setPlaceholderText("Your Kitsu account login...")
 
-        login_layout = QtWidgets.QHBoxLayout(login_widget)
-        login_layout.setContentsMargins(0, 0, 0, 0)
-        login_layout.addWidget(login_label)
-        login_layout.addWidget(login_input)
-
         # Password input
-        password_widget = QtWidgets.QWidget(self)
+        password_label = QtWidgets.QLabel("Password:", inputs_widget)
 
-        password_label = QtWidgets.QLabel("Password:", password_widget)
-
+        password_wrap_widget = QtWidgets.QWidget(inputs_widget)
         password_input = QtWidgets.QLineEdit(
-            password_widget,
+            password_wrap_widget,
             text=user_pwd if remembered else None,
         )
         password_input.setPlaceholderText("Your password...")
@@ -75,16 +67,29 @@ class KitsuPasswordDialog(QtWidgets.QDialog):
 
         show_password_icon_path = get_resource("icons", "eye.png")
         show_password_icon = QtGui.QIcon(show_password_icon_path)
-        show_password_btn = PressHoverButton(password_widget)
+        show_password_btn = PressHoverButton(password_wrap_widget)
         show_password_btn.setObjectName("PasswordBtn")
         show_password_btn.setIcon(show_password_icon)
         show_password_btn.setFocusPolicy(QtCore.Qt.ClickFocus)
 
-        password_layout = QtWidgets.QHBoxLayout(password_widget)
-        password_layout.setContentsMargins(0, 0, 0, 0)
-        password_layout.addWidget(password_label)
-        password_layout.addWidget(password_input)
-        password_layout.addWidget(show_password_btn)
+        password_wrap_layout = QtWidgets.QHBoxLayout(password_wrap_widget)
+        password_wrap_layout.setContentsMargins(0, 0, 0, 0)
+        password_wrap_layout.addWidget(password_input, 1)
+        password_wrap_layout.addWidget(show_password_btn, 0)
+
+        server_url_spacer = QtWidgets.QSpacerItem(5, 5)
+
+        inputs_layout = QtWidgets.QGridLayout(inputs_widget)
+        inputs_layout.setContentsMargins(0, 0, 0, 0)
+        inputs_layout.addWidget(server_label, 0, 0, QtCore.Qt.AlignRight)
+        inputs_layout.addWidget(server_url_label, 0, 1)
+        inputs_layout.addItem(server_url_spacer, 1, 0, 1, 2)
+        inputs_layout.addWidget(login_label, 2, 0, QtCore.Qt.AlignRight)
+        inputs_layout.addWidget(login_input, 2, 1)
+        inputs_layout.addWidget(password_label, 3, 0, QtCore.Qt.AlignRight)
+        inputs_layout.addWidget(password_wrap_widget, 3, 1)
+        inputs_layout.setColumnStretch(0, 0)
+        inputs_layout.setColumnStretch(1, 1)
 
         # Message label
         message_label = QtWidgets.QLabel("", self)
@@ -109,10 +114,7 @@ class KitsuPasswordDialog(QtWidgets.QDialog):
         # Main layout
         layout = QtWidgets.QVBoxLayout(self)
         layout.addSpacing(5)
-        layout.addWidget(server_label, 0)
-        layout.addSpacing(5)
-        layout.addWidget(login_widget, 0)
-        layout.addWidget(password_widget, 0)
+        layout.addWidget(inputs_widget, 0)
         layout.addWidget(message_label, 0)
         layout.addStretch(1)
         layout.addWidget(buttons_widget, 0)
@@ -121,10 +123,13 @@ class KitsuPasswordDialog(QtWidgets.QDialog):
         cancel_btn.clicked.connect(self._on_cancel_click)
         show_password_btn.change_state.connect(self._on_show_password)
 
-        self.login_input = login_input
-        self.password_input = password_input
-        self.remember_checkbox = remember_checkbox
-        self.message_label = message_label
+        self._login_input = login_input
+        self._password_input = password_input
+        self._remember_checkbox = remember_checkbox
+        self._message_label = message_label
+
+        self._final_result = None
+        self._connectable = bool(server_url)
 
         self.setStyleSheet(style.load_stylesheet())
 
@@ -144,21 +149,21 @@ class KitsuPasswordDialog(QtWidgets.QDialog):
     def _on_ok_click(self):
         # Check if is connectable
         if not self._connectable:
-            self.message_label.setText(
+            self._message_label.setText(
                 "Please set server url in Studio Settings!"
             )
             return
 
         # Collect values
-        login_value = self.login_input.text()
-        pwd_value = self.password_input.text()
-        remember = self.remember_checkbox.isChecked()
+        login_value = self._login_input.text()
+        pwd_value = self._password_input.text()
+        remember = self._remember_checkbox.isChecked()
 
         # Authenticate
         if validate_credentials(login_value, pwd_value):
             set_credentials_envs(login_value, pwd_value)
         else:
-            self.message_label.setText("Authentication failed...")
+            self._message_label.setText("Authentication failed...")
             return
 
         # Remember password cases
@@ -169,8 +174,8 @@ class KitsuPasswordDialog(QtWidgets.QDialog):
             clear_credentials()
 
             # Clear input fields
-            self.login_input.clear()
-            self.password_input.clear()
+            self._login_input.clear()
+            self._password_input.clear()
 
         self._final_result = True
         self.close()
@@ -180,7 +185,7 @@ class KitsuPasswordDialog(QtWidgets.QDialog):
             echo_mode = QtWidgets.QLineEdit.Normal
         else:
             echo_mode = QtWidgets.QLineEdit.Password
-        self.password_input.setEchoMode(echo_mode)
+        self._password_input.setEchoMode(echo_mode)
 
     def _on_cancel_click(self):
         self.close()
