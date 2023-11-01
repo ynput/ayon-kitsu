@@ -169,24 +169,6 @@ def find_files_in_subdir(
     return output
 
 
-def _get_yarn_executable():
-    cmd = "which"
-    if platform.system().lower() == "windows":
-        cmd = "where"
-
-    for line in subprocess.check_output(
-        [cmd, "yarn"], encoding="utf-8"
-    ).split():
-        if not line or not os.path.exists(line):
-            continue
-        try:
-            subprocess.call([line, "--version"])
-            return line
-        except OSError:
-            continue
-    return None
-
-
 def copy_server_content(
     addon_output_dir: str,
     current_dir: str,
@@ -211,13 +193,7 @@ def copy_server_content(
 
     frontend_dirpath: str = os.path.join(server_dirpath, "frontend")
     frontend_dist_dirpath: str = os.path.join(frontend_dirpath, "dist")
-    yarn_executable = _get_yarn_executable()
-    if yarn_executable is None:
-        raise RuntimeError("Yarn executable was not found.")
-
-    subprocess.run([yarn_executable, "install"], cwd=frontend_dirpath)
-    subprocess.run([yarn_executable, "build"], cwd=frontend_dirpath)
-    if not os.path.exists(frontend_dirpath):
+    if not os.path.exists(frontend_dist_dirpath):
         raise RuntimeError(
             "Build frontend first with `yarn install && yarn build`"
         )
