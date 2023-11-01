@@ -34,6 +34,8 @@ def validate_credentials(
     except gazu.exception.AuthFailedException:
         return False
 
+    # TODO remove this event trigger
+    # - for what is this used?
     emit_event("kitsu.user.logged", data={"username": login}, source="kitsu")
 
     return True
