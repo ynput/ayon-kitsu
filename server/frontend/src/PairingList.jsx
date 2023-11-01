@@ -1,5 +1,5 @@
 import axios from 'axios'
-import {BASE_URL} from '/src/common'
+import addonData from '/src/common'
 import { useState, useEffect } from 'react'
 import { Panel, ScrollPanel } from '@ynput/ayon-react-components'
 
@@ -47,7 +47,7 @@ const PairingList = () => {
 
   const loadPairings = () => {
     axios
-      .get(`${BASE_URL}/pairing`)
+      .get(`${addonData.baseUrl}/pairing`)
       .then((response) => {
         setPairings(response.data)
       })

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import addonData from '/src/common'
 import React, { useContext, useEffect, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { AddonProvider, AddonContext } from '@ynput/ayon-react-addon-provider'
@@ -32,7 +33,20 @@ const MainContainer = styled.div`
 
 const App = () => {
   const accessToken = useContext(AddonContext).accessToken
+  const addonName = useContext(AddonContext).addonName
+  const addonVersion = useContext(AddonContext).addonVersion
   const [tokenSet, setTokenSet] = useState(false)
+
+  useEffect(() =>{
+    if (addonName && addonVersion){
+      addonData.addonName = addonName
+      addonData.addonVersion = addonVersion
+      addonData.baseUrl = `${window.location.origin}/api/addons/${addonName}/${addonVersion}`
+      console.log("BaseUrl", addonData.baseUrl)
+    }
+      
+  }, [addonName, addonVersion])
+
 
   useEffect(() => {
     if (accessToken && !tokenSet) {
