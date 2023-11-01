@@ -3,9 +3,9 @@ __pycache__
 poetry.lock
 package/
 
-frontend/node_modules
-frontend/dist
-frontend/.env
-frontend/yarn.lock
-frontend/yarn-error.log
+server/frontend/node_modules
+server/frontend/dist
+server/frontend/.env
+server/frontend/yarn.lock
+server/frontend/yarn-error.log
 
