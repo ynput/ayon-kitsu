@@ -1,5 +1,5 @@
 import axios from 'axios'
-import {BASE_URL} from '/src/common'
+import addonData from '/src/common'
 
 import { useState, useEffect } from 'react'
 
@@ -114,7 +114,7 @@ const PairingButton = ({onPair, pairing}) => {
 
   const onSync = () => {
     axios
-      .post( `${BASE_URL}/sync/${pairing.ayonProjectName}` )
+      .post( `${addonData.baseUrl}/sync/${pairing.ayonProjectName}` )
       .then((response) => {
         setError(null)
         onHide()
