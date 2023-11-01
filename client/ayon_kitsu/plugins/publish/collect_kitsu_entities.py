@@ -24,15 +24,30 @@ class CollectKitsuEntities(pyblish.api.ContextPlugin):
         self.log.debug("Collect kitsu project: {}".format(kitsu_project))
 
         kitsu_entities_by_id = {}
+        filtered_instances = []
+        folder_ids = set()
         for instance in context:
             asset_doc = instance.data.get("assetEntity")
-            if not asset_doc:
-                continue
+            if asset_doc:
+                filtered_instances.append(instance)
+                folder_ids.add(asset_doc["_id"])
 
-            asset_path_parts = list(asset_doc["data"]["parents"])
-            asset_path_parts.append(asset_doc["name"])
-            asset_path = "/" + "/".join(asset_path_parts)
-            kitsu_id = asset_doc["data"].get("kitsuId")
+        if not folder_ids:
+            return
+
+        folders_by_id = {
+            folder["id"]: folder
+            for folder in ayon_api.get_folders(
+            project_name,
+                folder_ids=folder_ids,
+                fields={"id", "data", "path"}
+            )
+        }
+        for instance in filtered_instances:
+            asset_doc = instance.data["assetEntity"]
+            folder = folders_by_id[asset_doc["_id"]]
+            asset_path = folder["path"]
+            kitsu_id = folder["data"].get("kitsuId")
             if not kitsu_id:
                 raise KnownPublishError((
                     "Kitsu id not available in AYON for '{}'"
@@ -55,9 +70,12 @@ class CollectKitsuEntities(pyblish.api.ContextPlugin):
                 continue
 
             task = ayon_api.get_task_by_name(
-                project_name, asset_doc["_id"], task_name
+                project_name,
+                folder["id"],
+                task_name,
+                fields={"data"}
             )
-            kitsu_task_id = task["attrib"].get("kitsuId")
+            kitsu_task_id = task["data"].get("kitsuId")
 
             self.log.debug("Collect kitsu: {}".format(kitsu_entity))
 
