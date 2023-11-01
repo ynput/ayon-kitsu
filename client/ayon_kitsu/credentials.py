@@ -61,12 +61,18 @@ def validate_host(kitsu_url: str) -> bool:
 
 def clear_credentials():
     """Clear credentials in Secure Registry."""
+    (login, passsword) = load_credentials()
+    if login is None and passsword is None:
+        return
+
     # Get user registry
     user_registry = OpenPypeSecureRegistry("kitsu_user")
 
     # Set local settings
-    user_registry.delete_item("login")
-    user_registry.delete_item("password")
+    if login is not None:
+        user_registry.delete_item("login")
+    if passsword is not None:
+        user_registry.delete_item("password")
 
 
 def save_credentials(login: str, password: str):
