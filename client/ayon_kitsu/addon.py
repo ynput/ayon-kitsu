@@ -96,5 +96,5 @@ class KitsuAddon(OpenPypeModule, IPluginPaths, ITrayAction):
             "actions": [os.path.join(KITSU_ROOT, "plugins", "launcher")],
         }
 
-    def get_publish_plugin_paths(self, host_name):
+    def get_publish_plugin_paths(self, host_name=None):
         return [os.path.join(KITSU_ROOT, "plugins", "publish")]
