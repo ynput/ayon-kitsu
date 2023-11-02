@@ -30,6 +30,7 @@ import platform
 import argparse
 import logging
 import collections
+import subprocess
 import zipfile
 from typing import Any, Optional, Iterable, Pattern
 
@@ -38,7 +39,7 @@ from typing import Any, Optional, Iterable, Pattern
 ADDON_NAME: str = "kitsu"
 # Name of folder where client code is located to copy 'version.py'
 #   - e.g. 'ayon_maya'
-ADDON_CLIENT_DIR: str = ""
+ADDON_CLIENT_DIR: str = "ayon_kitsu"
 
 # Patterns of directories to be skipped for server part of addon
 IGNORE_DIR_PATTERNS: list[Pattern] = [
@@ -190,13 +191,14 @@ def copy_server_content(
     src_version_path: str = os.path.join(current_dir, "version.py")
     filepaths_to_copy.append((src_version_path, "version.py"))
 
-    frontend_dirpath: str = os.path.join(server_dirpath, "frontend", "dist")
-    if not os.path.exists(frontend_dirpath):
+    frontend_dirpath: str = os.path.join(server_dirpath, "frontend")
+    frontend_dist_dirpath: str = os.path.join(frontend_dirpath, "dist")
+    if not os.path.exists(frontend_dist_dirpath):
         raise RuntimeError(
             "Build frontend first with `yarn install && yarn build`"
         )
 
-    for item in find_files_in_subdir(frontend_dirpath):
+    for item in find_files_in_subdir(frontend_dist_dirpath):
         src_path, dst_subpath = item
         filepaths_to_copy.append(
             (src_path, os.path.join("frontend", "dist", dst_subpath))
@@ -246,8 +248,9 @@ def _get_client_zip_content(current_dir: str, log: logging.Logger):
     output.append((src_version_path, dst_version_path))
 
     # Add client code content to zip
-    for path, sub_path in find_files_in_subdir(client_dir):
-        output.append((path, sub_path))
+    client_code_dir: str = os.path.join(client_dir, ADDON_CLIENT_DIR)
+    for path, sub_path in find_files_in_subdir(client_code_dir):
+        output.append((path, os.path.join(ADDON_CLIENT_DIR, sub_path)))
     return output
 
 
@@ -276,6 +279,9 @@ def zip_client_side(
         os.makedirs(private_dir)
 
     mapping = _get_client_zip_content(current_dir, log)
+
+    pyproject_path = os.path.join(client_dir, "pyproject.toml")
+    mapping.append((pyproject_path, "pyproject.toml"))
 
     zip_filepath: str = os.path.join(os.path.join(private_dir, "client.zip"))
     with ZipFileLongPaths(zip_filepath, "w", zipfile.ZIP_DEFLATED) as zipf:
@@ -353,7 +359,7 @@ def copy_client_code(current_dir: str, output_dir: str, log: logging.Logger):
     os.makedirs(output_dir, exist_ok=True)
     mapping = _get_client_zip_content(current_dir, log)
     for (src_path, dst_path) in mapping:
-        full_dst_path = os.path.join(full_output_dir, dst_path)
+        full_dst_path = os.path.join(output_dir, dst_path)
         os.makedirs(os.path.dirname(full_dst_path), exist_ok=True)
         shutil.copy2(src_path, full_dst_path)
 
@@ -405,7 +411,7 @@ def main(
     try:
         copy_server_content(addon_output_dir, current_dir, log)
 
-        # zip_client_side(addon_output_dir, current_dir, log)
+        zip_client_side(addon_output_dir, current_dir, log)
         failed = False
     finally:
         if failed and os.path.isdir(addon_output_dir):
