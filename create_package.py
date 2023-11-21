@@ -280,8 +280,6 @@ def zip_client_side(
 
     mapping = _get_client_zip_content(current_dir, log)
 
-    pyproject_path = os.path.join(client_dir, "pyproject.toml")
-    mapping.append((pyproject_path, "pyproject.toml"))
 
     zip_filepath: str = os.path.join(os.path.join(private_dir, "client.zip"))
     with ZipFileLongPaths(zip_filepath, "w", zipfile.ZIP_DEFLATED) as zipf:
@@ -289,6 +287,7 @@ def zip_client_side(
         for path, sub_path in mapping:
             zipf.write(path, sub_path)
 
+    shutil.copy(os.path.join(client_dir, "pyproject.toml"), private_dir)
 
 def create_server_package(
     output_dir: str,
