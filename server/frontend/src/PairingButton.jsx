@@ -21,7 +21,7 @@ const ActionButton = styled(Button)`
 `
 
 
-const PairingDialog = ({pairing, onHide}) => {
+const PairingDialog = ({ pairing, onHide }) => {
   const [ayonProjectName, setAyonProjectName] = useState()
   const [ayonProjectCode, setAyonProjectCode] = useState()
   const [error, setError] = useState(null)
@@ -33,7 +33,7 @@ const PairingDialog = ({pairing, onHide}) => {
     // based on pairing.kitsuProjectName
     // ayon project names can only contain alphanumeric characters and underscores
     // ayon project codes can only contain alphanumeric characters and must be 3-6 characters long
-    
+
     let name = pairing.kitsuProjectName
     name = name.replace(/[^a-zA-Z0-9_]/g, '_')
     name = name.replace(/_+/g, '_')
@@ -57,10 +57,10 @@ const PairingDialog = ({pairing, onHide}) => {
     setLoading(true)
     axios
       .post(
-        `${BASE_URL}/pairing`, {
-          kitsuProjectId: pairing.kitsuProjectId,
-          ayonProjectName: ayonProjectName,
-          ayonProjectCode: ayonProjectCode,
+        `${addonData.baseUrl}/pairing`, {
+        kitsuProjectId: pairing.kitsuProjectId,
+        ayonProjectName: ayonProjectName,
+        ayonProjectCode: ayonProjectCode,
       })
       .then((response) => {
         setError(null)
@@ -81,14 +81,14 @@ const PairingDialog = ({pairing, onHide}) => {
 
       <FormLayout>
         <FormRow label="Ayon project name">
-          <InputText 
-            value={ayonProjectName} 
-            onChange={(e) => setAyonProjectName(e.target.value)} 
+          <InputText
+            value={ayonProjectName}
+            onChange={(e) => setAyonProjectName(e.target.value)}
           />
         </FormRow>
         <FormRow label="Ayon project code">
-          <InputText 
-            value={ayonProjectCode} 
+          <InputText
+            value={ayonProjectCode}
             onChange={(e) => setAyonProjectCode(e.target.value)}
           />
         </FormRow>
@@ -107,14 +107,14 @@ const PairingDialog = ({pairing, onHide}) => {
 }
 
 
-const PairingButton = ({onPair, pairing}) => {
+const PairingButton = ({ onPair, pairing }) => {
   const [showPairingDialog, setShowPairingDialog] = useState(false)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
 
   const onSync = () => {
     axios
-      .post( `${addonData.baseUrl}/sync/${pairing.ayonProjectName}` )
+      .post(`${addonData.baseUrl}/sync/${pairing.ayonProjectName}`)
       .then((response) => {
         setError(null)
         onHide()
@@ -129,7 +129,7 @@ const PairingButton = ({onPair, pairing}) => {
   }
 
   // project is not paired yet show pairing button
-  if (!pairing.ayonProjectName){
+  if (!pairing.ayonProjectName) {
     return (
       <>
         {showPairingDialog && (
@@ -141,12 +141,12 @@ const PairingButton = ({onPair, pairing}) => {
             }}
           />
         )}
-        <ActionButton 
-          label={`Pair project`} 
+        <ActionButton
+          label={`Pair project`}
           icon="link"
           onClick={() => {
             setShowPairingDialog(true)
-          }} 
+          }}
         />
       </>
     )
@@ -154,11 +154,11 @@ const PairingButton = ({onPair, pairing}) => {
 
 
   return (
-        <ActionButton 
-          label={`Sync now`} 
-          icon="sync"
-          onClick={onSync}
-        />
+    <ActionButton
+      label={`Sync now`}
+      icon="sync"
+      onClick={onSync}
+    />
   )
 
 }
