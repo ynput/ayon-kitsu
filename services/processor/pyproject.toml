@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "kitsu-processor"
-version = "0.1.5-dev.1"
+version = "1.0.0"
 description = "Kitsu Integration for Ayon"
 authors = ["Martin Wacker <martin@ynput.io>"]
 
