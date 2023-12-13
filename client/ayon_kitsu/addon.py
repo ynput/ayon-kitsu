@@ -2,18 +2,16 @@
 
 import os
 
-import ayon_api
 from openpype.modules import (
-    OpenPypeModule,
+    AYONAddon,
     IPluginPaths,
     ITrayAction,
 )
-from .version import __version__
 
 KITSU_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
-class KitsuAddon(OpenPypeModule, IPluginPaths, ITrayAction):
+class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
     """Kitsu module class."""
 
     label = "Kitsu Connect"
@@ -22,10 +20,9 @@ class KitsuAddon(OpenPypeModule, IPluginPaths, ITrayAction):
     def initialize(self, settings):
         """Initialization of module."""
 
-        addon_settings = ayon_api.get_addon_settings(self.name, __version__)
-
+        kitsu_settings = settings["kitsu"]
         # Add API URL schema
-        kitsu_url = addon_settings["server"].strip()
+        kitsu_url = kitsu_settings["server"].strip()
         if kitsu_url:
             # Ensure web url
             if not kitsu_url.startswith("http"):
