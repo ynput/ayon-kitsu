@@ -284,23 +284,29 @@ async def push_entities(
 
         # we need to sync folders first
         if entity_dict["type"] != "Task":
-            await sync_folder(
-                addon,
-                user,
-                project_name,
-                existing_folders,
-                entity_dict,
-            )
+            try:
+                await sync_folder(
+                    addon,
+                    user,
+                    project_name,
+                    existing_folders,
+                    entity_dict,
+                )
+            except Exception as e:
+                log_traceback(f"sync_folder failed for entity: {entity_dict}")
 
         else:
-            await sync_task(
-                addon,
-                user,
-                project_name,
-                existing_tasks,
-                existing_folders,
-                entity_dict,
-            )
+            try:
+                await sync_task(
+                    addon,
+                    user,
+                    project_name,
+                    existing_tasks,
+                    existing_folders,
+                    entity_dict,
+                )
+            except Exception as e:
+                log_traceback(f"sync_task failed for entity: {entity_dict}")
 
     logging.info(
         f"Synced {len(payload.entities)} entities in {time.time() - start_time}s"
