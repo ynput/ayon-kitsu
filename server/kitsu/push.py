@@ -229,6 +229,12 @@ async def sync_task(
             parent_folder = await get_folder_by_kitsu_id(
                 project_name, entity_dict["entity_id"], existing_folders
             )
+            ## TODO - handle edit tasks by creating edits folder
+            ## parent_folder will be blank when task is an edit task
+            ## for the moment lets skip so we can get on with the sync
+            if not parent_folder:
+                logging.error(f"No parent found for entity: {entity_dict}")
+                return
             parent_id = parent_folder.id
 
         logging.info(f"Creating {entity_dict['type']} {entity_dict['name']}")
