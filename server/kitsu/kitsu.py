@@ -101,4 +101,3 @@ class Kitsu:
 
     async def patch(self, endpoint: str, **kwargs) -> httpx.Response:
         return await self.request("patch", endpoint, **kwargs)
-
