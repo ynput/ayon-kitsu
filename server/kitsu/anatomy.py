@@ -1,6 +1,7 @@
 from typing import Any, TYPE_CHECKING
 
 from ayon_server.exceptions import AyonException
+from ayon_server.lib.postgres import Postgres
 from ayon_server.settings.anatomy import Anatomy
 from ayon_server.settings.anatomy.statuses import Status
 from ayon_server.settings.anatomy.task_types import TaskType, default_task_types
@@ -162,6 +163,13 @@ def parse_attrib(source: dict[str, Any] | None = None):
     return result
 
 
+async def get_primary_anatomy_preset() -> Anatomy:
+    query = "SELECT * FROM anatomy_presets WHERE is_primary is TRUE"
+    async for row in Postgres.iterate(query):
+        return Anatomy(**row["data"])
+    return Anatomy()
+
+
 async def get_kitsu_project_anatomy(
     addon: "KitsuAddon",
     kitsu_project_id: str,
@@ -180,10 +188,11 @@ async def get_kitsu_project_anatomy(
     statuses = await parse_statuses(addon, kitsu_project_id)
     task_types = await parse_task_types(addon, kitsu_project_id)
 
-    anatomy = Anatomy(
-        attributes=attributes,
-        task_types=task_types,
-        statuses=statuses,
-    )
+    anatomy_preset = await get_primary_anatomy_preset()
+    anatomy_dict = anatomy_preset.dict()
 
-    return anatomy
+    anatomy_dict["attributes"] = attributes
+    anatomy_dict["statuses"] = statuses
+    anatomy_dict["task_types"] = task_types
+
+    return Anatomy(**anatomy_dict)
