@@ -37,7 +37,7 @@ from typing import Any, Optional, Iterable, Pattern
 # Name of addon
 #   - e.g. 'maya'
 ADDON_NAME: str = "kitsu"
-# Name of folder where client code is located to copy 'version.py'
+# Name of folder where client code is located
 #   - e.g. 'ayon_maya'
 ADDON_CLIENT_DIR: str = "ayon_kitsu"
 
@@ -205,10 +205,6 @@ def copy_server_content(
     filepaths_to_copy: list[tuple[str, str]] = []
     server_dirpath: str = os.path.join(current_dir, "server")
 
-    # Version
-    src_version_path: str = os.path.join(current_dir, "version.py")
-    filepaths_to_copy.append((src_version_path, "version.py"))
-
     frontend_dirpath: str = os.path.join(server_dirpath, "frontend")
     frontend_dist_dirpath: str = os.path.join(frontend_dirpath, "dist")
     yarn_executable = _get_yarn_executable()
@@ -266,11 +262,6 @@ def _get_client_zip_content(current_dir: str, log: logging.Logger):
     log.info("Preparing client code zip")
 
     output: list[tuple[str, str]] = []
-
-    src_version_path: str = os.path.join(current_dir, "version.py")
-    dst_version_path: str = os.path.join(ADDON_CLIENT_DIR, "version.py")
-    output.append((src_version_path, dst_version_path))
-
     # Add client code content to zip
     client_code_dir: str = os.path.join(client_dir, ADDON_CLIENT_DIR)
     for path, sub_path in find_files_in_subdir(client_code_dir):
@@ -411,7 +402,7 @@ def main(
         log.info("Client folder created")
         return
 
-    version_filepath: str = os.path.join(current_dir, "version.py")
+    version_filepath: str = os.path.join(current_dir, "server", "version.py")
     version_content: dict[str, Any] = {}
     with open(version_filepath, "r") as stream:
         exec(stream.read(), version_content)
