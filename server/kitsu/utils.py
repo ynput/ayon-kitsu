@@ -1,3 +1,5 @@
+import re
+
 from typing import Any
 
 from ayon_server.lib.postgres import Postgres
@@ -63,6 +65,7 @@ async def get_task_by_kitsu_id(
 
 async def create_folder(
     project_name: str,
+    name: str,
     attrib: dict[str, Any] | None = None,
     **kwargs,
 ) -> FolderEntity:
@@ -71,9 +74,13 @@ async def create_folder(
     require background tasks. Maybe just use the similar function from
     api.folders.folders.py?
     """
+    # ensure name is correctly formatted
+    if name:
+        name = to_entity_name(name)
+
     folder = FolderEntity(
         project_name=project_name,
-        payload=kwargs,
+        payload=dict(kwargs, name=name),
     )
     await folder.save()
     event = {
@@ -89,13 +96,19 @@ async def create_folder(
 
 async def create_task(
     project_name: str,
+    name: str,
     attrib: dict[str, Any] | None = None,
     **kwargs,
 ) -> TaskEntity:
 
+    # ensure name is correctly formatted
+    if name:
+        name = to_entity_name(name)
+
+
     task = TaskEntity(
         project_name=project_name,
-        payload=kwargs,
+        payload=dict(kwargs, name=name),
     )
     await task.save()
     event = {
@@ -107,3 +120,13 @@ async def create_task(
 
     await dispatch_event(**event)
     return task
+
+
+def to_entity_name(kitsu_name) -> str:
+    """ convert kitsu names so they will pass Ayon Entity name validation """
+    name = kitsu_name.strip()
+    # replace whitespace
+    name = re.sub(r'\s+', "_", name)
+    # remove any invalid characters
+    name = re.sub(r'[^a-zA-Z0-9_\.\-]', '', name)
+    return name
