@@ -1,10 +1,17 @@
 import re
 
 from typing import Any
+from nxtools import slugify
 
 from ayon_server.lib.postgres import Postgres
 from ayon_server.entities import FolderEntity, TaskEntity
 from ayon_server.events import dispatch_event
+
+
+def create_name_and_label(kitsu_name: str) -> dict[str, str]:
+    """From a name coming from kitsu, create a name and label"""
+    name_slug = slugify(kitsu_name, separator="_")
+    return {"name": name_slug, "label": kitsu_name}
 
 
 async def get_folder_by_kitsu_id(
@@ -74,13 +81,11 @@ async def create_folder(
     require background tasks. Maybe just use the similar function from
     api.folders.folders.py?
     """
-    # ensure name is correctly formatted
-    if name:
-        name = to_entity_name(name)
+    payload = {**kwargs, **create_name_and_label(name)}
 
     folder = FolderEntity(
         project_name=project_name,
-        payload=dict(kwargs, name=name),
+        payload=payload,
     )
     await folder.save()
     event = {
@@ -100,15 +105,11 @@ async def create_task(
     attrib: dict[str, Any] | None = None,
     **kwargs,
 ) -> TaskEntity:
-
-    # ensure name is correctly formatted
-    if name:
-        name = to_entity_name(name)
-
+    payload = {**kwargs, **create_name_and_label(name)}
 
     task = TaskEntity(
         project_name=project_name,
-        payload=dict(kwargs, name=name),
+        payload=payload,
     )
     await task.save()
     event = {
@@ -120,13 +121,3 @@ async def create_task(
 
     await dispatch_event(**event)
     return task
-
-
-def to_entity_name(kitsu_name) -> str:
-    """ convert kitsu names so they will pass Ayon Entity name validation """
-    name = kitsu_name.strip()
-    # replace whitespace
-    name = re.sub(r'\s+', "_", name)
-    # remove any invalid characters
-    name = re.sub(r'[^a-zA-Z0-9_\.\-]', '', name)
-    return name
