@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "ayon-kitsu"
+version = "1.0.0"
+description = ""
+authors = ["Martastain <martas@imm.cz>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.0.1"
+requests = "^2.27.1"
+nxtools = "^1.6"
+simplejson = "^3.17.6"
+pytest-order = "^1.0.1"
+pytest-dependency = "^0.5.1"
+codenamize = "^1.2.3"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
