@@ -2,17 +2,20 @@ from typing import Type
 
 # from fastapi import BackgroundTasks
 
-
-from ayon_server.addons import BaseServerAddon
-from ayon_server.api.dependencies import CurrentUser
-from ayon_server.api.responses import EmptyResponse
-from ayon_server.exceptions import InvalidSettingsException, ForbiddenException
-from ayon_server.secrets import Secrets
+try:
+    from ayon_server.addons import BaseServerAddon
+    from ayon_server.api.dependencies import CurrentUser
+    from ayon_server.api.responses import EmptyResponse
+    from ayon_server.exceptions import InvalidSettingsException, ForbiddenException
+    from ayon_server.secrets import Secrets
+except:
+    pass
 
 from .version import __version__
 from .settings import KitsuSettings, DEFAULT_VALUES
 
 from .kitsu import Kitsu
+from .kitsu import KitsuMock
 
 from .kitsu.init_pairing import init_pairing, InitPairingRequest, sync_request
 from .kitsu.pairing_list import get_pairing_list, PairingItemModel
@@ -77,8 +80,8 @@ class KitsuAddon(BaseServerAddon):
             payload=payload,
         )
 
-    async def list_pairings(self) -> list[PairingItemModel]:
-        await self.ensure_kitsu()
+    async def list_pairings(self, mock=False) -> list[PairingItemModel]: 
+        await self.ensure_kitsu(mock)
         return await get_pairing_list(self)
 
     async def init_pairing(
@@ -96,8 +99,12 @@ class KitsuAddon(BaseServerAddon):
     # Helpers
     #
 
-    async def ensure_kitsu(self):
+    async def ensure_kitsu(self, mock=False):
         if self.kitsu is not None:
+            return
+        
+        if mock == "True":
+            self.kitsu = KitsuMock()
             return
 
         settings = await self.get_studio_settings()
@@ -112,5 +119,5 @@ class KitsuAddon(BaseServerAddon):
 
         if not actual_password:
             raise InvalidSettingsException("Kitsu password secret is not set")
-
+        
         self.kitsu = Kitsu(settings.server, actual_email, actual_password)

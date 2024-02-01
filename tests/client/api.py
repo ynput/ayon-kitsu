@@ -122,7 +122,6 @@ class API:
     def raw_get(self, endpoint: str, **kwargs) -> RestResponse:
         endpoint = endpoint.strip("/")
         url = f"{self.server_url}/api/{endpoint}"
-        print(url)
         response = self.session.get(url, params=kwargs)
         return response.content
 
@@ -133,11 +132,12 @@ class API:
         url = f"{self.server_url}/api/{endpoint}"
         return self._request(self.session.get, url, params=kwargs)
 
-    def post(self, endpoint: str, **kwargs) -> RestResponse:
+    def post(self, endpoint: str, mock=True, **kwargs) -> RestResponse:
         endpoint = endpoint.strip("/")
         if self.debug:
             logging.info(f"Executing [POST] {endpoint}")
         url = f"{self.server_url}/api/{endpoint}"
+        print('kwargs', kwargs)
         return self._request(self.session.post, url, json=kwargs)
 
     def put(self, endpoint: str, **kwargs) -> RestResponse:
