@@ -45,19 +45,16 @@ build-all:
 clean:
 	docker rmi $(IMAGE)
 
-clean-build:
-	clean
+clean-build: clean
 	build
 
 clean-build-all:
 	$(foreach service,processor sync-service, docker build --no-cache -t ynput/ayon-kitsu-$(service):$(ADDON_VERSION) -f $(service)/Dockerfile . &)
 
-dist:
-	build
+dist: build
 	docker push $(IMAGE)
 
-dev:
-	build
+dev: build
 	docker run --rm -u ayonuser -ti \
 		--hostname kitsu-dev-worker \
 		--env AYON_API_KEY=${AYON_API_KEY} \
