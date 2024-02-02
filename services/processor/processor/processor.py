@@ -7,6 +7,10 @@ import ayon_api
 import gazu
 
 from nxtools import logging, log_traceback
+from utils import (
+    KitsuServerError,
+    KitsuSettingsError,
+)
 
 from .fullsync import full_sync
 
@@ -15,14 +19,6 @@ if service_name := os.environ.get("AYON_SERVICE_NAME"):
     logging.user = service_name
 
 SENDER = f"kitsu-processor-{socket.gethostname()}"
-
-
-class KitsuServerError(Exception):
-    pass
-
-
-class KitsuSettingsError(Exception):
-    pass
 
 
 class KitsuProcessor:
@@ -112,7 +108,6 @@ class KitsuProcessor:
 
             src_job = ayon_api.get_event(job["dependsOn"])
 
-
             kitsu_project_id = src_job["summary"]["kitsuProjectId"]
             ayon_project_name = src_job["project"]
 
@@ -128,7 +123,7 @@ class KitsuProcessor:
                 full_sync(self, kitsu_project_id, ayon_project_name)
             except Exception:
                 log_traceback(f"Unable to sync kitsu project {ayon_project_name}")
-                
+
                 ayon_api.update_event(
                     job["id"],
                     sender=SENDER,
