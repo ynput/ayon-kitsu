@@ -1,11 +1,18 @@
 import pytest
+import os
 from .client.api import API
+import gazu as _gazu
+
 
 PROJECT_NAME = "test_kitsu_project"
+PROJECT_ID = "kitsu-project-id-1"
 PROJECT_CODE = "TK"
+PAIR_PROJECT_NAME = "another_test_kitsu_project"
+PAIR_PROJECT_CODE = "ATK"
+
 PROJECT_META = {
     "code": PROJECT_CODE,
-    "data": {"kitsuProjectId": 'kitsu-project-id-1'},
+    "data": {"kitsuProjectId": PROJECT_ID},
     "folderTypes": [
         {"name": "Folder"},
         {"name": "Asset"},
@@ -28,7 +35,7 @@ def api():
     api.delete(f"/projects/{PROJECT_NAME}")
 
     # ensure the synced kitsu project does not exist
-    api.delete('/projects/another_test_kitsu_project')
+    api.delete(f'/projects/{PAIR_PROJECT_NAME}')
     api.logout()
 
 @pytest.fixture
@@ -50,4 +57,24 @@ def kitsu_url(api):
     # return the addon url
     return f'addons/kitsu/{version}'
 
+@pytest.fixture
+def gazu():
+
+
+    host = os.environ.get('KITSU_API_URL', 'http://localhost/api')
+    login = os.environ.get('KITSU_LOGIN', 'admin@example.com')
+    pwd = os.environ.get('KITSU_PWD', 'mysecretpassword')
+
+    ## optional login to live kitsu 
+    # _gazu.set_host(host)
+    # _gazu.log_in(login, pwd)
+
+    return _gazu
+
+@pytest.fixture
+def processor():
+    class MockProcessor:
+        entrypoint = "/addons/kitsu/x.x.x"
+    
+    return MockProcessor()
     

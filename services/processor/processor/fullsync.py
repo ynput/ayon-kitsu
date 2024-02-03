@@ -33,22 +33,7 @@ def get_statuses():
         kitsu_statuses[status["id"]] = status["name"]
     return kitsu_statuses
 
-
-def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str):
-    logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
-
-    asset_types = get_asset_types(kitsu_project_id)
-    task_types = get_task_types(kitsu_project_id)
-    task_statuses = get_statuses()
-
-    episodes = gazu.shot.all_episodes_for_project(kitsu_project_id)
-    seqs = gazu.shot.all_sequences_for_project(kitsu_project_id)
-    shots = gazu.shot.all_shots_for_project(kitsu_project_id)
-
-    #
-    # Postprocess data
-    #
-
+def get_assets(kitsu_project_id: str, asset_types: {}) -> []:
     assets = []
     for record in gazu.asset.all_assets_for_project(kitsu_project_id):
         asset = {
@@ -56,7 +41,9 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
             "asset_type_name": asset_types[record["entity_type_id"]],
         }
         assets.append(asset)
+    return assets
 
+def get_tasks(kitsu_project_id: str, task_types: {}, task_statuses: {}) -> []:
     tasks = []
     for record in gazu.task.all_tasks_for_project(kitsu_project_id):
         task = {
@@ -71,6 +58,23 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
         # TODO: replace user uuids in task.assigness with emails
         # which can be used to pair with ayon users
 
+    return tasks
+
+
+def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str):
+    logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
+
+    asset_types = get_asset_types(kitsu_project_id)
+    task_types = get_task_types(kitsu_project_id)
+    task_statuses = get_statuses()
+
+    assets = get_assets(kitsu_project_id, asset_types)
+    tasks = get_tasks(kitsu_project_id, task_types, task_statuses)
+
+    episodes = gazu.shot.all_episodes_for_project(kitsu_project_id)
+    seqs = gazu.shot.all_sequences_for_project(kitsu_project_id)
+    shots = gazu.shot.all_shots_for_project(kitsu_project_id)
+       
     # compile list of entities
     # TODO: split folders and tasks if the list is huge
 

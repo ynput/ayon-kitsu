@@ -6,8 +6,10 @@ def to_entity_name(name) -> str:
     """ convert names so they will pass Ayon Entity name validation 
     """
     # @see ayon_server.types.NAME_REGEX = r"^[a-zA-Z0-9_]([a-zA-Z0-9_\.\-]*[a-zA-Z0-9_])?$"
+    assert name, "Entity name cannot be empty"
 
     name = name.strip()
+
     # replace whitespace
     name = re.sub(r'\s+', "_", name)
     # remove any invalid characters
@@ -35,6 +37,9 @@ def to_project_code(code: str) -> str:
     
     # not explicit but the code should be <=10 characters long
     code = code[:10]
+
+    # not explicit but the code should be >=2 characters long
+    assert len(code) >= 2, "Project Code should be 2 characters or more"
 
     return code
 
