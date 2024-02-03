@@ -1,10 +1,9 @@
+from pprint import pprint
 from typing import TYPE_CHECKING
 
 import ayon_api
 import gazu
-
 from nxtools import logging
-from pprint import pprint
 
 if TYPE_CHECKING:
     from .kitsu import KitsuProcessor
