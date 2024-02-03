@@ -1,7 +1,7 @@
 import pytest
 import os
-from .client.api import API
 import gazu as _gazu
+import ayon_api as _ayon_api
 
 
 PROJECT_NAME = "test_kitsu_project"
@@ -24,11 +24,16 @@ PROJECT_META = {
         {"name": "Unknown"},
     ],
 }
-
 @pytest.fixture()
 def api():
-    print("- api fixture")
-    api = API.login("admin", "admin")
+    """ use ayon_api to connect to backend for testing """
+
+    # set the environment variable for the ayon server if not set
+    if 'AYON_SERVER_URL' not in os.environ:
+        os.environ['AYON_SERVER_URL'] = "http://localhost:5000"
+
+    api = _ayon_api.GlobalServerAPI()
+    api.login("admin", "admin")
     api.delete(f"/projects/{PROJECT_NAME}")
     assert api.put(f"/projects/{PROJECT_NAME}", **PROJECT_META)
     yield api
@@ -40,7 +45,6 @@ def api():
 
 @pytest.fixture
 def kitsu_url(api):
-    print("- kitsu fixture")
     """ get the kitsu addon url """
 
     # /api/addons
@@ -59,7 +63,6 @@ def kitsu_url(api):
 
 @pytest.fixture
 def gazu():
-
 
     host = os.environ.get('KITSU_API_URL', 'http://localhost/api')
     login = os.environ.get('KITSU_LOGIN', 'admin@example.com')

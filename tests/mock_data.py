@@ -1,4 +1,4 @@
-""" mock data for patching gazu """
+""" mock kitsu api data for patching gazu """
 
 # /api/data/task-status
 all_task_statuses = [
