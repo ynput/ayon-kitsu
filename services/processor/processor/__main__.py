@@ -3,7 +3,11 @@ import time
 
 from nxtools import log_traceback, critical_error, logging
 
-from .processor import KitsuProcessor, KitsuServerError, KitsuSettingsError
+from .processor import KitsuProcessor
+from utils import (
+    KitsuServerError,
+    KitsuSettingsError,
+)
 
 
 def main():
