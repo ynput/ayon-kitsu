@@ -1,13 +1,17 @@
 import sys
 import time
 
-from nxtools import log_traceback, critical_error, logging
-
-from .processor import KitsuProcessor
 from kitsu_common.utils import (
     KitsuServerError,
     KitsuSettingsError,
 )
+from nxtools import (
+    critical_error,
+    log_traceback,
+    logging,
+)
+
+from .processor import KitsuProcessor
 
 
 def main():
@@ -20,8 +24,6 @@ def main():
 
 if __name__ == "__main__":
     err = None
-    print(KitsuServerError)
-    print(KitsuSettingsError)
     try:
         processor = KitsuProcessor()
     except (KitsuServerError, KitsuSettingsError) as e:
