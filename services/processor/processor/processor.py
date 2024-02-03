@@ -2,7 +2,6 @@ import os
 import socket
 import sys
 import time
-from typing import TYPE_CHECKING
 
 import ayon_api
 import gazu

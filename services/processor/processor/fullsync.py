@@ -1,4 +1,3 @@
-from pprint import pprint
 from typing import TYPE_CHECKING
 
 import ayon_api
