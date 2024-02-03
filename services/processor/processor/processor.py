@@ -1,13 +1,14 @@
 import os
-import sys
 import socket
+import sys
 import time
+from typing import TYPE_CHECKING
 
 import ayon_api
 import gazu
+from nxtools import log_traceback, logging
 
-from nxtools import logging, log_traceback
-from utils import (
+from kitsu_common.utils import (
     KitsuServerError,
     KitsuSettingsError,
 )

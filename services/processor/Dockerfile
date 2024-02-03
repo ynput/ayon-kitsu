@@ -21,7 +21,7 @@ RUN chown ayonuser:ayonuser -R /service
 RUN chmod 777 -R /service
 
 COPY processor/processor /service/processor
-COPY kitsu_common /service
+COPY kitsu_common /service/kitsu_common
 
 # Tell docker that all future commands should run as the appuser user
 USER ayonuser
