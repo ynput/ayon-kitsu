@@ -15,7 +15,11 @@ PROJECT_META = {
     "data": {"kitsuProjectId": PROJECT_ID},
     "folderTypes": [
         {"name": "Folder"},
+        {"name": "Library"},
         {"name": "Asset"},
+        {"name": "Episode"},
+        {"name": "Sequence"},
+        {"name": "Shot"},
     ],
     "taskTypes": [
         {"name": "Generic"},
