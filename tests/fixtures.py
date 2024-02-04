@@ -22,9 +22,11 @@ PROJECT_META = {
         {"name": "Shot"},
     ],
     "taskTypes": [
-        {"name": "Generic"},
+        {"name": "Animation"},
+        {"name": "Compositing"},
     ],
     "statuses": [
+        {"name": "Unknown"},
         {"name": "Unknown"},
     ],
 }

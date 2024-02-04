@@ -101,7 +101,6 @@ def test_push_episodes(api, kitsu_url):
     folders = res.data['hierarchy']
     assert len(folders) == 1
 
-    print(folders)
     episodes_folder = folders[0]
     assert episodes_folder['name'] == "Episodes"
     assert episodes_folder['label'] == "Episodes"
@@ -126,6 +125,47 @@ def test_push_episodes(api, kitsu_url):
     assert ep_2_folder['hasTasks'] == False
     assert not ep_2_folder['children']
 
+def test_push_sequences(api, kitsu_url):
+     # mock episodes
+    entities = mock_data.all_sequences_for_project
+
+    res = api.post(
+        f'{kitsu_url}/push', 
+        project_name=PROJECT_NAME,
+        entities=entities,
+    )
+    assert res.status_code == 200
+
+    # lets check what folder structure was saved
+    res = api.get(f"/projects/{PROJECT_NAME}/hierarchy")
+
+    folders = res.data['hierarchy']
+    print(folders)
+    assert len(folders) == 1
+
+    sequences_folder = folders[0]
+    assert sequences_folder['name'] == "Sequences"
+    assert sequences_folder['label'] == "Sequences"
+    assert sequences_folder['status'] == "Unknown"
+    assert sequences_folder['hasTasks'] == False
+    assert sequences_folder['folderType'] == "Folder"
+    assert len(sequences_folder['children']) == 2
+
+    seq_1_folder = sequences_folder['children'][0]
+    assert seq_1_folder['name'] == "SEQ01"
+    assert seq_1_folder['label'] == "SEQ01"
+    assert seq_1_folder['folderType'] == "Sequence"
+    assert seq_1_folder['status'] == "Unknown"
+    assert seq_1_folder['hasTasks'] == False
+    assert not seq_1_folder['children']
+
+    seq_2_folder = sequences_folder['children'][1]
+    assert seq_2_folder['name'] == "SEQ02"
+    assert seq_2_folder['label'] == "SEQ02"
+    assert seq_2_folder['folderType'] == "Sequence"
+    assert seq_2_folder['status'] == "Unknown"
+    assert seq_2_folder['hasTasks'] == False
+    assert not seq_2_folder['children']
 
 
 
