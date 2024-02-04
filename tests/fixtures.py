@@ -26,8 +26,8 @@ PROJECT_META = {
         {"name": "Compositing"},
     ],
     "statuses": [
-        {"name": "Unknown"},
-        {"name": "Unknown"},
+        {"name": "Todo"}, # the first status is the default
+        {"name": "Approved"},
     ],
 }
 @pytest.fixture(scope="session")
