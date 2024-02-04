@@ -30,7 +30,7 @@ PROJECT_META = {
         {"name": "Unknown"},
     ],
 }
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def api():
     """ use ayon_api to connect to backend for testing """
 
@@ -50,7 +50,7 @@ def api():
     api.logout()
 
 @pytest.fixture
-def kitsu_url(api):
+def kitsu_url(api, scope="session"):
     """ get the kitsu addon url """
 
     # /api/addons

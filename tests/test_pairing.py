@@ -1,4 +1,9 @@
-from tests.fixtures import api, kitsu_url, PROJECT_NAME, PROJECT_CODE, PAIR_PROJECT_NAME, PAIR_PROJECT_CODE
+from tests.fixtures import (
+    api, 
+    kitsu_url, 
+    PROJECT_NAME, PROJECT_CODE, 
+    PAIR_PROJECT_NAME, PAIR_PROJECT_CODE
+)
 
 assert api
 
@@ -14,6 +19,7 @@ def test_get_pairing(api, kitsu_url):
     api.delete(f'/projects/{PAIR_PROJECT_NAME}')
     
     res = api.get(f'{kitsu_url}/pairing', mock=True)
+    assert res.status_code == 200
     
     assert res.data == [
         {'kitsuProjectId': 'kitsu-project-id-1', 'kitsuProjectName': 'Kitsu Test Project', 'kitsuProjectCode': 'KTP', 'ayonProjectName': PROJECT_NAME}, 
@@ -30,8 +36,11 @@ def test_post_pairing_success(api, kitsu_url):
         ayonProjectCode=PAIR_PROJECT_CODE,
         mock=True
     )
+    assert res.status_code == 201 # created
     
     res = api.get(f'projects/{PAIR_PROJECT_NAME}')
+    print(res.data)
+
     project = res.data
 
     # check the created project
@@ -69,6 +78,7 @@ def test_post_pairing_success(api, kitsu_url):
 
     # the pairing should be updated
     res = api.get(f'{kitsu_url}/pairing', mock=True)
+    assert res.status_code == 200
     
     assert res.data == [
         {'kitsuProjectId': 'kitsu-project-id-1', 'kitsuProjectName': 'Kitsu Test Project', 'kitsuProjectCode': 'KTP', 'ayonProjectName': 'test_kitsu_project'}, 
@@ -76,4 +86,34 @@ def test_post_pairing_success(api, kitsu_url):
     ]
 
 
- 
+def test_post_pairing_already_exists(api, kitsu_url):
+    """ should have conflict if ayon project is already paired """
+
+    res = api.post(
+        f'{kitsu_url}/pairing', 
+        kitsuProjectId='kitsu-project-id-2', 
+        ayonProjectName=PROJECT_NAME,
+        ayonProjectCode=PROJECT_CODE
+    )
+    assert res.status_code == 409 # conflict
+
+# def test_post_pairing_duplicate(api, kitsu_url):
+#     """ should not be able to pair the same kitsu project with multiple ayon projects """
+
+#     res = api.post(
+#         f'{kitsu_url}/pairing', 
+#         kitsuProjectId='kitsu-project-id-2', 
+#         ayonProjectName=PAIR_PROJECT_NAME,
+#         ayonProjectCode=PAIR_PROJECT_CODE
+#     )
+#     res = api.post(
+#         f'{kitsu_url}/pairing', 
+#         kitsuProjectId='kitsu-project-id-2', 
+#         ayonProjectName="some_other_name",
+#         ayonProjectCode="SON"
+#     )
+#     api.delete(f'/projects/some_other_name')
+
+#     assert res.status_code != 201 
+
+    
