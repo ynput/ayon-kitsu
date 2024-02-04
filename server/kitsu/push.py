@@ -3,7 +3,7 @@ import time
 
 from typing import Any, Literal, get_args, TYPE_CHECKING
 
-from nxtools import logging
+from nxtools import logging, log_traceback
 
 from ayon_server.entities import FolderEntity, TaskEntity
 from ayon_server.lib.postgres import Postgres
