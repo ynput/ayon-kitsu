@@ -30,7 +30,7 @@ PROJECT_META = {
         {"name": "Approved"},
     ],
 }
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def api():
     """ use ayon_api to connect to backend for testing """
 
@@ -50,7 +50,7 @@ def api():
     api.logout()
 
 @pytest.fixture
-def kitsu_url(api, scope="session"):
+def kitsu_url(api, scope="module"):
     """ get the kitsu addon url """
 
     # /api/addons
@@ -68,7 +68,7 @@ def kitsu_url(api, scope="session"):
     return f'addons/kitsu/{version}'
 
 @pytest.fixture
-def gazu():
+def gazu(scope="module"):
 
     host = os.environ.get('KITSU_API_URL', 'http://localhost/api')
     login = os.environ.get('KITSU_LOGIN', 'admin@example.com')
@@ -81,7 +81,7 @@ def gazu():
     return _gazu
 
 @pytest.fixture
-def processor():
+def processor(scope="module"):
     class MockProcessor:
         entrypoint = "/addons/kitsu/x.x.x"
     

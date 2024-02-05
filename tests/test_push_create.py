@@ -1,11 +1,12 @@
 """ tests for endpoint 'api/addons/kitsu/{version}/push' 
     where all entities are being created for the first time
 
-    $ poetry run pytest tests/test_push.py
+    $ poetry run pytest tests/test_push_create.py
 """
 
 import ayon_api
 import gazu
+from pprint import pprint
 
 from processor import fullsync
 
@@ -234,6 +235,7 @@ def test_push_tasks(api, kitsu_url, monkeypatch):
         {'task-status-id-1': 'Todo', 'task-status-id-2': 'Approved'}
     )
     assert len(entities) == 2
+    pprint(entities)
 
     res = api.post(
         f'{kitsu_url}/push', 
@@ -263,6 +265,48 @@ def test_push_tasks(api, kitsu_url, monkeypatch):
     seq_2 = episode_2['children'][1]
     shot_3 = seq_2['children'][0]
     assert shot_3['hasTasks'] is False
+
+    # lets check what folder structure was saved
+    res = api.get_tasks(PROJECT_NAME)
+
+    tasks = list(res)
+    pprint(tasks)
+
+    assert len(tasks) == 2
+
+    task_1 = tasks[0]
+    assert task_1['taskType'] == 'Animation'
+    assert task_1['name'] == 'animation'
+    assert task_1['active'] is True
+    assert task_1['assignees'] == []
+    assert task_1['label'] is None
+    assert task_1['data'] == {'kitsuId': 'task-id-1'}
+    assert task_1['status'] == 'Todo' # status not working yet?
+    assert task_1['attrib'] == {
+        'description': None, 
+        'resolutionHeight': 1080, 
+        'resolutionWidth': 1920, 
+        'fps': 25.0, 
+        'frameStart': 1001, 
+        'frameEnd': 1001, 
+        'handleEnd': 0, 
+        'handleStart': 0,
+        'clipOut': 1, 
+        'clipIn': 1, 
+        'startDate': None, 
+        'endDate': None, 
+        'pixelAspect': 1.0, 
+        'tools': None, 
+    }
+
+    task_2 = tasks[1]
+    assert task_2['taskType'] == 'Compositing'
+    assert task_2['name'] == 'compositing'
+    assert task_2['data'] == {'kitsuId': 'task-id-2'}
+    assert task_2['status'] == 'Approved' # status not working yet?
+
+
+
 
 
 
