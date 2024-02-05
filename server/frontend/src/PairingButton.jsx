@@ -117,7 +117,7 @@ const PairingButton = ({ onPair, pairing }) => {
       .post(`${addonData.baseUrl}/sync/${pairing.ayonProjectName}`)
       .then((response) => {
         setError(null)
-        onHide()
+        onPair()
       })
       .catch((error) => {
         console.log(error)
