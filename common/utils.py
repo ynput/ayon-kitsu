@@ -45,7 +45,7 @@ def to_project_code(code: str) -> str:
 
 def to_label(label:str) -> str:
     # @see ayon_server.types.LABEL_REGEX = r"^[^';]*$"
-    return re.sub(r"[^';]", '', label)
+    return re.sub(r"[';]", '', label)
 
 
 # // create a ayon name and ayon code

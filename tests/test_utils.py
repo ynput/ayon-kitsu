@@ -1,5 +1,5 @@
 import pytest
-from common.utils import to_entity_name, to_project_name, to_project_code
+from common.utils import to_entity_name, to_project_name, to_project_code, to_label
 
 """ tests for common.utils.py
 
@@ -40,6 +40,12 @@ def test_to_project_code():
 
     with pytest.raises(Exception, match='Project Code should be 2 characters or more'):
         to_project_code("T")
-   
+
+def test_to_label():
+    assert to_label("Test Label") == "Test Label", "spaces supported in labels"
+    assert to_label("Test;Label'") == "TestLabel", "semi-colons and single quote not allowed to prevent sql injection"
+    
+    
+    
     
 
