@@ -62,16 +62,16 @@ def test_get_assets(gazu, monkeypatch):
         lambda x: mock_data.all_assets_for_project
     )
     res = fullsync.get_assets(PROJECT_ID,  {
-        'asset-type-id-1': 'Character', 
-        'asset-type-id-2': 'Rig', 
-        'asset-type-id-3': 'Location'
+        'asset-type-id-1': 'Character2', 
+        'asset-type-id-2': 'Rig2', 
+        'asset-type-id-3': 'Location2'
     })
     assert len(res) == 2
     assert res[0]['id'] == "asset-id-1"
-    assert res[0]['asset_type_name'] == 'Character'
+    assert res[0]['asset_type_name'] == 'Character2'
 
     assert res[1]['id'] == "asset-id-2"
-    assert res[1]['asset_type_name'] == 'Rig'
+    assert res[1]['asset_type_name'] == 'Rig2'
 
 
 def test_get_tasks(gazu, monkeypatch):
@@ -87,10 +87,12 @@ def test_get_tasks(gazu, monkeypatch):
     )
     assert len(res) == 2
     assert res[0]['id'] == "task-id-1"
+    assert res[0]['name'] == "animation"
     assert res[0]['task_type_name'] == 'Animation'
     assert res[0]['task_status_name'] == 'Approved'
 
     assert res[1]['id'] == "task-id-2"
+    assert res[1]['name'] == "compositing"
     assert res[1]['task_type_name'] == 'Compositing'
     assert res[1]['task_status_name'] == 'Todo'
     

@@ -1,7 +1,10 @@
 import pytest
 import os
+from pprint import pprint
 import gazu as _gazu
 import ayon_api as _ayon_api
+
+from . import mock_data
 
 
 PROJECT_NAME = "test_kitsu_project"
@@ -49,8 +52,8 @@ def api():
     api.delete(f'/projects/{PAIR_PROJECT_NAME}')
     api.logout()
 
-@pytest.fixture
-def kitsu_url(api, scope="module"):
+@pytest.fixture(scope="module")
+def kitsu_url(api):
     """ get the kitsu addon url """
 
     # /api/addons
@@ -67,8 +70,27 @@ def kitsu_url(api, scope="module"):
     # return the addon url
     return f'addons/kitsu/{version}'
 
-@pytest.fixture
-def gazu(scope="module"):
+@pytest.fixture(scope="module")
+def init_data(api, kitsu_url):
+    # create the starting entities
+    entities =  (
+        mock_data.all_assets_for_project_preprocessed + 
+        mock_data.all_episodes_for_project + 
+        mock_data.all_sequences_for_project + 
+        mock_data.all_shots_for_project +
+        mock_data.all_tasks_for_project_preprocessed
+    )
+    res = api.post(
+        f'{kitsu_url}/push', 
+        project_name=PROJECT_NAME,
+        entities=entities,
+    )
+    pprint(res.data)
+    assert res.status_code == 200
+
+
+@pytest.fixture(scope="module")
+def gazu():
 
     host = os.environ.get('KITSU_API_URL', 'http://localhost/api')
     login = os.environ.get('KITSU_LOGIN', 'admin@example.com')
@@ -86,4 +108,6 @@ def processor(scope="module"):
         entrypoint = "/addons/kitsu/x.x.x"
     
     return MockProcessor()
+
+
     

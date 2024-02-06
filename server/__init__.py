@@ -8,6 +8,7 @@ try:
     from ayon_server.api.responses import EmptyResponse
     from ayon_server.exceptions import InvalidSettingsException, ForbiddenException
     from ayon_server.secrets import Secrets
+    from ayon_server.entities import FolderEntity, TaskEntity
 except:
     pass
 
@@ -20,6 +21,7 @@ from .kitsu import KitsuMock
 from .kitsu.init_pairing import init_pairing, InitPairingRequest, sync_request
 from .kitsu.pairing_list import get_pairing_list, PairingItemModel
 from .kitsu.push import push_entities, PushEntitiesRequestModel
+from .kitsu import utils
 
 
 #
@@ -74,7 +76,7 @@ class KitsuAddon(BaseServerAddon):
     ):
         if not user.is_manager:
             raise ForbiddenException("Only managers can sync Kitsu projects")
-        await push_entities(
+        return await push_entities(
             self,
             user=user,
             payload=payload,

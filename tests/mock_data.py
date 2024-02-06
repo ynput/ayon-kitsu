@@ -229,7 +229,7 @@ all_shots_for_project = [
         "preview_file_id": "preview-id-2",
         "data": {
             "fps": "25",
-            "frame_in": "0",
+            "frame_in": "1",
             "frame_out": "150"
         },
         "ready_for": None,
@@ -255,7 +255,7 @@ all_shots_for_project = [
         "source_id": None,
         "preview_file_id": "preview-id-3",
         "data": {
-            "fps": "25",
+            "fps": "29.97",
             "frame_in": "0",
             "frame_out": "50"
         },
@@ -292,7 +292,7 @@ all_assets_for_project = [
     "updated_at":"2024-01-01T00:00:00",
     "type": "Asset"
   },
-    {
+  {
     "id": "asset-id-2",
     "name": "Second Character",
     "code": None,
@@ -316,6 +316,13 @@ all_assets_for_project = [
     "type": "Asset"
   }
 ]
+
+# adds the preprocessing that fullsync does
+all_assets_for_project_preprocessed = [
+    { **all_assets_for_project[0], 'asset_type_name': "Character"},
+    { **all_assets_for_project[1], 'asset_type_name': "Rig"},
+]
+
 
 all_tasks_for_project = [
     {
@@ -379,5 +386,12 @@ all_tasks_for_project = [
         "updated_at":"2024-01-01T00:00:00",
         "type": "Task"
     }
-
 ]
+
+# adds the preprocessing that fullsync does
+all_tasks_for_project_preprocessed = [
+    { **all_tasks_for_project[0], 'name': 'animation', 'task_type_name': "Animation", 'task_status_name': "Todo"},
+    { **all_tasks_for_project[1], 'name': 'compositing', 'task_type_name': "Compositing", 'task_status_name': "Approved"},
+]
+ 
+    

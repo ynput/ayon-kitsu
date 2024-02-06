@@ -39,8 +39,6 @@ def test_post_pairing_success(api, kitsu_url):
     assert res.status_code == 201 # created
     
     res = api.get(f'projects/{PAIR_PROJECT_NAME}')
-    print(res.data)
-
     project = res.data
 
     # check the created project

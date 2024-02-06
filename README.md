@@ -13,10 +13,13 @@ volumes:
       - "../ayon-backend:/backend"
 
       # mount ayon-kitsu
-      - "../ayon-kitsu/server:/addons/kitsu/1.0.1"
-      - "../ayon-kitsu/version.py:/addons/kitsu/1.0.1/version.py"
+      - "../ayon-kitsu/server:/addons/kitsu/1.0.2-dev1"
+      - "../ayon-kitsu/version.py:/addons/kitsu/1.0.2-dev1/version.py"
 
 ```
+
+In the ayon backend you will need to create a new bundle with the kitsu version included.
+
 
 Set up poetry env
 
