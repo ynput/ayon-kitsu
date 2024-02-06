@@ -23,6 +23,7 @@ def test_update_folder(api, kitsu_url):
         project_name=PROJECT_NAME,
         entities=[episode_entity],
     )
+    pprint(res.data)
     assert res.status_code == 200
     assert res.data, "push should return the ayon objects created including the ayon id"
 
