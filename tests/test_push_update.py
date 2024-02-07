@@ -8,7 +8,7 @@ from pprint import pprint
 
     $ poetry run pytest tests/test_push_update.py
 """
-def test_update_shot_data(api, kitsu_url, init_data):
+def test_update_folder_attrib(api, kitsu_url, init_data):
 
     # do a partial update
     kitsu_id = 'shot-id-1'
@@ -27,8 +27,9 @@ def test_update_shot_data(api, kitsu_url, init_data):
         project_name=PROJECT_NAME,
         entities=[update],
     )
+    assert res.status_code == 200
    
-    # res.data should be maps of kitsu-ids to ayon-ids {'folders': {'shot-id-1': '40dfcf00c50511eeba890242ac150004'}, 'tasks': {}}
+    # res.data should be maps of kitsu-ids to ayon-ids such as {'folders': {'shot-id-1': '40dfcf00c50511eeba890242ac150004'}, 'tasks': {}}
     assert res.data, "push should return the ayon objects created including the ayon id"
     assert kitsu_id in res.data['folders']
     assert isinstance(res.data['folders'][kitsu_id], str)
@@ -37,7 +38,6 @@ def test_update_shot_data(api, kitsu_url, init_data):
     # lets get the ayon folder
     ayon_id = res.data['folders'][kitsu_id]
     folder = api.get_folder_by_id(PROJECT_NAME, ayon_id)
-    pprint(folder)
 
     # fps and frame_in should be updated
     assert folder['attrib']['fps'] == 24
@@ -46,20 +46,19 @@ def test_update_shot_data(api, kitsu_url, init_data):
     
  
 def test_update_folder_name(api, kitsu_url):
-
     # do a partial update
     kitsu_id = 'shot-id-1'
     update = {
-        "id": kitsu_id,         # required
-        "type": "Episode",      # required
-        "name": "An Updated Name!",
+        "id": kitsu_id,             # required
+        "type": "Shot",             # required
+        "name": "An Updated Name!", # required
     }
     res = api.post(
         f'{kitsu_url}/push', 
         project_name=PROJECT_NAME,
         entities=[update],
     )
-
+     
     # lets get the ayon folder
     ayon_id = res.data['folders'][kitsu_id]
     folder = api.get_folder_by_id(PROJECT_NAME, ayon_id)
@@ -67,3 +66,71 @@ def test_update_folder_name(api, kitsu_url):
     assert folder['name'] == "an_updated_name"
     assert folder['label'] == "An Updated Name!"
    
+def test_update_folder_no_changes(api, kitsu_url):
+
+    # do a partial update
+    kitsu_id = 'shot-id-1'
+    update = {
+        "id": kitsu_id,             # required
+        "type": "Shot",             # required
+        "name": "An Updated Name!", # no change
+        "ready_for": "animation",   # update a key that does not get updated in ayon
+    }
+    res = api.post(
+        f'{kitsu_url}/push', 
+        project_name=PROJECT_NAME,
+        entities=[update],
+    )
+    assert res.status_code == 200
+   
+    # there should be no folders returned as none were created or updated
+    assert res.data == {'folders': {}, 'tasks': {}}
+
+def test_update_task_status(api, kitsu_url):
+
+    pprint(list(api.get_tasks(PROJECT_NAME)))
+
+    # do a partial update
+    kitsu_id = 'task-id-1'
+    update = {
+        "id": kitsu_id,                     # required
+        "type": "Task",                     # required
+        "name": "animation",                # required
+        "task_status_name": "Approved",     # Todo -> Approved
+        "task_type_name": "Animation",      # no change
+    }
+    res = api.post(
+        f'{kitsu_url}/push', 
+        project_name=PROJECT_NAME,
+        entities=[update],
+    )
+    pprint(res.data)
+     
+    # lets get the ayon folder
+    ayon_id = res.data['tasks'][kitsu_id]
+    task = api.get_task_by_id(PROJECT_NAME, ayon_id)
+    pprint(task)
+    assert False
+
+    assert folder['name'] == "an_updated_name"
+    assert folder['label'] == "An Updated Name!"
+   
+def _test_update_task_no_changes(api, kitsu_url):
+
+    # do a partial update
+    kitsu_id = 'shot-id-1'
+    update = {
+        "id": kitsu_id,             # required
+        "type": "Episode",          # required
+        "name": "An Updated Name!", # no change
+        "ready_for": "animation",   # update a key that does not get updated in ayon
+    }
+    res = api.post(
+        f'{kitsu_url}/push', 
+        project_name=PROJECT_NAME,
+        entities=[update],
+    )
+    assert res.status_code == 200
+   
+    # there should be no folders returned as none were created or updated
+    assert res.data == {'folders': {}, 'tasks': {}}

@@ -35,7 +35,6 @@ async def get_folder_by_kitsu_id(
         if not res:
             return None
         folder_id = res[0]["id"]
-        existing_folders[kitsu_id] = folder_id
 
     return await FolderEntity.load(project_name, folder_id)
 
@@ -63,7 +62,6 @@ async def get_task_by_kitsu_id(
         if not res:
             return None
         folder_id = res[0]["id"]
-        existing_tasks[kitsu_id] = folder_id
 
     return await TaskEntity.load(project_name, folder_id)
 
@@ -97,6 +95,41 @@ async def create_folder(
     await dispatch_event(**event)
     return folder
 
+async def update_folder(
+    project_name: str,
+    folder_id: str,
+    name: str,
+    **kwargs,
+) -> bool:
+    
+    folder = await FolderEntity.load(project_name, folder_id)
+    changed = False
+
+    payload = {**kwargs, **create_name_and_label(name)}
+
+    for key in ['name', 'label']:
+        if key in payload and getattr(folder, key) != payload[key]:
+            setattr(folder, key, payload[key])
+            changed = True
+
+    for key, value in payload['attrib'].items():
+        if getattr(folder.attrib, key) != value:
+            setattr(folder.attrib, key, value)
+            if key not in folder.own_attrib:
+                folder.own_attrib.append(key)
+            changed = True
+    if changed:
+        await folder.save()
+        event = {
+            "topic": "entity.folder.updated",
+            "description": f"Folder {folder.name} updated",
+            "summary": {"entityId": folder.id, "parentId": folder.parent_id},
+            "project": project_name,
+        }
+        await dispatch_event(**event)
+
+    return changed
+
 
 async def create_task(
     project_name: str,
@@ -119,3 +152,37 @@ async def create_task(
 
     await dispatch_event(**event)
     return task
+
+async def update_task(
+    project_name: str,
+    task_id: str,
+    name: str,
+    **kwargs,
+) -> bool:
+    
+    task = await TaskEntity.load(project_name, task_id)
+    changed = False
+
+    payload = {**kwargs, **create_name_and_label(name)}
+
+    for key in ['name', 'label']:
+        if key in payload and getattr(task, key) != payload[key]:
+            setattr(task, key, payload[key])
+            changed = True
+
+    for key, value in payload['attrib'].items():
+        if getattr(task.attrib, key) != value:
+            setattr(task.attrib, key, value)
+            if key not in task.own_attrib:
+                task.own_attrib.append(key)
+            changed = True
+    if changed:
+        await task.save()
+        event = {
+            "topic": "entity.task.updated",
+            "description": f"Task {task.name} updated",
+            "summary": {"entityId": task.id, "parentId": task.parent_id},
+            "project": project_name,
+        }
+        await dispatch_event(**event)
+    return changed
