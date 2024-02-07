@@ -19,7 +19,7 @@ def test_update_shot_data(api, kitsu_url, init_data):
         'data': {
             "fps": "24",            # 25 => 24
             "frame_in": "2",        # 0 => 1
-            # "frame_out": "100" # leave as is
+            "frame_out": "102"      # 100 => 102
         }
     }
     res = api.post(
@@ -42,9 +42,8 @@ def test_update_shot_data(api, kitsu_url, init_data):
     # fps and frame_in should be updated
     assert folder['attrib']['fps'] == 24
     assert folder['attrib']['frameStart'] == 2
-    assert folder['attrib']['frameEnd'] == 100
+    assert folder['attrib']['frameEnd'] == 102
     
-
  
 def test_update_folder_name(api, kitsu_url):
 

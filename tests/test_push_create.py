@@ -168,8 +168,7 @@ def test_push_shots(api, kitsu_url):
         entities=entities,
     )
     assert res.status_code == 200
-    pprint(res.data)
-
+   
     # lets check what folder structure was saved
     res = api.get(f"/projects/{PROJECT_NAME}/hierarchy")
 
@@ -286,8 +285,8 @@ def test_push_tasks(api, kitsu_url, monkeypatch):
         'resolutionHeight': 1080, 
         'resolutionWidth': 1920, 
         'fps': 25.0, 
-        'frameStart': 1001, 
-        'frameEnd': 1001, 
+        'frameStart': 0, 
+        'frameEnd': 100, 
         'handleEnd': 0, 
         'handleStart': 0,
         'clipOut': 1, 
@@ -303,6 +302,23 @@ def test_push_tasks(api, kitsu_url, monkeypatch):
     assert task_2['name'] == 'compositing'
     assert task_2['data'] == {'kitsuId': 'task-id-2'}
     # assert task_2['status'] == 'Approved' # status not working yet?
+
+    assert task_2['attrib'] == {
+        'description': None, 
+        'resolutionHeight': 1080, 
+        'resolutionWidth': 1920, 
+        'fps': 25.0, 
+        'frameStart': 0, 
+        'frameEnd': 100, 
+        'handleEnd': 0, 
+        'handleStart': 0,
+        'clipOut': 1, 
+        'clipIn': 1, 
+        'startDate': None, 
+        'endDate': None, 
+        'pixelAspect': 1.0, 
+        'tools': None, 
+    }
 
 
 
