@@ -73,7 +73,6 @@ async def get_task_by_kitsu_id(
 async def create_folder(
     project_name: str,
     name: str,
-    attrib: dict[str, Any] | None = None,
     **kwargs,
 ) -> FolderEntity:
     """
@@ -102,7 +101,6 @@ async def create_folder(
 async def create_task(
     project_name: str,
     name: str,
-    attrib: dict[str, Any] | None = None,
     **kwargs,
 ) -> TaskEntity:
     payload = {**kwargs, **create_name_and_label(name)}
