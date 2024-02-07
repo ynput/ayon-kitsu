@@ -1,7 +1,7 @@
 import re
 
 from typing import Any
-from nxtools import slugify
+from nxtools import slugify, logging
 
 from ayon_server.lib.postgres import Postgres
 from ayon_server.entities import FolderEntity, TaskEntity
@@ -138,6 +138,8 @@ async def create_task(
 ) -> TaskEntity:
     payload = {**kwargs, **create_name_and_label(name)}
 
+    logging.info(f"create_task: {str(payload)}")
+
     task = TaskEntity(
         project_name=project_name,
         payload=payload,
@@ -165,17 +167,18 @@ async def update_task(
 
     payload = {**kwargs, **create_name_and_label(name)}
 
-    for key in ['name', 'label']:
+    # keys that can be updated
+    for key in ['name', 'label', 'status', 'task_type']:
         if key in payload and getattr(task, key) != payload[key]:
             setattr(task, key, payload[key])
             changed = True
-
-    for key, value in payload['attrib'].items():
-        if getattr(task.attrib, key) != value:
-            setattr(task.attrib, key, value)
-            if key not in task.own_attrib:
-                task.own_attrib.append(key)
-            changed = True
+    if 'attrib' in payload:
+        for key, value in payload['attrib'].items():
+            if getattr(task.attrib, key) != value:
+                setattr(task.attrib, key, value)
+                if key not in task.own_attrib:
+                    task.own_attrib.append(key)
+                changed = True
     if changed:
         await task.save()
         event = {

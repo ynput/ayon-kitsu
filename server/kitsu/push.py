@@ -263,15 +263,13 @@ async def sync_task(
         existing_tasks[entity_dict["id"]] = target_task.id
 
     else:
-        logging.info(f"updating {target_task.id}")
         changed = await update_task(
             project_name=project.name,
             task_id=target_task.id,
-            name=entity_dict["name"],
-            status=entity_dict["task_status_name"],
-            task_type=entity_dict["task_type_name"],
+            name=entity_dict.get("name", target_task.name),
+            status=entity_dict.get("task_status_name", target_task.status),
+            task_type=entity_dict.get("task_type_name", target_task.task_type),
         )
-        logging.info(f"after updating {target_task.id}")
         if changed:
             logging.info(f"Updating {entity_dict['type']} '{entity_dict['name']}'")
             existing_tasks[entity_dict["id"]] = target_task.id

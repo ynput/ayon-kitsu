@@ -5,7 +5,7 @@ from tests.fixtures import (
     PAIR_PROJECT_NAME, PAIR_PROJECT_CODE
 )
 
-assert api
+from pprint import pprint
 
 
 """ tests for endpoint 'api/addons/kitsu/{version}/pairing' 
@@ -28,7 +28,6 @@ def test_get_pairing(api, kitsu_url):
 
 def test_post_pairing_success(api, kitsu_url):
 
-
     res = api.post(
         f'{kitsu_url}/pairing', 
         kitsuProjectId='kitsu-project-id-2', 
@@ -47,15 +46,34 @@ def test_post_pairing_success(api, kitsu_url):
     assert project['data'] == {'kitsuProjectId': 'kitsu-project-id-2'}
     assert project['active']
 
-    assert project['taskTypes'][0]['name'] == "Animation"
-    assert project['taskTypes'][0]['shortName'] == "anim"
-    assert project['taskTypes'][1]['name'] == "Compositing"
-    assert project['taskTypes'][1]['shortName'] == "comp"
+    # task types
+    assert project['taskTypes'][0] == {
+        'name': "Animation",
+        'shortName': "anim",
+        'icon': 'directions_run'
+    }
+    assert project['taskTypes'][1] == {
+        'name': "Compositing",
+        'shortName': "comp",
+        'icon': 'layers'
+    }
+    
+    # statuses
+    assert project['statuses'][0] == {
+        'name': "Todo",
+        'color': "#f5f5f5",
+        'state':"in_progress", 
+        'shortName': "TODO",
+        'icon': '',
+    }
 
-    assert project['statuses'][0]['name'] == "Todo"
-    assert project['statuses'][0]['color'] == "#f5f5f5"
-    assert project['statuses'][0]['state'] == "in_progress" ## why in_progress?
-    assert project['statuses'][0]['shortName'] == "TODO"
+    assert project['statuses'][1] == {
+        'name': "Approved",
+        'color': "#22D160",
+        'state':"in_progress", 
+        'shortName': "App",
+        'icon': '',
+    }
 
     assert project['tags'] == [] # could be useful for kitsu info
 
@@ -73,6 +91,30 @@ def test_post_pairing_success(api, kitsu_url):
         'startDate': '2024-01-01T00:00:00+00:00',
         'endDate': '2024-12-31T00:00:00+00:00'
     }
+
+    assert project['folderTypes'] == [
+        {'icon': 'folder', 'name': 'Folder', 'shortName': ''},
+        {'icon': 'category', 'name': 'Library', 'shortName': 'lib'},
+        {'icon': 'smart_toy', 'name': 'Asset', 'shortName': ''},
+        {'icon': 'live_tv', 'name': 'Episode', 'shortName': 'ep'},
+        {'icon': 'theaters', 'name': 'Sequence', 'shortName': 'sq'},
+        {'icon': 'movie', 'name': 'Shot', 'shortName': 'sh'}
+    ]
+
+    assert project['ownAttrib'] == [
+        'fps',
+        'clipIn',
+        'clipOut',
+        'endDate',
+        'frameEnd',
+        'handleEnd',
+        'startDate',
+        'frameStart',
+        'handleStart',
+        'pixelAspect',
+        'resolutionWidth',
+        'resolutionHeight'
+    ]
 
     # the pairing should be updated
     res = api.get(f'{kitsu_url}/pairing', mock=True)

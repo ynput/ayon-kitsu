@@ -241,15 +241,72 @@ def test_push_tasks(api, kitsu_url, monkeypatch):
         entities=entities,
     )
     assert res.status_code == 200
+    pprint(res.data)
 
-    # lets check what folder structure was saved
+    """
+     res.data should have the created task ids eg. 
+    {'folders': {},'tasks': {
+        'task-id-1': '0a942808c5e911ee9d540242ac150004',
+        'task-id-2': '0a95fb56c5e911ee9d540242ac150004'
+    }}
+    """
+    assert res.data['tasks'], "created task ids should be returned"
+    tasks = res.data['tasks']
+
+    res = api.get(f"/projects/{PROJECT_NAME}/tasks/{tasks['task-id-1']}") 
+    assert res.status_code == 200
+    task_1 = res.data
+    
+    assert task_1['taskType'] == 'Animation'
+    assert task_1['name'] == 'animation'
+    assert task_1['active'] is True
+    assert task_1['assignees'] == []
+    assert task_1['label'] == "animation"
+    assert task_1['data'] == {'kitsuId': 'task-id-1'}
+    assert task_1['status'] == 'Todo'
+    assert task_1['attrib'] == {
+        'resolutionHeight': 1080, 
+        'resolutionWidth': 1920, 
+        'fps': 25.0, 
+        'frameStart': 0, 
+        'frameEnd': 100, 
+        'handleEnd': 0, 
+        'handleStart': 0,
+        'clipOut': 1, 
+        'clipIn': 1, 
+        'pixelAspect': 1.0
+    }
+
+    res = api.get(f"/projects/{PROJECT_NAME}/tasks/{tasks['task-id-2']}") 
+    assert res.status_code == 200
+    task_2 = res.data
+
+    assert task_2['taskType'] == 'Compositing'
+    assert task_2['name'] == 'compositing'
+    assert task_2['data'] == {'kitsuId': 'task-id-2'}
+    assert task_2['status'] == 'Approved' # status not working yet?
+
+    assert task_2['attrib'] == { 
+        'resolutionHeight': 1080, 
+        'resolutionWidth': 1920, 
+        'fps': 25.0, 
+        'frameStart': 0, 
+        'frameEnd': 100, 
+        'handleEnd': 0, 
+        'handleStart': 0,
+        'clipOut': 1, 
+        'clipIn': 1, 
+        'pixelAspect': 1.0 
+    }
+
+    # ---------------------------------------------
+    # lets check what folder hierarchy now has tasks
     res = api.get(f"/projects/{PROJECT_NAME}/hierarchy")
 
     folders = res.data['hierarchy']
     assert len(folders) == 2
 
     # shot_1  now has tasks
-
     episodes_folder = folders[1]
     episode_2 = episodes_folder['children'][1]
     seq_1 = episode_2['children'][0]
@@ -263,62 +320,6 @@ def test_push_tasks(api, kitsu_url, monkeypatch):
     seq_2 = episode_2['children'][1]
     shot_3 = seq_2['children'][0]
     assert shot_3['hasTasks'] is False
-
-    # lets check what folder structure was saved
-    res = api.get_tasks(PROJECT_NAME)
-
-    tasks = list(res)
-    pprint(tasks)
-
-    assert len(tasks) == 2
-
-    task_1 = tasks[0]
-    assert task_1['taskType'] == 'Animation'
-    assert task_1['name'] == 'animation'
-    assert task_1['active'] is True
-    assert task_1['assignees'] == []
-    assert task_1['label'] == "animation"
-    assert task_1['data'] == {'kitsuId': 'task-id-1'}
-    # assert task_1['status'] == 'Todo' # status not working yet?
-    assert task_1['attrib'] == {
-        'description': None, 
-        'resolutionHeight': 1080, 
-        'resolutionWidth': 1920, 
-        'fps': 25.0, 
-        'frameStart': 0, 
-        'frameEnd': 100, 
-        'handleEnd': 0, 
-        'handleStart': 0,
-        'clipOut': 1, 
-        'clipIn': 1, 
-        'startDate': None, 
-        'endDate': None, 
-        'pixelAspect': 1.0, 
-        'tools': None, 
-    }
-
-    task_2 = tasks[1]
-    assert task_2['taskType'] == 'Compositing'
-    assert task_2['name'] == 'compositing'
-    assert task_2['data'] == {'kitsuId': 'task-id-2'}
-    # assert task_2['status'] == 'Approved' # status not working yet?
-
-    assert task_2['attrib'] == {
-        'description': None, 
-        'resolutionHeight': 1080, 
-        'resolutionWidth': 1920, 
-        'fps': 25.0, 
-        'frameStart': 0, 
-        'frameEnd': 100, 
-        'handleEnd': 0, 
-        'handleStart': 0,
-        'clipOut': 1, 
-        'clipIn': 1, 
-        'startDate': None, 
-        'endDate': None, 
-        'pixelAspect': 1.0, 
-        'tools': None, 
-    }
 
 
 

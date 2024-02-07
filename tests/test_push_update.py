@@ -88,8 +88,6 @@ def test_update_folder_no_changes(api, kitsu_url):
 
 def test_update_task_status(api, kitsu_url):
 
-    pprint(list(api.get_tasks(PROJECT_NAME)))
-
     # do a partial update
     kitsu_id = 'task-id-1'
     update = {
@@ -97,32 +95,28 @@ def test_update_task_status(api, kitsu_url):
         "type": "Task",                     # required
         "name": "animation",                # required
         "task_status_name": "Approved",     # Todo -> Approved
-        "task_type_name": "Animation",      # no change
     }
     res = api.post(
         f'{kitsu_url}/push', 
         project_name=PROJECT_NAME,
         entities=[update],
     )
-    pprint(res.data)
-     
-    # lets get the ayon folder
     ayon_id = res.data['tasks'][kitsu_id]
-    task = api.get_task_by_id(PROJECT_NAME, ayon_id)
-    pprint(task)
-    assert False
 
-    assert folder['name'] == "an_updated_name"
-    assert folder['label'] == "An Updated Name!"
+    res = api.get(f"/projects/{PROJECT_NAME}/tasks/{ayon_id}") 
+    assert res.status_code == 200
+    folder = res.data
+    assert folder['status'] == "Approved"
+ 
    
-def _test_update_task_no_changes(api, kitsu_url):
+def test_update_task_no_changes(api, kitsu_url):
 
     # do a partial update
-    kitsu_id = 'shot-id-1'
+    kitsu_id = 'task-id-1'
     update = {
         "id": kitsu_id,             # required
-        "type": "Episode",          # required
-        "name": "An Updated Name!", # no change
+        "type": "Task",             # required
+        "name": "animation",        # no change
         "ready_for": "animation",   # update a key that does not get updated in ayon
     }
     res = api.post(
