@@ -348,3 +348,10 @@ async def push_entities(
 
     # pass back the map of kitsu to ayon ids
     return {'folders': folders, 'tasks': tasks}
+
+async def delete_entities(
+    addon: "KitsuAddon",
+    user: "UserEntity",
+    payload: PushEntitiesRequestModel,
+) -> list:
+    raise NotImplementedError()

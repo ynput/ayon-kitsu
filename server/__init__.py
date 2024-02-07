@@ -20,7 +20,7 @@ from .kitsu import KitsuMock
 
 from .kitsu.init_pairing import init_pairing, InitPairingRequest, sync_request
 from .kitsu.pairing_list import get_pairing_list, PairingItemModel
-from .kitsu.push import push_entities, PushEntitiesRequestModel
+from .kitsu.push import push_entities, delete_entities, PushEntitiesRequestModel
 from .kitsu import utils
 
 
@@ -58,6 +58,8 @@ class KitsuAddon(BaseServerAddon):
         self.add_endpoint("/pairing", self.init_pairing, method="POST")
         self.add_endpoint("/sync/{project_name}", self.sync, method="POST")
         self.add_endpoint("/push", self.push, method="POST")
+        self.add_endpoint("/push", self.delete, method="DELETE")
+
 
     async def setup(self):
         pass
@@ -81,6 +83,20 @@ class KitsuAddon(BaseServerAddon):
             user=user,
             payload=payload,
         )
+    
+    async def delete(
+        self,
+        user: CurrentUser,
+        payload: PushEntitiesRequestModel,
+    ):
+        if not user.is_manager:
+            raise ForbiddenException("Only managers can sync Kitsu projects")
+        return await delete_entities(
+            self,
+            user=user,
+            payload=payload,
+        )
+
 
     async def list_pairings(self, mock=False) -> list[PairingItemModel]: 
         await self.ensure_kitsu(mock)

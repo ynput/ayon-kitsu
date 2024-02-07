@@ -85,7 +85,7 @@ def init_data(api, kitsu_url):
         project_name=PROJECT_NAME,
         entities=entities,
     )
-    pprint(res.data)
+    # pprint(res.data)
     assert res.status_code == 200
 
 
