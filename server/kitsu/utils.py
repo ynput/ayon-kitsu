@@ -14,6 +14,7 @@ def create_name_and_label(kitsu_name: str) -> dict[str, str]:
     return {"name": name_slug, "label": kitsu_name}
 
 
+
 async def get_folder_by_kitsu_id(
     project_name: str,
     kitsu_id: str,
@@ -137,8 +138,6 @@ async def create_task(
     **kwargs,
 ) -> TaskEntity:
     payload = {**kwargs, **create_name_and_label(name)}
-
-    logging.info(f"create_task: {str(payload)}")
 
     task = TaskEntity(
         project_name=project_name,

@@ -202,6 +202,39 @@ async def sync_folder(
             logging.info(f"Updating {entity_dict['type']} '{entity_dict['name']}'")
             existing_folders[entity_dict["id"]] = target_folder.id
 
+async def ensure_task_type(project, task_type_name) -> bool:
+    """ #TODO: kitsu listener for new task types would be preferable """
+    if task_type_name not in [ task_type["name"] for task_type in project.task_types ]:
+        logging.info(
+            f"Creating task type {task_type_name} for '{project.name}'"
+        )
+        project.task_types.append(
+            {
+                "name": task_type_name,
+                "short_name": task_type_name[:4],
+            }
+        )
+        await project.save()
+        return True
+    return False
+
+async def ensure_task_status(project, task_status_name) -> bool:
+    """ #TODO: kitsu listener for new task statuses would be preferable """
+
+    if task_status_name not in [ status["name"] for status in project.statuses ]:
+        logging.info(
+            f"Creating task status {task_status_name} for '{project.name}'"
+        )
+        project.statuses.append(
+            {
+                "name": task_status_name,
+                "short_name": task_status_name[:4],
+            }
+        )
+        await project.save()
+        return True
+    return False
+
 async def sync_task(
     addon,
     user,
@@ -209,7 +242,12 @@ async def sync_task(
     existing_tasks,
     existing_folders,
     entity_dict,
-):
+):    
+    if 'task_status_name' in entity_dict:
+        await ensure_task_status(project, entity_dict['task_status_name'])
+
+    if 'task_type_name' in entity_dict:
+        await ensure_task_type(project, entity_dict['task_type_name'])
     
     target_task = await get_task_by_kitsu_id(
         project.name,
@@ -235,20 +273,6 @@ async def sync_task(
                 )
             else:
                 parent_id = parent_folder.id
-
-        if entity_dict["task_type_name"] not in [
-            task_type["name"] for task_type in project.task_types
-        ]:
-            logging.info(
-                f"Creating task type {entity_dict['task_type_name']} for '{project.name}'"
-            )
-            project.task_types.append(
-                {
-                    "name": entity_dict["task_type_name"],
-                    "short_name": entity_dict["task_type_name"][:4],
-                }
-            )
-            await project.save()
 
         logging.info(f"Creating {entity_dict['type']} '{entity_dict['name']}'")
         target_task = await create_task(

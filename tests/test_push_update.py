@@ -128,3 +128,57 @@ def test_update_task_no_changes(api, kitsu_url):
    
     # there should be no folders returned as none were created or updated
     assert res.data == {'folders': {}, 'tasks': {}}
+
+def test_update_task_with_new_status(api, kitsu_url):
+
+    # do a partial update
+    kitsu_id = 'task-id-1'
+    update = {
+        "id": kitsu_id,                     # required
+        "type": "Task",                     # required
+        "name": "animation",                # required
+        "task_status_name": "New Status",   # Approved -> New Status
+    }
+    res = api.post(
+        f'{kitsu_url}/push', 
+        project_name=PROJECT_NAME,
+        entities=[update],
+    )
+    pprint(res.data)
+    ayon_id = res.data['tasks'][kitsu_id]
+
+    res = api.get(f"/projects/{PROJECT_NAME}/tasks/{ayon_id}") 
+    assert res.status_code == 200
+    folder = res.data
+    assert folder['status'] == "New Status"
+
+    # check the status has been created
+    res = api.get(f"/projects/{PROJECT_NAME}") 
+    assert "New Status" in [s['name'] for s in res.data['statuses']]
+
+def test_update_task_with_new_type(api, kitsu_url):
+
+    # do a partial update
+    kitsu_id = 'task-id-1'
+    update = {
+        "id": kitsu_id,                     # required
+        "type": "Task",                     # required
+        "name": "new_type",                 # required
+        "task_type_name": "New Type",  
+    }
+    res = api.post(
+        f'{kitsu_url}/push', 
+        project_name=PROJECT_NAME,
+        entities=[update],
+    )
+    ayon_id = res.data['tasks'][kitsu_id]
+
+    res = api.get(f"/projects/{PROJECT_NAME}/tasks/{ayon_id}") 
+    assert res.status_code == 200
+    folder = res.data
+    assert folder['taskType'] == "New Type"
+
+    # check the type has been created
+    res = api.get(f"/projects/{PROJECT_NAME}") 
+    assert "New Type" in [t['name'] for t in res.data['taskTypes']]
+  
