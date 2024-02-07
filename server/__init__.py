@@ -28,8 +28,12 @@ class KitsuAddon(BaseServerAddon):
     title = "Kitsu"
     version = __version__
     settings_model: Type[KitsuSettings] = KitsuSettings
-    frontend_scopes = {"settings": {}}
-    services = {"processor": {"image": f"ynput/ayon-kitsu-processor:{__version__}"}}
+    frontend_scopes = {
+        "settings": {},
+    }
+    services = {
+        "processor": {"image": f"ynput/ayon-kitsu-processor:{__version__}"},
+    }
 
     kitsu: Kitsu | None = None
 
