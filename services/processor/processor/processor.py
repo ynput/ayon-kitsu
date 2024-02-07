@@ -5,10 +5,6 @@ import time
 
 import ayon_api
 import gazu
-from kitsu_common.utils import (
-    KitsuServerError,
-    KitsuSettingsError,
-)
 from nxtools import log_traceback, logging
 
 from .fullsync import full_sync
@@ -17,6 +13,14 @@ if service_name := os.environ.get("AYON_SERVICE_NAME"):
     logging.user = service_name
 
 SENDER = f"kitsu-processor-{socket.gethostname()}"
+
+
+class KitsuServerError(Exception):
+    pass
+
+
+class KitsuSettingsError(Exception):
+    pass
 
 
 class KitsuProcessor:
