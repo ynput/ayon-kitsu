@@ -2,12 +2,10 @@ from typing import TYPE_CHECKING
 
 import ayon_api
 import gazu
-
 from nxtools import logging
-from pprint import pprint
 
 if TYPE_CHECKING:
-    from .kitsu import KitsuProcessor
+    from .processor import KitsuProcessor
 
 
 def get_asset_types(kitsu_project_id: str):
@@ -34,7 +32,7 @@ def get_statuses():
     return kitsu_statuses
 
 
-def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str):
+def full_sync(parent: KitsuProcessor, kitsu_project_id: str, project_name: str):
     logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
 
     asset_types = get_asset_types(kitsu_project_id)

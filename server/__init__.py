@@ -1,23 +1,18 @@
 from typing import Type
 
 # from fastapi import BackgroundTasks
-
-
 from ayon_server.addons import BaseServerAddon
 from ayon_server.api.dependencies import CurrentUser
 from ayon_server.api.responses import EmptyResponse
-from ayon_server.exceptions import InvalidSettingsException, ForbiddenException
+from ayon_server.exceptions import ForbiddenException, InvalidSettingsException
 from ayon_server.secrets import Secrets
 
-from .version import __version__
-from .settings import KitsuSettings, DEFAULT_VALUES
-
 from .kitsu import Kitsu
-
-from .kitsu.init_pairing import init_pairing, InitPairingRequest, sync_request
-from .kitsu.pairing_list import get_pairing_list, PairingItemModel
-from .kitsu.push import push_entities, PushEntitiesRequestModel
-
+from .kitsu.init_pairing import InitPairingRequest, init_pairing, sync_request
+from .kitsu.pairing_list import PairingItemModel, get_pairing_list
+from .kitsu.push import PushEntitiesRequestModel, push_entities
+from .settings import DEFAULT_VALUES, KitsuSettings
+from .version import __version__
 
 #
 # Events:
@@ -33,9 +28,11 @@ class KitsuAddon(BaseServerAddon):
     title = "Kitsu"
     version = __version__
     settings_model: Type[KitsuSettings] = KitsuSettings
-    frontend_scopes = {"settings": {}}
+    frontend_scopes = {
+        "settings": {},
+    }
     services = {
-        "processor": {"image": f"ynput/ayon-kitsu-processor:{__version__}"}
+        "processor": {"image": f"ynput/ayon-kitsu-processor:{__version__}"},
     }
 
     kitsu: Kitsu | None = None
