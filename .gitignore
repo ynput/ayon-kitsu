@@ -1,11 +1,10 @@
 __pycache__
 .venv
+.env
 poetry.lock
 package/
 
 server/frontend/node_modules
 server/frontend/dist
-server/frontend/.env
 server/frontend/yarn.lock
 server/frontend/yarn-error.log
-

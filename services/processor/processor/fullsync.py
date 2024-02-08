@@ -2,12 +2,10 @@ from typing import TYPE_CHECKING
 
 import ayon_api
 import gazu
-
 from nxtools import logging
-from pprint import pprint
 
 if TYPE_CHECKING:
-    from .kitsu import KitsuProcessor
+    from .processor import KitsuProcessor
 
 
 def get_asset_types(kitsu_project_id: str):
