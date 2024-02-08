@@ -3,8 +3,11 @@ from typing import TYPE_CHECKING
 import gazu
 from nxtools import logging
 
+from .constants import kitsu_models
+
 if TYPE_CHECKING:
     import ayon_api
+    from ayon_api.entity_hub import ProjectEntity
 
 
 class KitsuServerError(Exception):
@@ -78,3 +81,44 @@ def get_kitsu_credentials(ayon_api: "ayon_api", settings: dict[str, str]) -> lis
     except AssertionError as e:
         logging.error(f"KitsuProcessor failed to initialize: {e}")
         raise KitsuSettingsError() from e
+
+
+def create_kitsu_entities_in_ay(
+    project_entity: "ProjectEntity",
+    kitsu_project: dict[str, str],
+):
+    """Ensure Ayon has all the Kitsu entitys, task types and statuses.
+
+    Args:
+        project_entity (ProjectEntity): The ProjectEntity for a given project.
+        kitsu_project (dict): The project owning the Tasks.
+    """
+
+    """
+    name,
+    short_name=None,
+    state=None,
+    icon=None,
+    color=None,
+    """
+    # Add Kitsu models as folder types to Project Entity
+    folders = []
+    for status in kitsu_models:
+        folders.append(
+            {
+                "name": status["name"],
+                "short_name": status["short_name"],
+                "icon": status.get("icon"),
+            }
+        )
+
+    ## Add Project task types to Project Entity
+    project_entity.set_task_types(gazu.task.all_task_types_for_project(kitsu_project))
+    # for type in gazu.task.all_task_types_for_project(kitsu_project):
+    #    project_entity.task_types.create(
+    #        type["name"],
+    #        short_name=type["short_name"],
+    #    )
+
+    # Add Kitsu task statuses to Project Entity
+    project_entity.set_statuses(gazu.task.all_task_statuses_for_project(kitsu_project))

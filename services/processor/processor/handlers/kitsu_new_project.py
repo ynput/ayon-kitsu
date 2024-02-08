@@ -48,3 +48,6 @@ def process_event(
     )
 
     hub.create_project(kitsu_payload)
+    hub.syncronize_project(
+        source="ayon" if kwargs.get("action") == "sync-from-ayon" else "kitsu"
+    )

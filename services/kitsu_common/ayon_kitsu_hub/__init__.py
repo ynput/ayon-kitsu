@@ -7,10 +7,7 @@ from nxtools import log_traceback, logging
 
 from kitsu_common.utils import (
     KitsuServerError,
-)
-
-from .update_from_kitsu import (
-    create_ay_project,
+    create_kitsu_entities_in_ay,
 )
 
 PROJECT_NAME_REGEX = re.compile("^[a-zA-Z0-9_]+$")
@@ -188,6 +185,80 @@ class AyonKitsuHub:
                 f"Project {self.project_name} ({self.project_code}) already exists in Kitsu."
             )
         """
+
+    def syncronize_project(self, source: str = "ayon"):
+        """Ensure a Project matches in the other platform.
+
+        Args:
+            source (str): Either "ayon" or "kitsu", dictates which one is the
+                "source of truth".
+        """
+        if not self._ay_project or not self._kitsu_project:
+            raise ValueError(
+                """The project is missing in one of the two platforms:
+                AYON: {0}
+                Kitsu:{1}""".format(
+                    self._ay_project, self._kitsu_project
+                )
+            )
+
+        match source:
+            case "ayon":
+                """
+                disabled_entities = []
+                ay_entities = [
+                    folder["name"]
+                    for folder in self._ay_project.project_entity.folder_types
+                    if folder["name"] in AYON_SHOTGRID_ENTITY_TYPE_MAP.keys()
+                ]
+
+                sg_entities = [
+                    entity_name
+                    for entity_name, _ in get_sg_project_enabled_entities(
+                        self._sg, self._sg_project
+                    )
+                ]
+
+                disabled_entities = [
+                    ay_entity
+                    for ay_entity in ay_entities
+                    if ay_entity not in sg_entities
+                ]
+
+                if disabled_entities:
+                    raise ValueError(
+                        f"Unable to sync project {self.project_name} "
+                        f"<{self.project_code}> from AYON to Shotgrid, you need "
+                        "to enable the following entities in the Shotgrid Project "
+                        f"> Project Actions > Tracking Settings: {disabled_entities}"
+                    )
+
+                match_ayon_hierarchy_in_shotgrid(
+                    self._ay_project,
+                    self._sg_project,
+                    self._sg,
+                    self.sg_project_code_field,
+                )
+                """
+
+            case "kitsu":
+                create_kitsu_entities_in_ay(
+                    self._ay_project.project_entity,
+                    self._kitsu_project,
+                )
+                self._ay_project.commit_changes()
+
+                # match_shotgrid_hierarchy_in_ayon(
+                #    self._ay_project,
+                #    self._sg_project,
+                #    self._sg,
+                #    self.sg_project_code_field,
+                # )
+
+            case _:
+                raise ValueError(
+                    f"The `source` argument can only be `ayon` or `kitsu`, got '{source}'"
+                )
 
     def react_to_kitsu_event(self, kitsu_event: dict[str, str]):
         """React to events incoming from Kitsu
