@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "kitsu-processor"
+version = "1.0.2-dev1"
+description = "Kitsu Integration for Ayon"
+authors = ["Martin Wacker <martin@ynput.io>"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+gazu = "^0.9.9"
+nxtools = "^1.6"
+ayon-python-api = "1.0.0rc3"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
