@@ -2,25 +2,30 @@ from typing import Type
 from nxtools import logging
 
 # from fastapi import BackgroundTasks
+
+
 from ayon_server.addons import BaseServerAddon
 from ayon_server.api.dependencies import CurrentUser
 from ayon_server.api.responses import EmptyResponse
-from ayon_server.exceptions import InvalidSettingsException, ForbiddenException
+from ayon_server.exceptions import ForbiddenException, InvalidSettingsException
 from ayon_server.secrets import Secrets
 from ayon_server.entities import FolderEntity, TaskEntity
 
 
-from .version import __version__
-from .settings import KitsuSettings, DEFAULT_VALUES
-
 from .kitsu import Kitsu
 from .kitsu import KitsuMock
+from .kitsu import utils
 
 from .kitsu.init_pairing import init_pairing, InitPairingRequest, sync_request
 from .kitsu.pairing_list import get_pairing_list, PairingItemModel
-from .kitsu.push import push_entities, remove_entities, PushEntitiesRequestModel, RemoveEntitiesRequestModel
-from .kitsu import utils
+from .kitsu.push import push_entities, PushEntitiesRequestModel
 
+try:
+    from .version import __version__
+except ModuleNotFoundError:
+    # temporary solution for local development
+    # version is pushed from package.py in ayon >= 1.0.3
+    __version__ = "0.0.0"
 
 #
 # Events:
@@ -36,9 +41,11 @@ class KitsuAddon(BaseServerAddon):
     title = "Kitsu"
     version = __version__
     settings_model: Type[KitsuSettings] = KitsuSettings
-    frontend_scopes = {"settings": {}}
+    frontend_scopes = {
+        "settings": {},
+    }
     services = {
-        "processor": {"image": f"ynput/ayon-kitsu-processor:{__version__}"}
+        "processor": {"image": f"ynput/ayon-kitsu-processor:{__version__}"},
     }
 
     kitsu: Kitsu | None = None

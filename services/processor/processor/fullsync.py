@@ -2,12 +2,10 @@ from typing import TYPE_CHECKING
 
 import ayon_api
 import gazu
-
 from nxtools import logging
-from pprint import pprint
 
 if TYPE_CHECKING:
-    from .kitsu import KitsuProcessor
+    from .processor import KitsuProcessor
 
 from .utils import (
     get_asset_types, get_task_types, get_statuses, 

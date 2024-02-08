@@ -1,9 +1,17 @@
 import sys
 import time
 
-from nxtools import log_traceback, critical_error, logging
+from nxtools import (
+    critical_error,
+    log_traceback,
+    logging,
+)
 
-from .processor import KitsuProcessor, KitsuServerError, KitsuSettingsError
+from .processor import (
+    KitsuProcessor,
+    KitsuServerError,
+    KitsuSettingsError,
+)
 
 
 def main():

@@ -4,8 +4,10 @@ import ayon_api
 
 from openpype import style
 from openpype.resources import get_resource
-from openpype.settings import get_system_settings
-from openpype.widgets.password_dialog import PressHoverButton
+try:
+    from openpype.widgets.password_dialog import PressHoverButton
+except ImportError:
+    from ayon_core.tools.utils import PressHoverButton
 
 from ayon_kitsu.credentials import (
     clear_credentials,
