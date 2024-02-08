@@ -1,6 +1,5 @@
 from typing import Type
 
-# from fastapi import BackgroundTasks
 from ayon_server.addons import BaseServerAddon
 from ayon_server.api.dependencies import CurrentUser
 from ayon_server.api.responses import EmptyResponse
@@ -12,7 +11,13 @@ from .kitsu.init_pairing import InitPairingRequest, init_pairing, sync_request
 from .kitsu.pairing_list import PairingItemModel, get_pairing_list
 from .kitsu.push import PushEntitiesRequestModel, push_entities
 from .settings import DEFAULT_VALUES, KitsuSettings
-from .version import __version__
+
+try:
+    from .version import __version__
+except ModuleNotFoundError:
+    # temporary solution for local development
+    # version is pushed from package.py in ayon >= 1.0.3
+    __version__ = "0.0.0"
 
 #
 # Events:
