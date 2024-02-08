@@ -5,6 +5,10 @@ import time
 
 import ayon_api
 import gazu
+from kitsu_common.utils import (
+    KitsuServerError,
+    get_kitsu_credentials,
+)
 from nxtools import log_traceback, logging
 
 from .fullsync import full_sync

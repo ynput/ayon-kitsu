@@ -2,34 +2,15 @@ from typing import TYPE_CHECKING
 
 import ayon_api
 import gazu
+from kitsu_common.utils import (
+    get_asset_types,
+    get_statuses,
+    get_task_types,
+)
 from nxtools import logging
 
 if TYPE_CHECKING:
     from .processor import KitsuProcessor
-
-
-def get_asset_types(kitsu_project_id: str):
-    raw_asset_types = gazu.asset.all_asset_types_for_project(kitsu_project_id)
-    kitsu_asset_types = {}
-    for asset_type in raw_asset_types:
-        kitsu_asset_types[asset_type["id"]] = asset_type["name"]
-    return kitsu_asset_types
-
-
-def get_task_types(kitsu_project_id: str):
-    raw_task_types = gazu.task.all_task_types_for_project(kitsu_project_id)
-    kitsu_task_types = {}
-    for task_type in raw_task_types:
-        kitsu_task_types[task_type["id"]] = task_type["name"]
-    return kitsu_task_types
-
-
-def get_statuses():
-    raw_statuses = gazu.task.all_task_statuses()
-    kitsu_statuses = {}
-    for status in raw_statuses:
-        kitsu_statuses[status["id"]] = status["name"]
-    return kitsu_statuses
 
 
 def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str):
