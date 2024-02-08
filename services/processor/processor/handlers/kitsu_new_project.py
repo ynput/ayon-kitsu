@@ -7,7 +7,7 @@ from typing import Union
 from kitsu_common.ayon_kitsu_hub import AyonKitsuHub
 from nxtools import logging
 
-REGISTER_EVENT_TYPE = ["kitsu-new_project"]
+REGISTER_EVENT_TYPE = ["sync-from-kitsu", "sync-from-ayon"]
 
 
 def process_event(

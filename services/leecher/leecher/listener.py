@@ -153,7 +153,7 @@ class KitsuListener:
         """Create new project into OP DB."""
         print(inspect.stack()[0][3])
         data["event_type"] = "project:new"
-        self.send_kitsu_event_to_ayon(data, event_type="kitsu-new_project")
+        self.send_kitsu_event_to_ayon(data, event_type="sync-from-kitsu")
         return
         # Use update process to avoid duplicating code
         self._update_project(data, new_project=True)
