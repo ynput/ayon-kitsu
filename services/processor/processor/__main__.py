@@ -1,6 +1,10 @@
 import sys
 import time
 
+from kitsu_common.utils import (
+    KitsuServerError,
+    KitsuSettingsError,
+)
 from nxtools import (
     critical_error,
     log_traceback,
@@ -9,8 +13,6 @@ from nxtools import (
 
 from .processor import (
     KitsuProcessor,
-    KitsuServerError,
-    KitsuSettingsError,
 )
 
 

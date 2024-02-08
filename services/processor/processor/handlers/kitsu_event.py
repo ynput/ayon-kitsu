@@ -31,13 +31,6 @@ def process_event(
     if not kitsu_payload:
         logging.error("The Event payload is empty!")
         raise ValueError("The Event payload is empty!")
-    print(
-        project_name,
-        project_code,
-        kitsu_server_url,
-        kitsu_login_email,
-        kitsu_login_password,
-    )
 
     hub = AyonKitsuHub(
         project_name,

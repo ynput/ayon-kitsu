@@ -12,6 +12,7 @@ import socket
 import sys
 import time
 import types
+from typing import Any
 
 import ayon_api
 import gazu
@@ -25,16 +26,6 @@ from .fullsync import full_sync
 
 if service_name := os.environ.get("AYON_SERVICE_NAME"):
     logging.user = service_name
-
-SENDER = f"kitsu-processor-{socket.gethostname()}"
-
-
-class KitsuServerError(Exception):
-    pass
-
-
-class KitsuSettingsError(Exception):
-    pass
 
 
 class KitsuProcessor:
@@ -114,7 +105,7 @@ class KitsuProcessor:
         else:
             logging.debug(f"Found the these handlers: {self.handlers_map}")
 
-    def _get_handlers(self):
+    def _get_handlers(self) -> dict[Any, Any]:
         """Import the handlers found in the `handlers` directory.
 
         Scan the `handlers` directory and build a dictionary with
@@ -151,7 +142,7 @@ class KitsuProcessor:
                 event = ayon_api.enroll_event_job(
                     source_topic="kitsu.event",
                     target_topic="kitsu.proc",
-                    sender=SENDER,
+                    sender=socket.gethostname(),
                     description="Enrolling to any `kitsu.event` Event...",
                     max_retries=3,
                 )
@@ -160,7 +151,7 @@ class KitsuProcessor:
                 job = ayon_api.enroll_event_job(
                     source_topic="kitsu.sync_request",
                     target_topic="kitsu.sync",
-                    sender=SENDER,
+                    sender=socket.gethostname(),
                     description="Syncing Kitsu to Ayon",
                     max_retries=3,
                 )
@@ -168,16 +159,6 @@ class KitsuProcessor:
                 if not event and not job:
                     time.sleep(self.kitsu_polling_frequency)
                     continue
-
-                if False:
-                    if event:
-                        print("event id:", event.get("id"))
-                        ayon_api.update_event(event.get("id"), status="finished")
-                        continue
-                    else:
-                        print("job id:", job.get("id"))
-                        ayon_api.update_event(job.get("id"), status="finished")
-                        continue
 
                 if event:
                     source_event = ayon_api.get_event(event["dependsOn"])
@@ -232,14 +213,14 @@ class KitsuProcessor:
                         status="finished",
                     )
                     ayon_api.update_event(source_event["id"], status="finished")
-                else:  # Old sync code
+                elif job:  # Old sync code
                     src_job = ayon_api.get_event(job["dependsOn"])
                     kitsu_project_id = src_job["summary"]["kitsuProjectId"]
                     ayon_project_name = src_job["project"]
 
                     ayon_api.update_event(
                         job["id"],
-                        sender=SENDER,
+                        sender=socket.gethostname(),
                         status="in_progress",
                         project_name=ayon_project_name,
                         description="Syncing Kitsu project...",
@@ -254,7 +235,7 @@ class KitsuProcessor:
 
                         ayon_api.update_event(
                             job["id"],
-                            sender=SENDER,
+                            sender=socket.gethostname(),
                             status="failed",
                             project_name=ayon_project_name,
                             description="Sync failed",
@@ -263,14 +244,14 @@ class KitsuProcessor:
                     else:
                         ayon_api.update_event(
                             job["id"],
-                            sender=SENDER,
+                            sender=socket.gethostname(),
                             status="finished",
                             project_name=ayon_project_name,
                             description="Kitsu sync finished",
                         )
 
+                logging.info(f"Waiting {self.kitsu_polling_frequency} seconds...")
+                time.sleep(self.kitsu_polling_frequency)
+
             except Exception as err:
                 log_traceback(err)
-
-            logging.info(f"Waiting {self.kitsu_polling_frequency} seconds...")
-            time.sleep(self.kitsu_polling_frequency)
