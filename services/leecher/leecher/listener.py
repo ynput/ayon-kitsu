@@ -8,6 +8,7 @@ Addon settings page.
 
 import inspect
 import os
+import re
 import socket
 import sys
 import time
@@ -23,7 +24,9 @@ from kitsu_common.utils import (
     get_statuses,
     get_task_types,
 )
-from nxtools import log_traceback, logging
+from nxtools import log_traceback, logging, slugify
+
+from ayon_server.types import PROJECT_CODE_REGEX, PROJECT_NAME_REGEX, Field, OPModel
 
 # from .update_op_with_zou import (
 #    create_op_asset,
@@ -712,23 +715,40 @@ class KitsuListener:
         """
 
         logging.info(f"Processing Kitsu Event {payload}")
-        description = f"Leeched {payload['event_type']}"
+        description = f"Leeched '{payload['event_type']}' as a '{event_type}' event"
         logging.info(description)
 
         project_name = gazu.project.get_project(payload["project_id"])["name"]
 
-        logging.info(f"Event is from Project {project_name} ({payload['project_id']})")
+        legal_project_name = re.search(
+            PROJECT_NAME_REGEX,
+            project_name,
+        )
+
+        legal_project_code = slugify(
+            re.search(
+                PROJECT_CODE_REGEX,
+                project_name,
+            ),
+            separator="_",
+        )
+
+        logging.info(
+            f"Event is from Project {legal_project_name} [{legal_project_code}] ({payload['project_id']})"
+        )
 
         ayon_api.dispatch_event(
             "kitsu.event",
             sender=socket.gethostname(),
-            project_name=project_name,
+            project_name=legal_project_name,
             description=description,
             summary=None,
             payload={
                 "action": event_type,
                 "kitsu_payload": payload,
-                "project_name": project_name,
+                "project_name": legal_project_name,
+                "project_code": legal_project_code,
             },
         )
+
         logging.info("Dispatched Ayon event ", payload["event_type"])
