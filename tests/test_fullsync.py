@@ -2,7 +2,10 @@ from processor import fullsync
 from nxtools import logging
 import ayon_api
 
-from .fixtures import gazu, processor, PROJECT_ID, PROJECT_NAME
+from .fixtures import (
+    api, gazu, processor, kitsu_url, 
+    PROJECT_ID, PROJECT_NAME
+)
 
 from . import mock_data
 

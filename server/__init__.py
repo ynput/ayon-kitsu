@@ -1,16 +1,14 @@
 from typing import Type
+from nxtools import logging
 
 # from fastapi import BackgroundTasks
+from ayon_server.addons import BaseServerAddon
+from ayon_server.api.dependencies import CurrentUser
+from ayon_server.api.responses import EmptyResponse
+from ayon_server.exceptions import InvalidSettingsException, ForbiddenException
+from ayon_server.secrets import Secrets
+from ayon_server.entities import FolderEntity, TaskEntity
 
-try:
-    from ayon_server.addons import BaseServerAddon
-    from ayon_server.api.dependencies import CurrentUser
-    from ayon_server.api.responses import EmptyResponse
-    from ayon_server.exceptions import InvalidSettingsException, ForbiddenException
-    from ayon_server.secrets import Secrets
-    from ayon_server.entities import FolderEntity, TaskEntity
-except:
-    pass
 
 from .version import __version__
 from .settings import KitsuSettings, DEFAULT_VALUES
@@ -20,7 +18,7 @@ from .kitsu import KitsuMock
 
 from .kitsu.init_pairing import init_pairing, InitPairingRequest, sync_request
 from .kitsu.pairing_list import get_pairing_list, PairingItemModel
-from .kitsu.push import push_entities, delete_entities, PushEntitiesRequestModel
+from .kitsu.push import push_entities, remove_entities, PushEntitiesRequestModel, RemoveEntitiesRequestModel
 from .kitsu import utils
 
 
@@ -58,7 +56,7 @@ class KitsuAddon(BaseServerAddon):
         self.add_endpoint("/pairing", self.init_pairing, method="POST")
         self.add_endpoint("/sync/{project_name}", self.sync, method="POST")
         self.add_endpoint("/push", self.push, method="POST")
-        self.add_endpoint("/push", self.delete, method="DELETE")
+        self.add_endpoint("/remove", self.remove, method="POST")
 
 
     async def setup(self):
@@ -84,14 +82,15 @@ class KitsuAddon(BaseServerAddon):
             payload=payload,
         )
     
-    async def delete(
+    async def remove(
         self,
         user: CurrentUser,
-        payload: PushEntitiesRequestModel,
+        payload: RemoveEntitiesRequestModel,
     ):
+        logging.info(f"payload: {str(payload)}")
         if not user.is_manager:
             raise ForbiddenException("Only managers can sync Kitsu projects")
-        return await delete_entities(
+        return await remove_entities(
             self,
             user=user,
             payload=payload,

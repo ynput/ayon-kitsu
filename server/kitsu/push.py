@@ -15,8 +15,10 @@ from .utils import (
     get_task_by_kitsu_id,
     create_folder,
     update_folder,
+    delete_folder,
     create_task,
-    update_task
+    update_task,
+    delete_task
 )
 
 
@@ -39,6 +41,10 @@ KitsuEntityType = Literal[
 class PushEntitiesRequestModel(OPModel):
     project_name: str
     entities: list[EntityDict] = Field(..., title="List of entities to sync")
+
+class RemoveEntitiesRequestModel(OPModel):
+    project_name: str
+    entities: list[EntityDict] = Field(..., title="List of entities to remove")
 
 
 async def get_root_folder_id(
@@ -157,6 +163,7 @@ async def sync_folder(
                     parent_folder = await get_folder_by_kitsu_id(
                         project.name, entity_dict["parent_id"], existing_folders
                     )
+
                     parent_id = parent_folder.id
 
         elif entity_dict["type"] == "Shot":
@@ -297,6 +304,7 @@ async def sync_task(
         if changed:
             logging.info(f"Updating {entity_dict['type']} '{entity_dict['name']}'")
             existing_tasks[entity_dict["id"]] = target_task.id
+   
 
 
 async def push_entities(
@@ -318,6 +326,11 @@ async def push_entities(
     tasks = {}
 
     for entity_dict in payload.entities:
+
+        # required fields
+        assert "type" in entity_dict
+        assert "id" in entity_dict
+
         if entity_dict["type"] not in get_args(KitsuEntityType):
             logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")
             continue
@@ -349,9 +362,62 @@ async def push_entities(
     # pass back the map of kitsu to ayon ids
     return {'folders': folders, 'tasks': tasks}
 
-async def delete_entities(
+
+async def remove_entities(
     addon: "KitsuAddon",
     user: "UserEntity",
-    payload: PushEntitiesRequestModel,
+    payload: RemoveEntitiesRequestModel,
 ) -> list:
-    raise NotImplementedError()
+    start_time = time.time()
+    project = await ProjectEntity.load(payload.project_name)
+    
+    # A mapping of kitsu entity ids to folder ids
+    # they are added when a task or folder are deleted and returned by the method - useful for testing
+    folders = {}
+    tasks = {}
+
+    for entity_dict in payload.entities:
+        if entity_dict["type"] not in get_args(KitsuEntityType):
+            logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")
+            continue
+
+        if entity_dict["type"] == "Task":
+            task = await get_task_by_kitsu_id(
+                project.name,
+                entity_dict["id"],
+                tasks,
+            )
+            if not task:
+                continue
+
+            await delete_task(
+                project_name=project.name,
+                task_id=task.id,
+                user=user,
+            )
+            logging.info(f"Deleted {entity_dict['type']} '{task.name}'")
+            tasks[entity_dict['id']] = task.id
+
+        else:
+            folder = await get_folder_by_kitsu_id(
+                project.name,
+                entity_dict["id"],
+                folders,
+            )
+            if not folder:
+                continue
+
+            await delete_folder(
+                project_name=project.name,
+                folder_id=folder.id,
+                user=user,
+            )
+            logging.info(f"Deleted {entity_dict['type']} '{folder.name}'")
+            folders[entity_dict['id']] = folder.id
+
+    logging.info(
+        f"Deleted {len(payload.entities)} entities in {time.time() - start_time}s"
+    )
+
+    # pass back the map of kitsu to ayon ids
+    return {'folders': folders, 'tasks': tasks}

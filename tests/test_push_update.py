@@ -101,12 +101,13 @@ def test_update_task_status(api, kitsu_url):
         project_name=PROJECT_NAME,
         entities=[update],
     )
-    ayon_id = res.data['tasks'][kitsu_id]
+    task_id = res.data['tasks'][kitsu_id]
 
-    res = api.get(f"/projects/{PROJECT_NAME}/tasks/{ayon_id}") 
+    # note: ayon_api.get_task(project_name, task_id) does not include the status, not sure why
+    res = api.get(f"/projects/{PROJECT_NAME}/tasks/{task_id}") 
     assert res.status_code == 200
-    folder = res.data
-    assert folder['status'] == "Approved"
+    task = res.data
+    assert task['status'] == "Approved"
  
    
 def test_update_task_no_changes(api, kitsu_url):

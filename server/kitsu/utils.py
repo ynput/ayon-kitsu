@@ -131,6 +131,26 @@ async def update_folder(
 
     return changed
 
+async def delete_folder(
+    project_name: str,
+    folder_id: str,
+    user: {},
+    **kwargs,
+) -> None:
+    folder = await FolderEntity.load(project_name, folder_id)
+    
+    # do we need this?
+    await folder.ensure_delete_access(user)
+    
+    await folder.delete()
+    event = {
+        "topic": "entity.folder.deleted",
+        "description": f"Folder {folder.name} deleted",
+        "summary": {"entityId": folder.id, "parentId": folder.parent_id},
+        "project": project_name,
+    }
+    await dispatch_event(**event)
+
 
 async def create_task(
     project_name: str,
@@ -150,7 +170,6 @@ async def create_task(
         "summary": {"entityId": task.id, "parentId": task.parent_id},
         "project": project_name,
     }
-
     await dispatch_event(**event)
     return task
 
@@ -188,3 +207,23 @@ async def update_task(
         }
         await dispatch_event(**event)
     return changed
+
+async def delete_task(
+    project_name: str,
+    task_id: str,
+    user: {},
+    **kwargs,
+) -> None:
+    task = await TaskEntity.load(project_name, task_id)
+    
+    # do we need this?
+    await task.ensure_delete_access(user)
+    
+    await task.delete()
+    event = {
+        "topic": "entity.task.deleted",
+        "description": f"Task {task.name} deleted",
+        "summary": {"entityId": task.id, "parentId": task.parent_id},
+        "project": project_name,
+    }
+    await dispatch_event(**event)

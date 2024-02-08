@@ -213,6 +213,7 @@ def test_push_shots(api, kitsu_url):
     assert shot_folder_2['attrib']['fps'] == 25
     assert shot_folder_2['attrib']['frameStart'] == 1
     assert shot_folder_2['attrib']['frameEnd'] == 150
+    assert shot_folder_2['path'] == '/episodes/episode_02/seq01/sh002'
 
     seq_2 = episode_2['children'][1]
     assert len(seq_2['children']) == 1
@@ -230,6 +231,7 @@ def test_push_shots(api, kitsu_url):
     assert shot_folder_3['attrib']['fps'] == 29.97
     assert shot_folder_3['attrib']['frameStart'] == 0
     assert shot_folder_3['attrib']['frameEnd'] == 50
+    assert shot_folder_3['path'] == '/episodes/episode_02/seq02/sh003'
 
 def test_push_tasks(api, kitsu_url, monkeypatch):
     

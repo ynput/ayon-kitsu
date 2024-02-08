@@ -2,7 +2,7 @@
 name = "ayon-kitsu"
 version = "1.0.0"
 description = ""
-authors = ["Martastain <martas@imm.cz>"]
+authors = ["Martastain <martas@imm.cz>", "Scott McDonnell <scott@jammedia.com"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
