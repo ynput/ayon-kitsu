@@ -74,6 +74,7 @@ function dev {
   	--env AYON_SERVER_URL=$env:AYON_SERVER_URL `
   	--env AYON_ADDON_NAME=kitsu `
   	--env AYON_ADDON_VERSION=$ADDON_VERSION `
+    --network=ayon-docker_network `
   	"$($IMAGE_FULL_NAME)" python -m processor
 }
 

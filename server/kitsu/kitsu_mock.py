@@ -1,6 +1,7 @@
 import httpx
 
 from typing import Literal
+from nxtools import logging
 
 class KitsuResponse:
     """REST API Response."""
@@ -160,6 +161,10 @@ class KitsuMock:
         headers: dict[str, str] | None = None,
         **kwargs,
     ) -> httpx.Response:
+        
+        logging.info(f"kitsu_mock request [{method}] {endpoint}")
+        
+
 
         if method == "get" and endpoint == "data/projects":
             return KitsuResponse(self.api_data_projects)
