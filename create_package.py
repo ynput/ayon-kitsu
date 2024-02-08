@@ -212,15 +212,20 @@ def copy_server_content(
     frontend_dirpath: str = os.path.join(server_dirpath, "frontend")
     frontend_dist_dirpath: str = os.path.join(frontend_dirpath, "dist")
     yarn_executable = _get_yarn_executable()
-    if yarn_executable is None:
-        raise RuntimeError("Yarn executable was not found.")
 
-    subprocess.run([yarn_executable, "install"], cwd=frontend_dirpath)
-    subprocess.run([yarn_executable, "build"], cwd=frontend_dirpath)
-    if not os.path.exists(frontend_dirpath):
-        raise RuntimeError(
-            "Build frontend first with `yarn install && yarn build`"
-        )
+
+
+    # Manually execute yarn & yarn build as this fails on windows
+    #####################################
+    # if yarn_executable is None:
+    #     raise RuntimeError("Yarn executable was not found.")
+
+    # subprocess.run([yarn_executable, "install"], cwd=frontend_dirpath)
+    # subprocess.run([yarn_executable, "build"], cwd=frontend_dirpath)
+    # if not os.path.exists(frontend_dirpath):
+    #     raise RuntimeError(
+    #         "Build frontend first with `yarn install && yarn build`"
+    #     )
 
     for item in find_files_in_subdir(frontend_dist_dirpath):
         src_path, dst_subpath = item
