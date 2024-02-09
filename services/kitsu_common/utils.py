@@ -100,3 +100,43 @@ def get_kitsu_credentials(
     except AssertionError as e:
         logging.error(f"KitsuProcessor failed to initialize: {e}")
         raise KitsuSettingsError() from e
+
+
+def parse_attrib(source: dict[str, Any] | None = None) -> dict[str, str | int | float]:
+    result: dict[str, str | int | float] = {}
+    if source is None:
+        return result
+    for key, value in source.items():
+        if value is None:
+            continue
+        # Slugify the key as the key might come from custom metadata from Kitsu
+        key = slugify(key)
+        if key == "fps":
+            with contextlib.suppress(ValueError):
+                result["fps"] = float(value)
+        elif key == "frame_in":
+            with contextlib.suppress(ValueError):
+                result["frameStart"] = int(value)
+        elif key == "frame_out":
+            with contextlib.suppress(ValueError):
+                result["frameEnd"] = int(value)
+        elif key == "nb_frames":
+            with contextlib.suppress(ValueError):
+                result["frames"] = int(value)
+        elif key == "resolution":
+            try:
+                result["resolutionWidth"] = int(value.split("x")[0])
+                result["resolutionHeight"] = int(value.split("x")[1])
+            except (IndexError, ValueError):
+                pass
+        elif key == "description":
+            result["description"] = value
+        elif key == "start_date":
+            result["startDate"] = value + "T00:00:00Z"
+        elif key == "end_date":
+            result["endDate"] = value + "T00:00:00Z"
+        elif key == "data":
+            # there might exist custom metadata
+            result = result | parse_attrib(value)
+
+    return result
