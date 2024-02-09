@@ -279,7 +279,7 @@ class KitsuListener:
             description=description,
             summary=None,
             payload={
-                "action": event_type,
+                "event_type": event_type,
                 "kitsu_payload": payload,
                 "project_name": legal_project_name,
                 "project_code": legal_project_code,
