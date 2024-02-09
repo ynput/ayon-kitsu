@@ -8,33 +8,22 @@ Addon settings page.
 
 import inspect
 import os
-import re
 import socket
 import sys
 import time
-from pprint import pprint
 from typing import Any
 
 import ayon_api
 import gazu
 from kitsu_common.utils import (
     KitsuServerError,
+    create_project_code,
     get_asset_types,
     get_kitsu_credentials,
     get_statuses,
     get_task_types,
 )
 from nxtools import log_traceback, logging, slugify
-
-from ayon_server.types import PROJECT_CODE_REGEX, PROJECT_NAME_REGEX, Field, OPModel
-
-# from .update_op_with_zou import (
-#    create_op_asset,
-#    get_kitsu_project_name,
-#    set_op_project,
-#    update_op_assets,
-#    write_project_to_op,
-# )
 
 if service_name := os.environ.get("AYON_SERVICE_NAME"):
     logging.user = service_name
@@ -138,6 +127,17 @@ class KitsuListener:
         gazu.events.add_listener(self.event_client, "task:new", self._new_task)
         gazu.events.add_listener(self.event_client, "task:update", self._update_task)
         gazu.events.add_listener(self.event_client, "task:delete", self._delete_task)
+        gazu.events.add_listener(self.event_client, "task:assign", self._assign_task)
+        gazu.events.add_listener(
+            self.event_client, "task:unassign", self._unassign_task
+        )
+        gazu.events.add_listener(
+            self.event_client, "task:status-changed", self._status_changed_task
+        )
+
+        gazu.events.add_listener(self.event_client, "edit:new", self._new_edit)
+        gazu.events.add_listener(self.event_client, "edit:update", self._update_edit)
+        gazu.events.add_listener(self.event_client, "edit:delete", self._delete_edit)
 
     def start_listening(self):
         """Start listening for events."""
@@ -153,557 +153,106 @@ class KitsuListener:
 
     # == Project ==
     def _new_project(self, data):
-        """Create new project into OP DB."""
-        print(inspect.stack()[0][3])
         data["event_type"] = "project:new"
         self.send_kitsu_event_to_ayon(data, event_type="sync-from-kitsu")
-        return
-        # Use update process to avoid duplicating code
-        self._update_project(data, new_project=True)
 
-    def _update_project(self, data, new_project=False):
-        print(inspect.stack()[0][3])
-        return
-        """Update project into OP DB."""
-        # Get project entity
-        project = gazu.project.get_project(data["project_id"])
-
-        update_project = write_project_to_op(project, self.dbcon)
-
-        # Write into DB
-        if update_project:
-            self.dbcon.Session["AVALON_PROJECT"] = get_kitsu_project_name(
-                data["project_id"]
-            )
-            self.dbcon.bulk_write([update_project])
-
-            if new_project:
-                logging.info("Project created: {}".format(project["name"]))
+    def _update_project(self, data):
+        data["event_type"] = "project:update"
+        self.send_kitsu_event_to_ayon(data)
 
     def _delete_project(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Delete project."""
-
-        collections = self.dbcon.database.list_collection_names()
-        for collection in collections:
-            project = self.dbcon.database[collection].find_one(
-                {"data.zou_id": data["project_id"]}
-            )
-            if project:
-                # Delete project collection
-                self.dbcon.database[project["name"]].drop()
-
-                # Print message
-                logging.info("Project deleted: {}".format(project["name"]))
-                return
+        data["event_type"] = "project:delete"
+        self.send_kitsu_event_to_ayon(data)
 
     # == Asset ==
     def _new_asset(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Create new asset into OP DB."""
-        # Get project entity
-        set_op_project(self.dbcon, data["project_id"])
-
-        # Get asset entity
-        asset = gazu.asset.get_asset(data["asset_id"])
-
-        # Insert doc in DB
-        self.dbcon.insert_one(create_op_asset(asset))
-
-        # Update
-        self._update_asset(data)
-
-        # Print message
-        ep_id = asset.get("episode_id")
-        ep = self.get_ep_dict(ep_id)
-
-        msg = (
-            "Asset created: {proj_name} - {ep_name}"
-            "{asset_type_name} - {asset_name}".format(
-                proj_name=asset["project_name"],
-                ep_name=ep["name"] + " - " if ep is not None else "",
-                asset_type_name=asset["asset_type_name"],
-                asset_name=asset["name"],
-            )
-        )
-        logging.info(msg)
+        data["event_type"] = "asset:new"
+        self.send_kitsu_event_to_ayon(data)
 
     def _update_asset(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Update asset into OP DB."""
-        set_op_project(self.dbcon, data["project_id"])
-        project_name = self.dbcon.active_project()
-        project_doc = get_project(project_name)
-
-        # Get gazu entity
-        asset = gazu.asset.get_asset(data["asset_id"])
-
-        # Find asset doc
-        # Query all assets of the local project
-        zou_ids_and_asset_docs = {
-            asset_doc["data"]["zou"]["id"]: asset_doc
-            for asset_doc in get_assets(project_name)
-            if asset_doc["data"].get("zou", {}).get("id")
-        }
-        zou_ids_and_asset_docs[asset["project_id"]] = project_doc
-        gazu_project = gazu.project.get_project(asset["project_id"])
-
-        # Update
-        update_op_result = update_op_assets(
-            self.dbcon,
-            gazu_project,
-            project_doc,
-            [asset],
-            zou_ids_and_asset_docs,
-        )
-        if update_op_result:
-            asset_doc_id, asset_update = update_op_result[0]
-            self.dbcon.update_one({"_id": asset_doc_id}, asset_update)
+        data["event_type"] = "asset:update"
+        self.send_kitsu_event_to_ayon(data)
 
     def _delete_asset(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Delete asset of OP DB."""
-        set_op_project(self.dbcon, data["project_id"])
-
-        asset = self.dbcon.find_one({"data.zou.id": data["asset_id"]})
-        if asset:
-            # Delete
-            self.dbcon.delete_one({"type": "asset", "data.zou.id": data["asset_id"]})
-
-            # Print message
-            ep_id = asset["data"]["zou"].get("episode_id")
-            ep = self.get_ep_dict(ep_id)
-
-            msg = (
-                "Asset deleted: {proj_name} - {ep_name}"
-                "{type_name} - {asset_name}".format(
-                    proj_name=asset["data"]["zou"]["project_name"],
-                    ep_name=ep["name"] + " - " if ep is not None else "",
-                    type_name=asset["data"]["zou"]["asset_type_name"],
-                    asset_name=asset["name"],
-                )
-            )
-            logging.info(msg)
+        data["event_type"] = "asset:delete"
+        self.send_kitsu_event_to_ayon(data)
 
     # == Episode ==
     def _new_episode(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Create new episode into OP DB."""
-        # Get project entity
-        set_op_project(self.dbcon, data["project_id"])
-
-        # Get gazu entity
-        ep = gazu.shot.get_episode(data["episode_id"])
-
-        # Insert doc in DB
-        self.dbcon.insert_one(create_op_asset(ep))
-
-        # Update
-        self._update_episode(data)
-
-        # Print message
-        msg = "Episode created: {proj_name} - {ep_name}".format(
-            proj_name=ep["project_name"], ep_name=ep["name"]
-        )
-        logging.info(msg)
+        data["event_type"] = "episode:new"
+        self.send_kitsu_event_to_ayon(data)
 
     def _update_episode(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Update episode into OP DB."""
-        set_op_project(self.dbcon, data["project_id"])
-        project_name = self.dbcon.active_project()
-        project_doc = get_project(project_name)
-
-        # Get gazu entity
-        ep = gazu.shot.get_episode(data["episode_id"])
-
-        # Find asset doc
-        # Query all assets of the local project
-        zou_ids_and_asset_docs = {
-            asset_doc["data"]["zou"]["id"]: asset_doc
-            for asset_doc in get_assets(project_name)
-            if asset_doc["data"].get("zou", {}).get("id")
-        }
-        zou_ids_and_asset_docs[ep["project_id"]] = project_doc
-        gazu_project = gazu.project.get_project(ep["project_id"])
-
-        # Update
-        update_op_result = update_op_assets(
-            self.dbcon,
-            gazu_project,
-            project_doc,
-            [ep],
-            zou_ids_and_asset_docs,
-        )
-        if update_op_result:
-            asset_doc_id, asset_update = update_op_result[0]
-            self.dbcon.update_one({"_id": asset_doc_id}, asset_update)
+        data["event_type"] = "episode:update"
+        self.send_kitsu_event_to_ayon(data)
 
     def _delete_episode(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Delete shot of OP DB."""
-        set_op_project(self.dbcon, data["project_id"])
-
-        ep = self.dbcon.find_one({"data.zou.id": data["episode_id"]})
-        if ep:
-            # Delete
-            self.dbcon.delete_one({"type": "asset", "data.zou.id": data["episode_id"]})
-
-            # Print message
-            project = gazu.project.get_project(ep["data"]["zou"]["project_id"])
-
-            msg = "Episode deleted: {proj_name} - {ep_name}".format(
-                proj_name=project["name"], ep_name=ep["name"]
-            )
-            logging.info(msg)
+        data["event_type"] = "episode:delete"
+        self.send_kitsu_event_to_ayon(data)
 
     # == Sequence ==
     def _new_sequence(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Create new sequnce into OP DB."""
-        # Get project entity
-        set_op_project(self.dbcon, data["project_id"])
-
-        # Get gazu entity
-        sequence = gazu.shot.get_sequence(data["sequence_id"])
-
-        # Insert doc in DB
-        self.dbcon.insert_one(create_op_asset(sequence))
-
-        # Update
-        self._update_sequence(data)
-
-        # Print message
-        ep_id = sequence.get("episode_id")
-        ep = self.get_ep_dict(ep_id)
-
-        msg = "Sequence created: {proj_name} - {ep_name}" "{sequence_name}".format(
-            proj_name=sequence["project_name"],
-            ep_name=ep["name"] + " - " if ep is not None else "",
-            sequence_name=sequence["name"],
-        )
-        logging.info(msg)
+        data["event_type"] = "sequence:new"
+        self.send_kitsu_event_to_ayon(data)
 
     def _update_sequence(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Update sequence into OP DB."""
-        set_op_project(self.dbcon, data["project_id"])
-        project_name = self.dbcon.active_project()
-        project_doc = get_project(project_name)
-
-        # Get gazu entity
-        sequence = gazu.shot.get_sequence(data["sequence_id"])
-
-        # Find asset doc
-        # Query all assets of the local project
-        zou_ids_and_asset_docs = {
-            asset_doc["data"]["zou"]["id"]: asset_doc
-            for asset_doc in get_assets(project_name)
-            if asset_doc["data"].get("zou", {}).get("id")
-        }
-        zou_ids_and_asset_docs[sequence["project_id"]] = project_doc
-        gazu_project = gazu.project.get_project(sequence["project_id"])
-
-        # Update
-        update_op_result = update_op_assets(
-            self.dbcon,
-            gazu_project,
-            project_doc,
-            [sequence],
-            zou_ids_and_asset_docs,
-        )
-        if update_op_result:
-            asset_doc_id, asset_update = update_op_result[0]
-            self.dbcon.update_one({"_id": asset_doc_id}, asset_update)
+        data["event_type"] = "sequence:update"
+        self.send_kitsu_event_to_ayon(data)
 
     def _delete_sequence(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Delete sequence of OP DB."""
-        set_op_project(self.dbcon, data["project_id"])
-        sequence = self.dbcon.find_one({"data.zou.id": data["sequence_id"]})
-        if sequence:
-            # Delete
-            self.dbcon.delete_one({"type": "asset", "data.zou.id": data["sequence_id"]})
-
-            # Print message
-            ep_id = sequence["data"]["zou"].get("episode_id")
-            ep = self.get_ep_dict(ep_id)
-
-            gazu_project = gazu.project.get_project(
-                sequence["data"]["zou"]["project_id"]
-            )
-
-            msg = "Sequence deleted: {proj_name} - {ep_name}" "{sequence_name}".format(
-                proj_name=gazu_project["name"],
-                ep_name=ep["name"] + " - " if ep is not None else "",
-                sequence_name=sequence["name"],
-            )
-            logging.info(msg)
+        data["event_type"] = "sequence:delete"
+        self.send_kitsu_event_to_ayon(data)
 
     # == Shot ==
     def _new_shot(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Create new shot into OP DB."""
-        # Get project entity
-        set_op_project(self.dbcon, data["project_id"])
-
-        # Get gazu entity
-        shot = gazu.shot.get_shot(data["shot_id"])
-
-        # Insert doc in DB
-        self.dbcon.insert_one(create_op_asset(shot))
-
-        # Update
-        self._update_shot(data)
-
-        # Print message
-        ep_id = shot["episode_id"]
-        ep = self.get_ep_dict(ep_id)
-
-        msg = (
-            "Shot created: {proj_name} - {ep_name}"
-            "{sequence_name} - {shot_name}".format(
-                proj_name=shot["project_name"],
-                ep_name=ep["name"] + " - " if ep is not None else "",
-                sequence_name=shot["sequence_name"],
-                shot_name=shot["name"],
-            )
-        )
-        logging.info(msg)
+        data["event_type"] = "shot:new"
+        self.send_kitsu_event_to_ayon(data)
 
     def _update_shot(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Update shot into OP DB."""
-        set_op_project(self.dbcon, data["project_id"])
-        project_name = self.dbcon.active_project()
-        project_doc = get_project(project_name)
-
-        # Get gazu entity
-        shot = gazu.shot.get_shot(data["shot_id"])
-
-        # Find asset doc
-        # Query all assets of the local project
-        zou_ids_and_asset_docs = {
-            asset_doc["data"]["zou"]["id"]: asset_doc
-            for asset_doc in get_assets(project_name)
-            if asset_doc["data"].get("zou", {}).get("id")
-        }
-        zou_ids_and_asset_docs[shot["project_id"]] = project_doc
-        gazu_project = gazu.project.get_project(shot["project_id"])
-
-        # Update
-        update_op_result = update_op_assets(
-            self.dbcon,
-            gazu_project,
-            project_doc,
-            [shot],
-            zou_ids_and_asset_docs,
-        )
-
-        if update_op_result:
-            asset_doc_id, asset_update = update_op_result[0]
-            self.dbcon.update_one({"_id": asset_doc_id}, asset_update)
+        data["event_type"] = "shot:update"
+        self.send_kitsu_event_to_ayon(data)
 
     def _delete_shot(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Delete shot of OP DB."""
-        set_op_project(self.dbcon, data["project_id"])
-        shot = self.dbcon.find_one({"data.zou.id": data["shot_id"]})
-
-        if shot:
-            # Delete
-            self.dbcon.delete_one({"type": "asset", "data.zou.id": data["shot_id"]})
-
-            # Print message
-            ep_id = shot["data"]["zou"].get("episode_id")
-            ep = self.get_ep_dict(ep_id)
-
-            msg = (
-                "Shot deleted: {proj_name} - {ep_name}"
-                "{sequence_name} - {shot_name}".format(
-                    proj_name=shot["data"]["zou"]["project_name"],
-                    ep_name=ep["name"] + " - " if ep is not None else "",
-                    sequence_name=shot["data"]["zou"]["sequence_name"],
-                    shot_name=shot["name"],
-                )
-            )
-            logging.info(msg)
+        data["event_type"] = "shot:delete"
+        self.send_kitsu_event_to_ayon(data)
 
     # == Task ==
     def _new_task(self, data):
-        print(inspect.stack()[0][3])
         data["event_type"] = "task:new"
         self.send_kitsu_event_to_ayon(data)
-        return
-        """Create new task into OP DB."""
-        # Get project entity
-        set_op_project(self.dbcon, data["project_id"])
-        project_name = self.dbcon.active_project()
-
-        # Get gazu entity
-        task = gazu.task.get_task(data["task_id"])
-
-        # Print message
-        ep_id = task.get("episode_id")
-        ep = self.get_ep_dict(ep_id)
-
-        parent_name = None
-        asset_name = None
-        ent_type = None
-
-        if task["task_type"]["for_entity"] == "Asset":
-            parent_name = task["entity"]["name"]
-            asset_name = task["entity"]["name"]
-            ent_type = task["entity_type"]["name"]
-        elif task["task_type"]["for_entity"] == "Shot":
-            parent_name = "{ep_name}{sequence_name} - {shot_name}".format(
-                ep_name=ep["name"] + " - " if ep is not None else "",
-                sequence_name=task["sequence"]["name"],
-                shot_name=task["entity"]["name"],
-            )
-            asset_name = "{ep_name}{sequence_name}_{shot_name}".format(
-                ep_name=ep["name"] + "_" if ep is not None else "",
-                sequence_name=task["sequence"]["name"],
-                shot_name=task["entity"]["name"],
-            )
-
-        # Update asset tasks with new one
-        asset_doc = get_asset_by_name(project_name, asset_name)
-        if asset_doc:
-            asset_tasks = asset_doc["data"].get("tasks")
-            task_type_name = task["task_type"]["name"]
-            asset_tasks[task_type_name] = {
-                "type": task_type_name,
-                "zou": task,
-            }
-            self.dbcon.update_one(
-                {"_id": asset_doc["_id"]},
-                {"$set": {"data.tasks": asset_tasks}},
-            )
-
-            # Print message
-            msg = "Task created: {proj} - {ent_type}{parent}" " - {task}".format(
-                proj=task["project"]["name"],
-                ent_type=ent_type + " - " if ent_type is not None else "",
-                parent=parent_name,
-                task=task["task_type"]["name"],
-            )
-            logging.info(msg)
 
     def _update_task(self, data):
-        """Update task into OP DB."""
-
-        asset_types = get_asset_types(data["project_id"])
-        task_types = get_task_types(data["project_id"])
-        task_statuses = get_statuses()
-
-        episodes = gazu.shot.all_episodes_for_project(data["project_id"])
-        seqs = gazu.shot.all_sequences_for_project(data["project_id"])
-        shots = gazu.shot.all_shots_for_project(data["project_id"])
-
-        assets = []
-
-        for record in gazu.asset.all_assets_for_project(data["project_id"]):
-            asset = {
-                **record,
-                "asset_type_name": asset_types[record["entity_type_id"]],
-            }
-            assets.append(asset)
-
-        tasks = []
-        for record in gazu.task.all_tasks_for_project(data["project_id"]):
-            task = {
-                **record,
-                "task_type_name": task_types[record["task_type_id"]],
-                "task_status_name": task_statuses[record["task_status_id"]],
-            }
-            if record["name"] == "main":
-                task["name"] = task["task_type_name"].lower()
-            tasks.append(task)
-
-        # TODO: replace user uuids in task.assigness with emails
-        # which can be used to pair with ayon users
-
-        # compile list of entities
-        # TODO: split folders and tasks if the list is huge
-
-        entities = assets + episodes + seqs + shots + tasks
-        # print(gazu.project.get_project(data["project_id"]["name"]))
-        # pprint("-1-----------------------")
-        # pprint(entities)
-        # pprint("-2-----------------------")
-        # pprint(
-        #    ayon_api.get_project(
-        #        gazu.project.get_project(
-        #            data["project_id"],
-        #        )["name"],
-        #    )
-        # )
-        # pprint("-3-----------------------")
         data["event_type"] = "task:update"
         self.send_kitsu_event_to_ayon(data)
 
     def _delete_task(self, data):
-        print(inspect.stack()[0][3])
-        return
-        """Delete task of OP DB."""
+        data["event_type"] = "task:delete"
+        self.send_kitsu_event_to_ayon(data)
 
-        set_op_project(self.dbcon, data["project_id"])
-        project_name = self.dbcon.active_project()
-        # Find asset doc
-        asset_docs = list(get_assets(project_name))
-        for doc in asset_docs:
-            # Match task
-            for name, task in doc["data"]["tasks"].items():
-                if task.get("zou") and data["task_id"] == task["zou"]["id"]:
-                    # Pop task
-                    asset_tasks = doc["data"].get("tasks", {})
-                    asset_tasks.pop(name)
+    def _assign_task(self, data):
+        data["event_type"] = "task:assign"
+        self.send_kitsu_event_to_ayon(data)
 
-                    # Delete task in DB
-                    self.dbcon.update_one(
-                        {"_id": doc["_id"]},
-                        {"$set": {"data.tasks": asset_tasks}},
-                    )
+    def _unassign_task(self, data):
+        data["event_type"] = "task:unassign"
+        self.send_kitsu_event_to_ayon(data)
 
-                    # Print message
-                    entity = gazu.entity.get_entity(task["zou"]["entity_id"])
-                    ep = self.get_ep_dict(entity["source_id"])
+    def _status_changed_task(self, data):
+        data["event_type"] = "task:status-changed"
+        self.send_kitsu_event_to_ayon(data)
 
-                    if entity["type"] == "Asset":
-                        parent_name = "{ep}{entity_type} - {entity}".format(
-                            ep=ep["name"] + " - " if ep is not None else "",
-                            entity_type=task["zou"]["entity_type"]["name"],
-                            entity=task["zou"]["entity"]["name"],
-                        )
-                    elif entity["type"] == "Shot":
-                        parent_name = "{ep}{sequence} - {shot}".format(
-                            ep=ep["name"] + " - " if ep is not None else "",
-                            sequence=task["zou"]["sequence"]["name"],
-                            shot=task["zou"]["entity"]["name"],
-                        )
+    # == Edit ==
+    def _new_edit(self, data):
+        data["event_type"] = "edit:new"
+        self.send_kitsu_event_to_ayon(data)
 
-                    msg = "Task deleted: {proj} - {parent} - {task}".format(
-                        proj=task["zou"]["project"]["name"],
-                        parent=parent_name,
-                        task=name,
-                    )
-                    logging.info(msg)
+    def _update_edit(self, data):
+        data["event_type"] = "edit:update"
+        self.send_kitsu_event_to_ayon(data)
 
-                    return
+    def _delete_edit(self, data):
+        data["event_type"] = "edit:delete"
+        self.send_kitsu_event_to_ayon(data)
 
     def send_kitsu_event_to_ayon(
         self, payload: dict[str, Any], event_type: str = "kitsu-event"
@@ -719,19 +268,8 @@ class KitsuListener:
         logging.info(description)
 
         project_name = gazu.project.get_project(payload["project_id"])["name"]
-
-        legal_project_name = re.search(
-            PROJECT_NAME_REGEX,
-            project_name,
-        )
-
-        legal_project_code = slugify(
-            re.search(
-                PROJECT_CODE_REGEX,
-                project_name,
-            ),
-            separator="_",
-        )
+        legal_project_name = slugify(project_name, separator="_")
+        legal_project_code = create_project_code(project_name)
 
         logging.info(
             f"Event is from Project {legal_project_name} [{legal_project_code}] ({payload['project_id']})"
