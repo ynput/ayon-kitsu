@@ -12,9 +12,7 @@ def process_event(
     kitsu_server_url: str,
     kitsu_login_email: str,
     kitsu_login_password: str,
-    project_name: str,
-    project_code: str,
-    kitsu_payload: dict[str, str],
+    payload: dict[str, str],
     **kwargs,
 ):
     """React to Kitsu Events.
@@ -24,16 +22,15 @@ def process_event(
     creating a new Shot, renaming a Task, etc.
     """
 
-    if not kitsu_payload:
+    if not payload:
         logging.error("The Event payload is empty!")
         raise ValueError("The Event payload is empty!")
 
     hub = AyonKitsuHub(
-        project_name,
-        project_code,
+        payload["project_id"],
         kitsu_server_url,
         kitsu_login_email,
         kitsu_login_password,
     )
 
-    hub.react_to_kitsu_event(kitsu_payload)
+    hub.react_to_kitsu_event(payload)

@@ -3,11 +3,11 @@ import re
 import ayon_api
 import gazu
 from ayon_api.entity_hub import EntityHub
-from nxtools import log_traceback, logging
+from nxtools import log_traceback, logging, slugify
 
-from kitsu_common.utils import (
-    KitsuServerError,
-    create_kitsu_entities_in_ay,
+from kitsu_common.utils import KitsuServerError, create_short_name
+
+from .project import (
 )
 
 PROJECT_NAME_REGEX = re.compile("^[a-zA-Z0-9_]+$")
@@ -33,8 +33,7 @@ class AyonKitsuHub:
 
     def __init__(
         self,
-        project_name: str,
-        project_code: str,
+        project_id: str,
         kitsu_server_url: str,
         kitsu_login_email: str,
         kitsu_login_password: str,
@@ -51,9 +50,23 @@ class AyonKitsuHub:
 
         self._ay_project = None
         self._kitsu_project = None
+        self.project_id = project_id
 
-        self.project_name = project_name
-        self.project_code = project_code
+        self._get_project_names_from_id()
+
+    def _get_project_names_from_id(self):
+        # Try first with Ayon
+        for project in ayon_api.get_projects():
+            if project["data"].get("kitsuId", "") == self.project_id:
+                self.project_name = project["name"]
+                self.project_code = project["code"]
+                return
+
+        # Try with Kitsu
+        project = gazu.project.get_project(self.project_id)
+        if project:
+            self.project_name = slugify(project["name"], separator="_", lower=False)
+            self.project_code = create_short_name(self.project_name)
 
     def _initialize_apis(
         self, kitsu_server_url: str, kitsu_login_email: str, kitsu_login_password: str
@@ -129,7 +142,7 @@ class AyonKitsuHub:
             self._ay_project = None
 
         try:
-            self._kitsu_project = gazu.project.get_project_by_name(self.project_name)
+            self._kitsu_project = gazu.project.get_project(self.project_id)
             logging.info(
                 f"Project {project_name} <{self._kitsu_project['id']}> already exists in Kitsu."
             )
@@ -138,7 +151,7 @@ class AyonKitsuHub:
             log_traceback(e)
             self._kitsu_project = None
 
-    def create_project(self, kitsu_event: dict[str, str]):
+    def create_project(self, payload: dict[str, str]):
         """Create project in AYON and Kitsu.
 
         This step is also where we create all the required fields in Kitsu
@@ -151,6 +164,7 @@ class AyonKitsuHub:
             ayon_api.create_project(self.project_name, self.project_code)
             self._ay_project = EntityHub(self.project_name)
             self._ay_project.query_entities_from_server()
+            self._ay_project.project_entity.data["kitsuId"] = payload["project_id"]
         else:
             logging.info(
                 f"Project {self.project_name} ({self.project_code}) already exists in AYON."
