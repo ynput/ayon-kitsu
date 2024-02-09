@@ -5,6 +5,7 @@ import gazu
 
 from nxtools import logging
 from pprint import pprint
+import time
 
 if TYPE_CHECKING:
     from .kitsu import KitsuProcessor
@@ -32,6 +33,7 @@ def get_tasks(kitsu_project_id: str, task_types: {}, task_statuses: {}) -> []:
 
 
 def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str):
+    start_time = time.time()
     logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
 
     asset_types = get_asset_types(kitsu_project_id)
@@ -54,4 +56,7 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
         f"{parent.entrypoint}/push",
         project_name=project_name,
         entities=entities,
+    )
+    logging.info(
+        f"Full Sync for project {project_name} completed in {time.time() - start_time}s"
     )

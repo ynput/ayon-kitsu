@@ -85,6 +85,7 @@ def init_data(api, kitsu_url):
         project_name=PROJECT_NAME,
         entities=entities,
     )
+    print("init_data...")
     pprint(res.data)
     assert res.status_code == 200
 
@@ -92,9 +93,9 @@ def init_data(api, kitsu_url):
 @pytest.fixture(scope="module")
 def gazu():
 
-    host = os.environ.get('KITSU_API_URL', 'http://localhost/api')
-    login = os.environ.get('KITSU_LOGIN', 'admin@example.com')
-    pwd = os.environ.get('KITSU_PWD', 'mysecretpassword')
+    # host = os.environ.get('KITSU_API_URL', 'http://localhost/api')
+    # login = os.environ.get('KITSU_LOGIN', 'admin@example.com')
+    # pwd = os.environ.get('KITSU_PWD', 'mysecretpassword')
 
     # ## optional login to live kitsu 
     # print(f"gazu logging into {host} with {login}")
@@ -107,6 +108,9 @@ def gazu():
 def processor(kitsu_url):
     class MockProcessor:
         entrypoint = kitsu_url
+
+        def get_paired_ayon_project(self, kitsu_project_id):
+            return PROJECT_NAME
     
     return MockProcessor()
 

@@ -152,7 +152,11 @@ def test_full_sync(gazu, processor, monkeypatch, mocker):
     res = fullsync.full_sync(processor, PROJECT_ID, "AYON_Project")
 
     # assert logging
-    log_info.assert_called_once_with(f"Syncing kitsu project {PROJECT_ID} to AYON_Project")
+    log_calls = log_info.call_args_list
+    assert len(log_calls) == 2
+
+    assert log_calls[0][0][0] == f"Syncing kitsu project {PROJECT_ID} to AYON_Project"
+    assert log_calls[1][0][0].startswith("Full Sync for project AYON_Project completed in ")
     
     # assert ayon api call
     api_patch.assert_called_once()

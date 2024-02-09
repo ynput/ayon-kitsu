@@ -9,7 +9,19 @@ import gazu
 from nxtools import logging, log_traceback
 
 from .fullsync import full_sync
-from . import update_from_kitsu
+from .update_from_kitsu import (
+    create_or_update_asset,
+    create_or_update_episode,
+    create_or_update_sequence,
+    create_or_update_shot,
+    create_or_update_task,
+
+    delete_asset,
+    delete_episode,
+    delete_sequence,
+    delete_shot,
+    delete_task,
+)
 
 
 if service_name := os.environ.get("AYON_SERVICE_NAME"):
@@ -32,6 +44,7 @@ class KitsuProcessor:
         # Connect to Ayon
         #
         try:
+            # ayon_api.init_service(addon_name='kitsu', addon_version='1.0.2-dev1', service_name='processor')
             ayon_api.init_service()
             connected = True
         except Exception:
@@ -52,6 +65,11 @@ class KitsuProcessor:
         self.settings = ayon_api.get_service_addon_settings()
         self.entrypoint = f"/addons/{self.addon_name}/{self.addon_version}"
 
+        #
+        # Get list of projects that have been paired
+        #
+        self.pairing_list = self.get_pairing_list()
+        
         #
         # Get Kitsu server credentials from settings
         #
@@ -83,7 +101,7 @@ class KitsuProcessor:
         #
         # Connect to Kitsu
         #
-
+        gazu.client.set_host(self.kitsu_server_url)
         gazu.set_host(self.kitsu_server_url)
         if not gazu.client.host_is_valid():
             raise KitsuServerError(
@@ -97,13 +115,14 @@ class KitsuProcessor:
         except gazu.exception.AuthFailedException as e:
             raise KitsuServerError(f"Kitsu login failed: {e}") from e
         
-    def add_gazu_event_listeners(self):
-        
-        gazu.set_event_host(
-            self.kitsu_server_url.replace("api", "socket.io")
-        )
+        # init event client
+        self.kitsu_events_url = self.kitsu_server_url.replace("api", "socket.io")
+        gazu.set_event_host(self.kitsu_events_url)
         self.event_client = gazu.events.init()
-
+        
+        
+        # ============= Add Kitsu Event Listeners ==============
+       
         # gazu.events.add_listener(
         #     self.event_client, "project:new", self._new_project
         # )
@@ -114,100 +133,116 @@ class KitsuProcessor:
         #     self.event_client, "project:delete", self._delete_project
         # )
     
-        
         gazu.events.add_listener(
             self.event_client, 
             "asset:new", 
-            self.update_asset
+            lambda data: create_or_update_asset(self, data)
         )
         gazu.events.add_listener(
             self.event_client, 
             "asset:update", 
-            self.update_asset
+            lambda data: create_or_update_asset(self, data)
         )
         gazu.events.add_listener(
             self.event_client, 
             "asset:delete", 
-            self.delete_asset
+            lambda data: delete_asset(self, data)
         )
         gazu.events.add_listener(
             self.event_client, 
             "episode:new", 
-            lambda data: update_from_kitsu.create_or_update_episode(self, data)
+            lambda data: create_or_update_episode(self, data)
         )
         gazu.events.add_listener(
             self.event_client,
             "episode:update", 
-            lambda data: update_from_kitsu.create_or_update_episode(self, data)
+            lambda data: create_or_update_episode(self, data)
         )
         gazu.events.add_listener(
             self.event_client, 
             "episode:delete", 
-            lambda data: update_from_kitsu.delete_episode(self, data)
+            lambda data: delete_episode(self, data)
         )
         gazu.events.add_listener(
             self.event_client, 
             "sequence:new",
-            lambda data: update_from_kitsu.create_or_update_sequence(self, data)
+            lambda data: create_or_update_sequence(self, data)
         )
         gazu.events.add_listener(
             self.event_client, 
             "sequence:update", 
-            lambda data: update_from_kitsu.create_or_update_sequence(self, data)
+            lambda data: create_or_update_sequence(self, data)
         )
         gazu.events.add_listener(
             self.event_client, 
             "sequence:delete", 
-            lambda data: update_from_kitsu.delete_sequence(self, data)
+            lambda data: delete_sequence(self, data)
         )
         gazu.events.add_listener(
             self.event_client,
             "shot:new",
-            lambda data: update_from_kitsu.create_or_update_shot(self, data)
+            lambda data: create_or_update_shot(self, data)
         )
         gazu.events.add_listener(
             self.event_client, 
             "shot:update", 
-            lambda data: update_from_kitsu.create_or_update_shot(self, data)
+            lambda data: create_or_update_shot(self, data)
         )
         gazu.events.add_listener(
             self.event_client, 
             "shot:delete", 
-            lambda data: update_from_kitsu.delete_shot(self, data)
+            lambda data: delete_shot(self, data)
         )
         gazu.events.add_listener(
             self.event_client, 
             "task:new", 
-            lambda data: update_from_kitsu.create_or_update_task(self, data)
+            lambda data: create_or_update_task(self, data)
         )
         gazu.events.add_listener(
             self.event_client, 
             "task:update", 
-            lambda data: update_from_kitsu.create_or_update_task(self, data)
+            lambda data: create_or_update_task(self, data)
         )
         gazu.events.add_listener(
             self.event_client, 
             "task:delete", 
-            lambda data: update_from_kitsu.delete_task(self, data)
+            lambda data: delete_task(self, data)
         )
         logging.info("Gazu event listeners added")
+        gazu.events.run_client(self.event_client)
 
-    def update_asset(self, data):
-        logging.info("KitsuProcessor update_asset")
-        ayon_api.init_service()
-        logging.info("KitsuProcessor logged in")
-        update_from_kitsu.create_or_update_asset(self, data)
+    
 
-    def delete_asset(self, data):
-        logging.info("KitsuProcessor delete_asset")
-        ayon_api.init_service()
-        logging.info("KitsuProcessor logged in")
-        update_from_kitsu.delete_asset(self, data)
+    def get_pairing_list(self):
+        logging.info("get_pairing_list")
+        """ maintain a list of pairings so that we can check 
+        the kitsu change is in a paired project and get the ayon project name  
+        """
+        res = ayon_api.get(f"{self.entrypoint}/pairing")
 
+        assert res.status_code == 200, f"{self.entrypoint}/pairing failed"
+        # logging.info(f'get_pairing_list {res.status_code} {res.data}')
+        return res.data
+    
+    def get_paired_ayon_project(self, kitsu_project_id):
+        """ returns the ayon project if paired else None """
+        for pair in self.pairing_list:
+            if pair['kitsuProjectId'] == kitsu_project_id:
+                return pair['ayonProjectName']
+            
+    def set_paired_ayon_project(self, kitsu_project_id, ayon_project_name):
+        """ add a new pair to the list """
+        for pair in self.pairing_list:
+            if 'kitsuProjectId' in pair:
+                return
+        self.pairing_list.append({
+            'kitsuProjectId': kitsu_project_id,
+            'ayonProjectName': ayon_project_name
+        })
 
     def start_processing(self):
+
         logging.info("KitsuProcessor started")
-        self.add_gazu_event_listeners()
         
         while True:
             job = ayon_api.enroll_event_job(
@@ -224,7 +259,6 @@ class KitsuProcessor:
 
             src_job = ayon_api.get_event(job["dependsOn"])
 
-
             kitsu_project_id = src_job["summary"]["kitsuProjectId"]
             ayon_project_name = src_job["project"]
 
@@ -238,6 +272,9 @@ class KitsuProcessor:
 
             try:
                 full_sync(self, kitsu_project_id, ayon_project_name)
+                
+                # if successful add the pair to the list
+                self.set_paired_ayon_project(kitsu_project_id, ayon_project_name)
             except Exception:
                 log_traceback(f"Unable to sync kitsu project {ayon_project_name}")
                 

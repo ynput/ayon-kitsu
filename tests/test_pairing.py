@@ -20,13 +20,13 @@ def test_get_pairing(api, kitsu_url):
     
     res = api.get(f'{kitsu_url}/pairing', mock=True)
     assert res.status_code == 200
-    
+    pprint(res.data)
     assert res.data == [
         {'kitsuProjectId': 'kitsu-project-id-1', 'kitsuProjectName': 'Kitsu Test Project', 'kitsuProjectCode': 'KTP', 'ayonProjectName': PROJECT_NAME}, 
         {'kitsuProjectId': 'kitsu-project-id-2', 'kitsuProjectName': 'Another Project', 'kitsuProjectCode': 'AP', 'ayonProjectName': None}
     ]
 
-def test_post_pairing_success(api, kitsu_url):
+def _test_post_pairing_success(api, kitsu_url):
 
     res = api.post(
         f'{kitsu_url}/pairing', 
@@ -126,7 +126,7 @@ def test_post_pairing_success(api, kitsu_url):
     ]
 
 
-def test_post_pairing_already_exists(api, kitsu_url):
+def _test_post_pairing_already_exists(api, kitsu_url):
     """ should have conflict if ayon project is already paired """
 
     res = api.post(

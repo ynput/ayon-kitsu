@@ -29,7 +29,8 @@ def test_update_folder_attrib(api, kitsu_url, init_data):
     )
     assert res.status_code == 200
    
-    # res.data should be maps of kitsu-ids to ayon-ids such as {'folders': {'shot-id-1': '40dfcf00c50511eeba890242ac150004'}, 'tasks': {}}
+    # res.data should be maps of kitsu-ids to ayon-ids such as 
+    # {'folders': {'shot-id-1': '40dfcf00c50511eeba890242ac150004'}, 'tasks': {}}
     assert res.data, "push should return the ayon objects created including the ayon id"
     assert kitsu_id in res.data['folders']
     assert isinstance(res.data['folders'][kitsu_id], str)

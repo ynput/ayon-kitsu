@@ -74,6 +74,15 @@ def test_push_assets(api, kitsu_url, monkeypatch):
     assert character_2_asset['hasTasks'] is False
     assert not character_2_asset['children']
 
+   
+    # get the full folder data
+    res = api.get(f"/projects/{PROJECT_NAME}/folders/{character_2_asset['id']}") 
+    assert res.status_code == 200
+    folder = res.data
+    
+    # check the kitsu id is saved to data
+    assert folder['data'] == {'kitsuId': 'asset-id-2'}
+
     
 def test_push_episodes(api, kitsu_url):
     # mock episodes
