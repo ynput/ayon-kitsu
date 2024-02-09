@@ -1,40 +1,14 @@
-from typing import TYPE_CHECKING, Any
-import ayon_api
+from typing import TYPE_CHECKING
 
+import ayon_api
 import gazu
+from server.kitsu.anatomy import parse_attrib
 
 from kitsu_common.constants import kitsu_models, kitsu_statuses, kitsu_tasks
 from kitsu_common.utils import create_short_name
 
 if TYPE_CHECKING:
     from ayon_api.entity_hub import EntityHub, ProjectEntity
-
-
-def parse_attrib(source: dict[str, Any] | None = None):
-    result = {}
-    if source is None:
-        return result
-    for key, value in source.items():
-        if key == "fps":
-            result["fps"] = float(value)
-        elif key == "frame_in":
-            result["frameStart"] = int(value)
-        elif key == "frame_out":
-            result["frameEnd"] = int(value)
-        elif key == "resolution":
-            try:
-                result["resolutionWidth"] = int(value.split("x")[0])
-                result["resolutionHeight"] = int(value.split("x")[1])
-            except (IndexError, ValueError):
-                pass
-        elif key == "description":
-            result["description"] = value
-        elif key == "start_date":
-            result["startDate"] = value + "T00:00:00Z"
-        elif key == "end_date":
-            result["endDate"] = value + "T00:00:00Z"
-
-    return result
 
 
 def kitsu_project_create(
