@@ -8,6 +8,9 @@ from nxtools import log_traceback, logging, slugify
 from kitsu_common.utils import KitsuServerError, create_short_name
 
 from .project import (
+    kitsu_project_create,
+    kitsu_project_delete,
+    kitsu_project_update,
 )
 
 PROJECT_NAME_REGEX = re.compile("^[a-zA-Z0-9_]+$")
@@ -218,45 +221,9 @@ class AyonKitsuHub:
 
         match source:
             case "ayon":
-                """
-                disabled_entities = []
-                ay_entities = [
-                    folder["name"]
-                    for folder in self._ay_project.project_entity.folder_types
-                    if folder["name"] in AYON_SHOTGRID_ENTITY_TYPE_MAP.keys()
-                ]
-
-                sg_entities = [
-                    entity_name
-                    for entity_name, _ in get_sg_project_enabled_entities(
-                        self._sg, self._sg_project
-                    )
-                ]
-
-                disabled_entities = [
-                    ay_entity
-                    for ay_entity in ay_entities
-                    if ay_entity not in sg_entities
-                ]
-
-                if disabled_entities:
-                    raise ValueError(
-                        f"Unable to sync project {self.project_name} "
-                        f"<{self.project_code}> from AYON to Shotgrid, you need "
-                        "to enable the following entities in the Shotgrid Project "
-                        f"> Project Actions > Tracking Settings: {disabled_entities}"
-                    )
-
-                match_ayon_hierarchy_in_shotgrid(
-                    self._ay_project,
-                    self._sg_project,
-                    self._sg,
-                    self.sg_project_code_field,
-                )
-                """
-
+                pass
             case "kitsu":
-                create_kitsu_entities_in_ay(
+                kitsu_project_create(
                     self._ay_project.project_entity,
                     self._kitsu_project,
                 )
@@ -280,16 +247,22 @@ class AyonKitsuHub:
             kitsu_event (dict): The `meta` key of a Shogrid Event, describing what
                 the change encompases, i.e. a new shot, new asset, etc.
         """
-        return
         match kitsu_event["event_type"]:
-            case "task:new":
-                # create_ay_entity_from_kitsu_event(
-                #    kitsu_event,
-                #    self._kitsu_project,
-                #    self._ay_project,
-                # )
+            case "project:update":
+                kitsu_project_update(
+                    self._kitsu_project,
+                    self._ay_project,
+                )
+                pass
+            case "project:delete":
+                kitsu_project_delete(
+                    self._ay_project,
+                )
                 pass
             case _:
+                return
                 msg = f"Unable to process event {kitsu_event['event_type']}."
                 logging.error(msg)
                 raise ValueError(msg)
+
+        self._ay_project.commit_changes()
