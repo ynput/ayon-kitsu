@@ -6,7 +6,7 @@ DEFAULT_VALUES = {
             "note_status_shortname": "wfa",
             "status_change_conditions": {
                 "status_conditions": [],
-                "product_type_requirements": [],
+                "family_requirements": [],
             },
             "custom_comment_template": {
                 "enabled": False,

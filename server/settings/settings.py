@@ -34,7 +34,7 @@ class StatusChangeConditionsModel(BaseSettingsModel):
     status_conditions: list[StatusChangeCondition] = Field(
         default_factory=list, title="Status conditions"
     )
-    product_type_requirements: list[StatusChangeProductTypeRequirementModel] = Field(
+    family_requirements: list[StatusChangeProductTypeRequirementModel] = Field(
         default_factory=list, title="Product type requirements"
     )
 
