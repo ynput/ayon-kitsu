@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 import gazu
 from nxtools import logging
 
-from .constants import kitsu_models
+from .constants import kitsu_models, kitsu_statuses, kitsu_tasks
 
 if TYPE_CHECKING:
     import ayon_api
@@ -62,7 +62,10 @@ def get_statuses() -> dict[str, str]:
     return kitsu_statuses
 
 
-def get_kitsu_credentials(ayon_api: "ayon_api", settings: dict[str, str]) -> list[str]:
+def get_kitsu_credentials(
+    ayon_api: "ayon_api",
+    settings: dict[str, str],
+) -> tuple[str, str, str]:
     """Gets the kitsu credentials from Ayon
 
     Args:
@@ -114,31 +117,39 @@ def create_kitsu_entities_in_ay(
         kitsu_project (dict): The project owning the Tasks.
     """
 
-    """
-    name,
-    short_name=None,
-    state=None,
-    icon=None,
-    color=None,
-    """
     # Add Kitsu models as folder types to Project Entity
-    folders = []
-    for status in kitsu_models:
-        folders.append(
-            {
-                "name": status["name"],
-                "short_name": status["short_name"],
-                "icon": status.get("icon"),
-            }
-        )
+    project_entity.set_folder_types(project_entity.get_folder_types() + kitsu_models)
 
     ## Add Project task types to Project Entity
-    project_entity.set_task_types(gazu.task.all_task_types_for_project(kitsu_project))
-    # for type in gazu.task.all_task_types_for_project(kitsu_project):
-    #    project_entity.task_types.create(
-    #        type["name"],
-    #        short_name=type["short_name"],
-    #    )
+    task_types = []
+
+    default_types = project_entity.get_task_types()
+    kitsu_types = gazu.task.all_task_types_for_project(kitsu_project)
+
+    for kitsu_type in kitsu_types:
+        # Fetch data from Ayon defaults
+        for default_type in default_types:
+            if kitsu_type["name"] == default_type["name"]:
+                kitsu_type["icon"] = default_type["icon"]
+                kitsu_type["shortName"] = default_type["shortName"]
+
+        # Fetch icon from constants
+        icon = kitsu_tasks.get(kitsu_type["name"].lower())
+        if icon:
+            kitsu_type["icon"] = icon
+
+        # Generate short name
+        if "shortName" not in kitsu_type:
+            kitsu_type["shortName"] = create_short_name(kitsu_type["name"])
+        task_types.append(kitsu_type)
+
+    project_entity.set_task_types(task_types)
 
     # Add Kitsu task statuses to Project Entity
     project_entity.set_statuses(gazu.task.all_task_statuses_for_project(kitsu_project))
+    # Add state and icon to the statuses
+    for status in project_entity.get_statuses():
+        kitsu_status = kitsu_statuses.get(status.short_name)
+        if kitsu_status:
+            status.set_icon(kitsu_status["icon"])
+            status.set_state(kitsu_status["state"])
