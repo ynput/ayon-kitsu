@@ -1,10 +1,12 @@
-from typing import TYPE_CHECKING
+import contextlib
+from typing import TYPE_CHECKING, Any
 
 import gazu
-from nxtools import logging
+from nxtools import logging, slugify
 
 if TYPE_CHECKING:
     import ayon_api
+    from ayon_api.entity_hub import BaseEntity, EntityHub, FolderEntity, TaskEntity
 
 
 class KitsuServerError(Exception):
@@ -140,3 +142,19 @@ def parse_attrib(source: dict[str, Any] | None = None) -> dict[str, str | int | 
             result = result | parse_attrib(value)
 
     return result
+
+
+def get_or_create_root_folder_by_name(
+    ay_project: "EntityHub",
+    folder_name: str,
+    folder_type: str = "Folder",
+):
+    root = ay_project.get_entity_children(ay_project.project_entity)
+    for folder in root:
+        if folder.name == folder_name:
+            return folder
+
+    return ay_project.add_new_folder(
+        folder_type=folder_type,
+        name=folder_name,
+    )
