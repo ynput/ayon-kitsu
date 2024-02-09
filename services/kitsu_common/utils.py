@@ -127,22 +127,23 @@ def create_kitsu_entities_in_ay(
     kitsu_types = gazu.task.all_task_types_for_project(kitsu_project)
 
     for kitsu_type in kitsu_types:
+        new_type = {}
+        new_type["name"] = kitsu_type["name"]
         # Fetch data from Ayon defaults
         for default_type in default_types:
-            if kitsu_type["name"] == default_type["name"]:
-                kitsu_type["icon"] = default_type["icon"]
-                kitsu_type["shortName"] = default_type["shortName"]
+            if new_type["name"] == default_type["name"]:
+                new_type["icon"] = default_type["icon"]
+                new_type["shortName"] = default_type["shortName"]
 
         # Fetch icon from constants
-        icon = kitsu_tasks.get(kitsu_type["name"].lower())
-        if icon:
-            kitsu_type["icon"] = icon
+        constant_type = kitsu_tasks.get(new_type["name"].lower())
+        if constant_type:
+            new_type["icon"] = constant_type["icon"]
 
         # Generate short name
-        if "shortName" not in kitsu_type:
-            kitsu_type["shortName"] = create_short_name(kitsu_type["name"])
-        task_types.append(kitsu_type)
-
+        if "shortName" not in new_type:
+            new_type["shortName"] = create_short_name(new_type["name"])
+        task_types.append(new_type)
     project_entity.set_task_types(task_types)
 
     # Add Kitsu task statuses to Project Entity
