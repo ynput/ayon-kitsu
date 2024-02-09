@@ -17,7 +17,7 @@ import ayon_api
 import gazu
 from kitsu_common.utils import (
     KitsuServerError,
-    create_project_code,
+    create_short_name,
     get_kitsu_credentials,
 )
 from nxtools import log_traceback, logging, slugify
@@ -265,8 +265,8 @@ class KitsuListener:
         logging.info(description)
 
         project_name = gazu.project.get_project(payload["project_id"])["name"]
-        legal_project_name = slugify(project_name, separator="_")
-        legal_project_code = create_project_code(legal_project_name)
+        legal_project_name = slugify(project_name, separator="_", lower=False)
+        legal_project_code = create_short_name(legal_project_name)
 
         logging.info(
             f"Event is from Project {legal_project_name} [{legal_project_code}] ({payload['project_id']})"
