@@ -18,10 +18,7 @@ import gazu
 from kitsu_common.utils import (
     KitsuServerError,
     create_project_code,
-    get_asset_types,
     get_kitsu_credentials,
-    get_statuses,
-    get_task_types,
 )
 from nxtools import log_traceback, logging, slugify
 
