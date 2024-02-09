@@ -1,4 +1,3 @@
-from pprint import pprint
 from typing import TYPE_CHECKING
 
 import gazu
@@ -16,9 +15,6 @@ def kitsu_shot_new(
 ):
     kitsu_shot = gazu.shot.get_shot(kitsu_event["shot_id"])
     kitsu_sequence = gazu.shot.get_sequence(kitsu_shot["sequence_id"])
-    print("----------")
-    pprint(kitsu_shot)
-    print("---------")
     folder = ay_project.add_new_folder(
         folder_type="Sequence",
         name=slugify(kitsu_shot["name"], separator="_", lower=False),
