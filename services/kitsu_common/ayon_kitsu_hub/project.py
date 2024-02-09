@@ -2,16 +2,15 @@ from typing import TYPE_CHECKING
 
 import ayon_api
 import gazu
-from server.kitsu.anatomy import parse_attrib
 
 from kitsu_common.constants import kitsu_models, kitsu_statuses, kitsu_tasks
-from kitsu_common.utils import create_short_name
+from kitsu_common.utils import create_short_name, parse_attrib
 
 if TYPE_CHECKING:
     from ayon_api.entity_hub import EntityHub, ProjectEntity
 
 
-def kitsu_project_create(
+def kitsu_project_new(
     project_entity: "ProjectEntity",
     kitsu_project: dict[str, str],
 ):

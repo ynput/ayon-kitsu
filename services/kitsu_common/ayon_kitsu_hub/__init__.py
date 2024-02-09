@@ -8,8 +8,8 @@ from nxtools import log_traceback, logging, slugify
 from kitsu_common.utils import KitsuServerError, create_short_name
 
 from .project import (
-    kitsu_project_create,
     kitsu_project_delete,
+    kitsu_project_new,
     kitsu_project_update,
 )
 
@@ -253,12 +253,14 @@ class AyonKitsuHub:
                     self._kitsu_project,
                     self._ay_project,
                 )
-                pass
             case "project:delete":
                 kitsu_project_delete(
                     self._ay_project,
                 )
-                pass
+            case "sequence:new":
+                kitsu_sequence_new(
+                    kitsu_event,
+                    self._ay_project,
             case _:
                 return
                 msg = f"Unable to process event {kitsu_event['event_type']}."
