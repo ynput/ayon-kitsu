@@ -8,6 +8,7 @@ import gazu
 from nxtools import log_traceback, logging
 
 from .fullsync import full_sync
+from . import update_from_kitsu
 
 if service_name := os.environ.get("AYON_SERVICE_NAME"):
     logging.user = service_name
@@ -28,7 +29,6 @@ class KitsuProcessor:
         #
         # Connect to Ayon
         #
-
         try:
             ayon_api.init_service()
             connected = True
@@ -87,14 +87,126 @@ class KitsuProcessor:
             raise KitsuServerError(
                 f"Kitsu server `{self.kitsu_server_url}` is not valid"
             )
-
+        
+        
         try:
             gazu.log_in(self.kitsu_login_email, self.kitsu_login_password)
+            logging.info(f"Gazu logged in as {self.kitsu_login_email}")
         except gazu.exception.AuthFailedException as e:
             raise KitsuServerError(f"Kitsu login failed: {e}") from e
+        
+    def add_gazu_event_listeners(self):
+        
+        gazu.set_event_host(
+            self.kitsu_server_url.replace("api", "socket.io")
+        )
+        self.event_client = gazu.events.init()
+
+        # gazu.events.add_listener(
+        #     self.event_client, "project:new", self._new_project
+        # )
+        # gazu.events.add_listener(
+        #     self.event_client, "project:update", self._update_project
+        # )
+        # gazu.events.add_listener(
+        #     self.event_client, "project:delete", self._delete_project
+        # )
+    
+        
+        gazu.events.add_listener(
+            self.event_client, 
+            "asset:new", 
+            self.update_asset
+        )
+        gazu.events.add_listener(
+            self.event_client, 
+            "asset:update", 
+            self.update_asset
+        )
+        gazu.events.add_listener(
+            self.event_client, 
+            "asset:delete", 
+            self.delete_asset
+        )
+        gazu.events.add_listener(
+            self.event_client, 
+            "episode:new", 
+            lambda data: update_from_kitsu.create_or_update_episode(self, data)
+        )
+        gazu.events.add_listener(
+            self.event_client,
+            "episode:update", 
+            lambda data: update_from_kitsu.create_or_update_episode(self, data)
+        )
+        gazu.events.add_listener(
+            self.event_client, 
+            "episode:delete", 
+            lambda data: update_from_kitsu.delete_episode(self, data)
+        )
+        gazu.events.add_listener(
+            self.event_client, 
+            "sequence:new",
+            lambda data: update_from_kitsu.create_or_update_sequence(self, data)
+        )
+        gazu.events.add_listener(
+            self.event_client, 
+            "sequence:update", 
+            lambda data: update_from_kitsu.create_or_update_sequence(self, data)
+        )
+        gazu.events.add_listener(
+            self.event_client, 
+            "sequence:delete", 
+            lambda data: update_from_kitsu.delete_sequence(self, data)
+        )
+        gazu.events.add_listener(
+            self.event_client,
+            "shot:new",
+            lambda data: update_from_kitsu.create_or_update_shot(self, data)
+        )
+        gazu.events.add_listener(
+            self.event_client, 
+            "shot:update", 
+            lambda data: update_from_kitsu.create_or_update_shot(self, data)
+        )
+        gazu.events.add_listener(
+            self.event_client, 
+            "shot:delete", 
+            lambda data: update_from_kitsu.delete_shot(self, data)
+        )
+        gazu.events.add_listener(
+            self.event_client, 
+            "task:new", 
+            lambda data: update_from_kitsu.create_or_update_task(self, data)
+        )
+        gazu.events.add_listener(
+            self.event_client, 
+            "task:update", 
+            lambda data: update_from_kitsu.create_or_update_task(self, data)
+        )
+        gazu.events.add_listener(
+            self.event_client, 
+            "task:delete", 
+            lambda data: update_from_kitsu.delete_task(self, data)
+        )
+        logging.info("Gazu event listeners added")
+
+    def update_asset(self, data):
+        logging.info("KitsuProcessor update_asset")
+        ayon_api.init_service()
+        logging.info("KitsuProcessor logged in")
+        update_from_kitsu.create_or_update_asset(self, data)
+
+    def delete_asset(self, data):
+        logging.info("KitsuProcessor delete_asset")
+        ayon_api.init_service()
+        logging.info("KitsuProcessor logged in")
+        update_from_kitsu.delete_asset(self, data)
+
 
     def start_processing(self):
         logging.info("KitsuProcessor started")
+        self.add_gazu_event_listeners()
+        
         while True:
             job = ayon_api.enroll_event_job(
                 source_topic="kitsu.sync_request",
