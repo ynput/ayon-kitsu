@@ -18,6 +18,26 @@ class KitsuSettingsError(Exception):
     pass
 
 
+def create_short_name(project_name: str) -> str:
+    project_name = project_name.lower()
+    code = project_name
+
+    if "_" in project_name:
+        subwords = project_name.split("_")
+        code = "".join([subword[0] for subword in subwords])[:4]
+    elif len(project_name) > 4:
+        vowels = ["a", "e", "i", "o", "u"]
+        filtered_word = "".join([char for char in project_name if char not in vowels])
+        code = filtered_word[:4]
+
+    # if there is a number at the end of the project_name, add it to the code
+    last_char = project_name[-1]
+    if last_char.isdigit():
+        code += last_char
+
+    return code
+
+
 def get_asset_types(kitsu_project_id: str) -> dict[str, str]:
     raw_asset_types = gazu.asset.all_asset_types_for_project(kitsu_project_id)
     kitsu_asset_types = {}
