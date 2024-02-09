@@ -1,3 +1,5 @@
+import contextlib
+
 from typing import Any, TYPE_CHECKING
 
 from ayon_server.exceptions import AyonException
@@ -142,11 +144,14 @@ def parse_attrib(source: dict[str, Any] | None = None):
         return result
     for key, value in source.items():
         if key == "fps":
-            result["fps"] = float(value)
+            with contextlib.suppress(ValueError):
+                result["fps"] = float(value)
         elif key == "frame_in":
-            result["frameStart"] = int(value)
+            with contextlib.suppress(ValueError):
+                result["frameStart"] = int(value)
         elif key == "frame_out":
-            result["frameEnd"] = int(value)
+            with contextlib.suppress(ValueError):
+                result["frameEnd"] = int(value)
         elif key == "resolution":
             try:
                 result["resolutionWidth"] = int(value.split("x")[0])
