@@ -248,13 +248,6 @@ class AyonKitsuHub:
                 )
                 self._ay_project.commit_changes()
 
-                # match_shotgrid_hierarchy_in_ayon(
-                #    self._ay_project,
-                #    self._sg_project,
-                #    self._sg,
-                #    self.sg_project_code_field,
-                # )
-
             case _:
                 raise ValueError(
                     f"The `source` argument can only be `ayon` or `kitsu`, got '{source}'"
@@ -273,15 +266,16 @@ class AyonKitsuHub:
             kitsu_event (dict): The `meta` key of a Shogrid Event, describing what
                 the change encompases, i.e. a new shot, new asset, etc.
         """
-
+        return
         match kitsu_event["event_type"]:
             case "task:new":
-                create_ay_entity_from_kitsu_event(
-                    kitsu_event,
-                    self._kitsu_project,
-                    self._ay_project,
-                )
+                # create_ay_entity_from_kitsu_event(
+                #    kitsu_event,
+                #    self._kitsu_project,
+                #    self._ay_project,
+                # )
+                pass
             case _:
-                msg = f"Unable to process event {kitsu_event['type']}."
+                msg = f"Unable to process event {kitsu_event['event_type']}."
                 logging.error(msg)
                 raise ValueError(msg)

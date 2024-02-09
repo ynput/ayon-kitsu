@@ -14,11 +14,9 @@ def process_event(
     kitsu_server_url: str,
     kitsu_login_email: str,
     kitsu_login_password: str,
-    user_name: Union[str, None] = None,
-    project_name: Union[str, None] = None,
-    project_code: Union[str, None] = None,
-    project_code_field: Union[str, None] = None,
-    kitsu_payload: Union[str, None] = None,
+    project_name: str,
+    project_code: str,
+    kitsu_payload: dict[str, str],
     **kwargs,
 ):
     """React to Kitsu Events.

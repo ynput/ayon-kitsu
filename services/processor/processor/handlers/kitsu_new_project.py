@@ -14,11 +14,9 @@ def process_event(
     kitsu_server_url: str,
     kitsu_login_email: str,
     kitsu_login_password: str,
-    user_name: Union[str, None] = None,
-    project_name: Union[str, None] = None,
-    project_code: Union[str, None] = None,
-    project_code_field: Union[str, None] = None,
-    kitsu_payload: Union[str, None] = None,
+    project_name: str,
+    project_code: str,
+    kitsu_payload: dict[str, str],
     **kwargs,
 ):
     """React to Kitsu Events.
@@ -31,13 +29,6 @@ def process_event(
     if not kitsu_payload:
         logging.error("The Event payload is empty!")
         raise ValueError("The Event payload is empty!")
-    print(
-        project_name,
-        project_code,
-        kitsu_server_url,
-        kitsu_login_email,
-        kitsu_login_password,
-    )
 
     hub = AyonKitsuHub(
         project_name,
@@ -49,5 +40,5 @@ def process_event(
 
     hub.create_project(kitsu_payload)
     hub.syncronize_project(
-        source="ayon" if kwargs.get("action") == "sync-from-ayon" else "kitsu"
+        source="ayon" if kwargs.get("event_type") == "sync-from-ayon" else "kitsu"
     )

@@ -174,13 +174,13 @@ class KitsuProcessor:
                         ayon_api.update_event(source_event["id"], status="finished")
                         continue
 
-                    for handler in self.handlers_map.get(payload["action"], []):
+                    for handler in self.handlers_map.get(payload["event_type"], []):
                         # If theres any handler "subscirbed" to this event type..
                         try:
                             logging.info(f"Running the Handler {handler}")
                             ayon_api.update_event(
                                 event["id"],
-                                description=f"Procesing event with Handler {payload['action']}...",
+                                description=f"Procesing event with Handler {payload['event_type']}...",
                                 status="finished",
                             )
                             handler.process_event(
@@ -249,9 +249,6 @@ class KitsuProcessor:
                             project_name=ayon_project_name,
                             description="Kitsu sync finished",
                         )
-
-                logging.info(f"Waiting {self.kitsu_polling_frequency} seconds...")
-                time.sleep(self.kitsu_polling_frequency)
 
             except Exception as err:
                 log_traceback(err)
