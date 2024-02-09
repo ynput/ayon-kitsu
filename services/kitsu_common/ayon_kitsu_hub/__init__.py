@@ -12,6 +12,11 @@ from .project import (
     kitsu_project_new,
     kitsu_project_update,
 )
+from .sequence import (
+    kitsu_sequence_delete,
+    kitsu_sequence_new,
+    kitsu_sequence_update,
+)
 
 PROJECT_NAME_REGEX = re.compile("^[a-zA-Z0-9_]+$")
 
