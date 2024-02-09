@@ -2,8 +2,6 @@
 Handle Events originated from Kitsu.
 """
 
-from typing import Union
-
 from kitsu_common.ayon_kitsu_hub import AyonKitsuHub
 from nxtools import logging
 
