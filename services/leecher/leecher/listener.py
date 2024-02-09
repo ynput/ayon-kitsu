@@ -269,7 +269,7 @@ class KitsuListener:
 
         project_name = gazu.project.get_project(payload["project_id"])["name"]
         legal_project_name = slugify(project_name, separator="_")
-        legal_project_code = create_project_code(project_name)
+        legal_project_code = create_project_code(legal_project_name)
 
         logging.info(
             f"Event is from Project {legal_project_name} [{legal_project_code}] ({payload['project_id']})"
