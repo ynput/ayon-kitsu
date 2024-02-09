@@ -264,9 +264,14 @@ class KitsuListener:
         description = f"Leeched '{payload['event_type']}' as a '{event_type}' event"
         logging.info(description)
 
-        project_name = gazu.project.get_project(payload["project_id"])["name"]
-        legal_project_name = slugify(project_name, separator="_", lower=False)
-        legal_project_code = create_short_name(legal_project_name)
+        try:
+            project_name = gazu.project.get_project(payload["project_id"])["name"]
+            legal_project_name = slugify(project_name, separator="_", lower=False)
+            legal_project_code = create_short_name(legal_project_name)
+        except Exception:
+            project_name = None
+            legal_project_name = None
+            legal_project_code = None
 
         logging.info(
             f"Event is from Project {legal_project_name} [{legal_project_code}] ({payload['project_id']})"
@@ -280,7 +285,7 @@ class KitsuListener:
             summary=None,
             payload={
                 "event_type": event_type,
-                "kitsu_payload": payload,
+                "payload": payload,
                 "project_name": legal_project_name,
                 "project_code": legal_project_code,
             },
