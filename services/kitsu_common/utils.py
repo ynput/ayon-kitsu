@@ -158,3 +158,29 @@ def get_or_create_root_folder_by_name(
         folder_type=folder_type,
         name=folder_name,
     )
+
+
+def scan_for_entity_by_kitsu_id(
+    kitsu_id: str,
+    root: "BaseEntity",
+):
+    if root.data.get("kitsuId") == kitsu_id:
+        return root
+    if root.entity_type == "folder":
+        for child in root.children:
+            result = scan_for_entity_by_kitsu_id(kitsu_id, child)
+            if result:
+                return result
+
+
+def get_entity_by_kitsu_id(
+    kitsu_id: str,
+    ay_project: "EntityHub",
+):
+    root: list["FolderEntity"] = ay_project.get_entity_children(
+        ay_project.project_entity
+    )
+    for child in root:
+        result = scan_for_entity_by_kitsu_id(kitsu_id, child)
+        if result:
+            return result
