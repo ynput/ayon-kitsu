@@ -17,6 +17,11 @@ from .sequence import (
     kitsu_sequence_new,
     kitsu_sequence_update,
 )
+from .shot import (
+    kitsu_shot_delete,
+    kitsu_shot_new,
+    kitsu_shot_update,
+)
 
 PROJECT_NAME_REGEX = re.compile("^[a-zA-Z0-9_]+$")
 
@@ -228,7 +233,7 @@ class AyonKitsuHub:
             case "ayon":
                 pass
             case "kitsu":
-                kitsu_project_create(
+                kitsu_project_new(
                     self._ay_project.project_entity,
                     self._kitsu_project,
                 )
@@ -266,6 +271,32 @@ class AyonKitsuHub:
                 kitsu_sequence_new(
                     kitsu_event,
                     self._ay_project,
+                )
+            case "sequence:update":
+                kitsu_sequence_update(
+                    kitsu_event,
+                    self._ay_project,
+                )
+            case "sequence:delete":
+                kitsu_sequence_delete(
+                    kitsu_event,
+                    self._ay_project,
+                )
+            case "shot:new":
+                kitsu_shot_new(
+                    kitsu_event,
+                    self._ay_project,
+                )
+            case "shot:update":
+                kitsu_shot_update(
+                    kitsu_event,
+                    self._ay_project,
+                )
+            case "shot:delete":
+                kitsu_shot_delete(
+                    kitsu_event,
+                    self._ay_project,
+                )
             case _:
                 return
                 msg = f"Unable to process event {kitsu_event['event_type']}."
