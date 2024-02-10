@@ -17,16 +17,16 @@ from .utils import (
 )
 
 
-def get_assets(kitsu_project_id: str, asset_types: {}) -> []:
-    assets = []
+def get_assets(kitsu_project_id: str, asset_types: dict[str, str]) -> list[dict[str, str]]:
+    assets:list[dict[str, str]] = []
     for record in gazu.asset.all_assets_for_project(kitsu_project_id):
         assets.append(
             preprocess_asset(kitsu_project_id, record, asset_types)
         )
     return assets
 
-def get_tasks(kitsu_project_id: str, task_types: {}, task_statuses: {}) -> []:
-    tasks = []
+def get_tasks(kitsu_project_id: str, task_types: dict[str, str], task_statuses: dict[str, str]) -> list[dict[str, str]]:
+    tasks:list[dict[str, str]] = []
     for record in gazu.task.all_tasks_for_project(kitsu_project_id):
         tasks.append(
             preprocess_task(kitsu_project_id, record, task_types, task_statuses)

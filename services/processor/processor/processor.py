@@ -276,7 +276,6 @@ class KitsuProcessor:
                     project_name=ayon_project_name,
                     description="Sync failed",
                 )
-
             else:
                 ayon_api.update_event(
                     job["id"],
