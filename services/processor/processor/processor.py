@@ -206,10 +206,10 @@ class KitsuProcessor:
         gazu.events.run_client(self.event_client)
 
     def get_pairing_list(self):
-        logging.info("get_pairing_list")
-        """ maintain a list of pairings so that we can check 
-        the kitsu change is in a paired project and get the ayon project name  
+        """ maintain a list of pairings so that we can check
+        the kitsu change is in a paired project and get the ayon project name
         """
+        logging.info("get_pairing_list")
         res = ayon_api.get(f"{self.entrypoint}/pairing")
 
         assert res.status_code == 200, f"{self.entrypoint}/pairing failed"

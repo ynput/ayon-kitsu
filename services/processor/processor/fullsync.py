@@ -1,3 +1,4 @@
+import time
 from typing import TYPE_CHECKING
 
 import ayon_api
@@ -8,9 +9,13 @@ if TYPE_CHECKING:
     from .processor import KitsuProcessor
 
 from .utils import (
-    get_asset_types, get_task_types, get_statuses, 
-    preprocess_asset, preprocess_task
+    get_asset_types,
+    get_statuses,
+    get_task_types,
+    preprocess_asset,
+    preprocess_task,
 )
+
 
 def get_assets(kitsu_project_id: str, asset_types: {}) -> []:
     assets = []
