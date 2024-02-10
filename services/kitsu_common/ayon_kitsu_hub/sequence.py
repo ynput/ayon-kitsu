@@ -29,6 +29,8 @@ def kitsu_sequence_new(
     )
 
     # Add ayon ID to the sequence's data in Kitsu so we later can fetch it directly
+    if kitsu_sequence["data"] is None:
+        kitsu_sequence["data"] = {}
     kitsu_sequence["data"]["ayon_id"] = folder.id
     gazu.shot.update_sequence(kitsu_sequence)
 
