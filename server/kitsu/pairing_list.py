@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from ayon_server.exceptions import AyonException
 from ayon_server.lib.postgres import Postgres
-from ayon_server.types import OPModel, Field
+from ayon_server.types import Field, OPModel
 
 if TYPE_CHECKING:
     from .. import KitsuAddon
@@ -40,10 +40,10 @@ async def get_pairing_list(addon: "KitsuAddon") -> list[PairingItemModel]:
     ayon_projects: dict[str, str] = {}
     async for res in Postgres.iterate(
         """
-        SELECT 
-            name, 
-            data->>'kitsuProjectId' AS kitsu_project_id 
-        FROM projects 
+        SELECT
+            name,
+            data->>'kitsuProjectId' AS kitsu_project_id
+        FROM projects
         WHERE data->>'kitsuProjectId' IS NOT NULL
         """
     ):

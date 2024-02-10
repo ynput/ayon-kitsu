@@ -1,6 +1,5 @@
 import contextlib
-
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ayon_server.exceptions import AyonException
 from ayon_server.lib.postgres import Postgres
@@ -138,7 +137,7 @@ async def parse_statuses(addon: "KitsuAddon", kitsu_project_id: str) -> list[Sta
 #
 
 
-def parse_attrib(source: dict[str, Any] | None = None):
+def parse_attrib(source: dict[str, Any] | None = None) -> dict[str, Any]:
     result = {}
     if source is None:
         return result

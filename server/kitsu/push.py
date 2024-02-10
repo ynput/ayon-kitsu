@@ -1,30 +1,28 @@
-import json
 import time
+from typing import TYPE_CHECKING, Any, Literal, get_args
 
-from typing import Any, Literal, get_args, TYPE_CHECKING
+from nxtools import logging
 
-from nxtools import logging, log_traceback
-
-from ayon_server.entities import FolderEntity, TaskEntity, ProjectEntity
+from ayon_server.entities import ProjectEntity
 from ayon_server.lib.postgres import Postgres
-from ayon_server.types import OPModel, Field
+from ayon_server.types import Field, OPModel
 
 from .anatomy import parse_attrib
 from .utils import (
+    create_folder,
+    create_task,
+    delete_folder,
+    delete_task,
     get_folder_by_kitsu_id,
     get_task_by_kitsu_id,
-    create_folder,
     update_folder,
-    delete_folder,
-    create_task,
     update_task,
-    delete_task
 )
 
-
 if TYPE_CHECKING:
-    from .. import KitsuAddon
     from ayon_server.entities import UserEntity
+
+    from .. import KitsuAddon
 
 
 EntityDict = dict[str, Any]
@@ -41,6 +39,7 @@ KitsuEntityType = Literal[
 class PushEntitiesRequestModel(OPModel):
     project_name: str
     entities: list[EntityDict] = Field(..., title="List of entities to sync")
+
 
 class RemoveEntitiesRequestModel(OPModel):
     project_name: str
@@ -102,11 +101,11 @@ async def get_root_folder_id(
 
 
 async def sync_folder(
-    addon,
-    user,
-    project,
-    existing_folders,
-    entity_dict,
+    addon: "KitsuAddon",
+    user: "UserEntity",
+    project: "ProjectEntity",
+    existing_folders: dict[str, Any],
+    entity_dict: "EntityDict",
 ):
     target_folder = await get_folder_by_kitsu_id(
         project.name,
@@ -223,12 +222,14 @@ async def sync_folder(
             logging.info(f"Updating {entity_dict['type']} '{entity_dict['name']}'")
             existing_folders[entity_dict["id"]] = target_folder.id
 
-async def ensure_task_type(project, task_type_name) -> bool:
-    """ #TODO: kitsu listener for new task types would be preferable """
-    if task_type_name not in [ task_type["name"] for task_type in project.task_types ]:
-        logging.info(
-            f"Creating task type {task_type_name} for '{project.name}'"
-        )
+
+async def ensure_task_type(
+    project: "ProjectEntity",
+    task_type_name: str,
+) -> bool:
+    """#TODO: kitsu listener for new task types would be preferable"""
+    if task_type_name not in [task_type["name"] for task_type in project.task_types]:
+        logging.info(f"Creating task type {task_type_name} for '{project.name}'")
         project.task_types.append(
             {
                 "name": task_type_name,
@@ -239,13 +240,15 @@ async def ensure_task_type(project, task_type_name) -> bool:
         return True
     return False
 
-async def ensure_task_status(project, task_status_name) -> bool:
-    """ #TODO: kitsu listener for new task statuses would be preferable """
 
-    if task_status_name not in [ status["name"] for status in project.statuses ]:
-        logging.info(
-            f"Creating task status {task_status_name} for '{project.name}'"
-        )
+async def ensure_task_status(
+    project: "ProjectEntity",
+    task_status_name: str,
+) -> bool:
+    """#TODO: kitsu listener for new task statuses would be preferable"""
+
+    if task_status_name not in [status["name"] for status in project.statuses]:
+        logging.info(f"Creating task status {task_status_name} for '{project.name}'")
         project.statuses.append(
             {
                 "name": task_status_name,
@@ -256,20 +259,21 @@ async def ensure_task_status(project, task_status_name) -> bool:
         return True
     return False
 
-async def sync_task(
-    addon,
-    user,
-    project,
-    existing_tasks,
-    existing_folders,
-    entity_dict,
-):    
-    if 'task_status_name' in entity_dict:
-        await ensure_task_status(project, entity_dict['task_status_name'])
 
-    if 'task_type_name' in entity_dict:
-        await ensure_task_type(project, entity_dict['task_type_name'])
-    
+async def sync_task(
+    addon: "KitsuAddon",
+    user: "UserEntity",
+    project: "ProjectEntity",
+    existing_tasks: dict[str, Any],
+    existing_folders: dict[str, Any],
+    entity_dict: "EntityDict",
+):
+    if "task_status_name" in entity_dict:
+        await ensure_task_status(project, entity_dict["task_status_name"])
+
+    if "task_type_name" in entity_dict:
+        await ensure_task_type(project, entity_dict["task_type_name"])
+
     target_task = await get_task_by_kitsu_id(
         project.name,
         entity_dict["id"],
@@ -318,24 +322,23 @@ async def sync_task(
         if changed:
             logging.info(f"Updating {entity_dict['type']} '{entity_dict['name']}'")
             existing_tasks[entity_dict["id"]] = target_task.id
-   
 
 
 async def push_entities(
     addon: "KitsuAddon",
     user: "UserEntity",
     payload: PushEntitiesRequestModel,
-) -> list:
+) -> dict[str, dict[Any, Any]]:
     start_time = time.time()
     project = await ProjectEntity.load(payload.project_name)
-    
+
     # A mapping of kitsu entity ids to folder ids
     # they are added when a task or folder is created or updated and returned by the method - useful for testing
 
     # This object only exists during the request
     # and speeds up the process of finding folders
     # if multiple entities are requested to sync
-  
+
     folders = {}
     tasks = {}
 
@@ -374,17 +377,17 @@ async def push_entities(
     )
 
     # pass back the map of kitsu to ayon ids
-    return {'folders': folders, 'tasks': tasks}
+    return {"folders": folders, "tasks": tasks}
 
 
 async def remove_entities(
     addon: "KitsuAddon",
     user: "UserEntity",
     payload: RemoveEntitiesRequestModel,
-) -> list:
+) -> dict[str, dict[Any, Any]]:
     start_time = time.time()
     project = await ProjectEntity.load(payload.project_name)
-    
+
     # A mapping of kitsu entity ids to folder ids
     # they are added when a task or folder are deleted and returned by the method - useful for testing
     folders = {}
@@ -410,7 +413,7 @@ async def remove_entities(
                 user=user,
             )
             logging.info(f"Deleted {entity_dict['type']} '{task.name}'")
-            tasks[entity_dict['id']] = task.id
+            tasks[entity_dict["id"]] = task.id
 
         else:
             folder = await get_folder_by_kitsu_id(
@@ -427,11 +430,11 @@ async def remove_entities(
                 user=user,
             )
             logging.info(f"Deleted {entity_dict['type']} '{folder.name}'")
-            folders[entity_dict['id']] = folder.id
+            folders[entity_dict["id"]] = folder.id
 
     logging.info(
         f"Deleted {len(payload.entities)} entities in {time.time() - start_time}s"
     )
 
     # pass back the map of kitsu to ayon ids
-    return {'folders': folders, 'tasks': tasks}
+    return {"folders": folders, "tasks": tasks}

@@ -14,7 +14,6 @@ from .update_from_kitsu import (
     create_or_update_sequence,
     create_or_update_shot,
     create_or_update_task,
-
     delete_asset,
     delete_episode,
     delete_sequence,
@@ -67,7 +66,7 @@ class KitsuProcessor:
         # Get list of projects that have been paired
         #
         self.pairing_list = self.get_pairing_list()
-        
+
         #
         # Get Kitsu server credentials from settings
         #
@@ -99,28 +98,25 @@ class KitsuProcessor:
         #
         # Connect to Kitsu
         #
-        gazu.client.set_host(self.kitsu_server_url)
         gazu.set_host(self.kitsu_server_url)
         if not gazu.client.host_is_valid():
             raise KitsuServerError(
                 f"Kitsu server `{self.kitsu_server_url}` is not valid"
             )
-        
-        
+
         try:
             gazu.log_in(self.kitsu_login_email, self.kitsu_login_password)
             logging.info(f"Gazu logged in as {self.kitsu_login_email}")
         except gazu.exception.AuthFailedException as e:
             raise KitsuServerError(f"Kitsu login failed: {e}") from e
-        
+
         # init event client
         self.kitsu_events_url = self.kitsu_server_url.replace("api", "socket.io")
         gazu.set_event_host(self.kitsu_events_url)
         self.event_client = gazu.events.init()
-        
-        
+
         # ============= Add Kitsu Event Listeners ==============
-       
+
         # gazu.events.add_listener(
         #     self.event_client, "project:new", self._new_project
         # )
@@ -130,86 +126,84 @@ class KitsuProcessor:
         # gazu.events.add_listener(
         #     self.event_client, "project:delete", self._delete_project
         # )
-    
+
         gazu.events.add_listener(
-            self.event_client, 
-            "asset:new", 
-            lambda data: create_or_update_asset(self, data)
-        )
-        gazu.events.add_listener(
-            self.event_client, 
-            "asset:update", 
-            lambda data: create_or_update_asset(self, data)
-        )
-        gazu.events.add_listener(
-            self.event_client, 
-            "asset:delete", 
-            lambda data: delete_asset(self, data)
-        )
-        gazu.events.add_listener(
-            self.event_client, 
-            "episode:new", 
-            lambda data: create_or_update_episode(self, data)
+            self.event_client,
+            "asset:new",
+            lambda data: create_or_update_asset(self, data),
         )
         gazu.events.add_listener(
             self.event_client,
-            "episode:update", 
-            lambda data: create_or_update_episode(self, data)
+            "asset:update",
+            lambda data: create_or_update_asset(self, data),
         )
         gazu.events.add_listener(
-            self.event_client, 
-            "episode:delete", 
-            lambda data: delete_episode(self, data)
+            self.event_client,
+            "asset:delete",
+            lambda data: delete_asset(self, data),
         )
         gazu.events.add_listener(
-            self.event_client, 
+            self.event_client,
+            "episode:new",
+            lambda data: create_or_update_episode(self, data),
+        )
+        gazu.events.add_listener(
+            self.event_client,
+            "episode:update",
+            lambda data: create_or_update_episode(self, data),
+        )
+        gazu.events.add_listener(
+            self.event_client,
+            "episode:delete",
+            lambda data: delete_episode(self, data),
+        )
+        gazu.events.add_listener(
+            self.event_client,
             "sequence:new",
-            lambda data: create_or_update_sequence(self, data)
+            lambda data: create_or_update_sequence(self, data),
         )
         gazu.events.add_listener(
-            self.event_client, 
-            "sequence:update", 
-            lambda data: create_or_update_sequence(self, data)
+            self.event_client,
+            "sequence:update",
+            lambda data: create_or_update_sequence(self, data),
         )
         gazu.events.add_listener(
-            self.event_client, 
-            "sequence:delete", 
-            lambda data: delete_sequence(self, data)
+            self.event_client,
+            "sequence:delete",
+            lambda data: delete_sequence(self, data),
         )
         gazu.events.add_listener(
             self.event_client,
             "shot:new",
-            lambda data: create_or_update_shot(self, data)
+            lambda data: create_or_update_shot(self, data),
         )
         gazu.events.add_listener(
-            self.event_client, 
-            "shot:update", 
-            lambda data: create_or_update_shot(self, data)
+            self.event_client,
+            "shot:update",
+            lambda data: create_or_update_shot(self, data),
         )
         gazu.events.add_listener(
-            self.event_client, 
-            "shot:delete", 
-            lambda data: delete_shot(self, data)
+            self.event_client,
+            "shot:delete",
+            lambda data: delete_shot(self, data),
         )
         gazu.events.add_listener(
-            self.event_client, 
-            "task:new", 
-            lambda data: create_or_update_task(self, data)
+            self.event_client,
+            "task:new",
+            lambda data: create_or_update_task(self, data),
         )
         gazu.events.add_listener(
-            self.event_client, 
-            "task:update", 
-            lambda data: create_or_update_task(self, data)
+            self.event_client,
+            "task:update",
+            lambda data: create_or_update_task(self, data),
         )
         gazu.events.add_listener(
-            self.event_client, 
-            "task:delete", 
-            lambda data: delete_task(self, data)
+            self.event_client,
+            "task:delete",
+            lambda data: delete_task(self, data),
         )
         logging.info("Gazu event listeners added")
         gazu.events.run_client(self.event_client)
-
-    
 
     def get_pairing_list(self):
         logging.info("get_pairing_list")
@@ -221,27 +215,26 @@ class KitsuProcessor:
         assert res.status_code == 200, f"{self.entrypoint}/pairing failed"
         # logging.info(f'get_pairing_list {res.status_code} {res.data}')
         return res.data
-    
-    def get_paired_ayon_project(self, kitsu_project_id):
-        """ returns the ayon project if paired else None """
+
+    def get_paired_ayon_project(self, kitsu_project_id: str):
+        """returns the ayon project if paired else None"""
         for pair in self.pairing_list:
-            if pair['kitsuProjectId'] == kitsu_project_id:
-                return pair['ayonProjectName']
-            
-    def set_paired_ayon_project(self, kitsu_project_id, ayon_project_name):
-        """ add a new pair to the list """
+            if pair["kitsuProjectId"] == kitsu_project_id:
+                return pair["ayonProjectName"]
+
+    def set_paired_ayon_project(self, kitsu_project_id: str, ayon_project_name: str):
+        """add a new pair to the list"""
         for pair in self.pairing_list:
-            if 'kitsuProjectId' in pair:
+            if "kitsuProjectId" in pair:
                 return
-        self.pairing_list.append({
-            'kitsuProjectId': kitsu_project_id,
-            'ayonProjectName': ayon_project_name
-        })
+        self.pairing_list.append(
+            {"kitsuProjectId": kitsu_project_id, "ayonProjectName": ayon_project_name}
+        )
 
     def start_processing(self):
 
         logging.info("KitsuProcessor started")
-        
+
         while True:
             job = ayon_api.enroll_event_job(
                 source_topic="kitsu.sync_request",
@@ -270,7 +263,7 @@ class KitsuProcessor:
 
             try:
                 full_sync(self, kitsu_project_id, ayon_project_name)
-                
+
                 # if successful add the pair to the list
                 self.set_paired_ayon_project(kitsu_project_id, ayon_project_name)
             except Exception:

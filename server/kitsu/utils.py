@@ -1,11 +1,13 @@
-import re
+from typing import TYPE_CHECKING, Any
 
-from typing import Any
-from nxtools import slugify, logging
+from nxtools import slugify
 
-from ayon_server.lib.postgres import Postgres
 from ayon_server.entities import FolderEntity, TaskEntity
 from ayon_server.events import dispatch_event
+from ayon_server.lib.postgres import Postgres
+
+if TYPE_CHECKING:
+    from ayon_server.entities import UserEntity
 
 
 def create_name_and_label(kitsu_name: str) -> dict[str, str]:
@@ -14,12 +16,11 @@ def create_name_and_label(kitsu_name: str) -> dict[str, str]:
     return {"name": name_slug, "label": kitsu_name}
 
 
-
 async def get_folder_by_kitsu_id(
     project_name: str,
     kitsu_id: str,
     existing_folders: dict[str, str] | None = None,
-) -> FolderEntity:
+) -> FolderEntity | None:
     """Get an Ayon FolderEndtity by its Kitsu ID"""
 
     if existing_folders and (kitsu_id in existing_folders):
@@ -46,7 +47,7 @@ async def get_task_by_kitsu_id(
     project_name: str,
     kitsu_id: str,
     existing_tasks: dict[str, str] | None = None,
-) -> TaskEntity:
+) -> TaskEntity | None:
     """Get an Ayon TaskEntity by its Kitsu ID"""
 
     if existing_tasks and (kitsu_id in existing_tasks):
@@ -65,8 +66,6 @@ async def get_task_by_kitsu_id(
         folder_id = res[0]["id"]
 
     return await TaskEntity.load(project_name, folder_id)
-
-    return None
 
 
 async def create_folder(
@@ -96,24 +95,25 @@ async def create_folder(
     await dispatch_event(**event)
     return folder
 
+
 async def update_folder(
     project_name: str,
     folder_id: str,
     name: str,
     **kwargs,
 ) -> bool:
-    
+
     folder = await FolderEntity.load(project_name, folder_id)
     changed = False
 
-    payload = {**kwargs, **create_name_and_label(name)}
+    payload: dict[str, Any] = {**kwargs, **create_name_and_label(name)}
 
-    for key in ['name', 'label']:
+    for key in ["name", "label"]:
         if key in payload and getattr(folder, key) != payload[key]:
             setattr(folder, key, payload[key])
             changed = True
 
-    for key, value in payload['attrib'].items():
+    for key, value in payload["attrib"].items():
         if getattr(folder.attrib, key) != value:
             setattr(folder.attrib, key, value)
             if key not in folder.own_attrib:
@@ -131,17 +131,18 @@ async def update_folder(
 
     return changed
 
+
 async def delete_folder(
     project_name: str,
     folder_id: str,
-    user: {},
+    user: "UserEntity",
     **kwargs,
 ) -> None:
     folder = await FolderEntity.load(project_name, folder_id)
-    
+
     # do we need this?
     await folder.ensure_delete_access(user)
-    
+
     await folder.delete()
     event = {
         "topic": "entity.folder.deleted",
@@ -173,25 +174,26 @@ async def create_task(
     await dispatch_event(**event)
     return task
 
+
 async def update_task(
     project_name: str,
     task_id: str,
     name: str,
     **kwargs,
 ) -> bool:
-    
+
     task = await TaskEntity.load(project_name, task_id)
     changed = False
 
     payload = {**kwargs, **create_name_and_label(name)}
 
     # keys that can be updated
-    for key in ['name', 'label', 'status', 'task_type']:
+    for key in ["name", "label", "status", "task_type"]:
         if key in payload and getattr(task, key) != payload[key]:
             setattr(task, key, payload[key])
             changed = True
-    if 'attrib' in payload:
-        for key, value in payload['attrib'].items():
+    if "attrib" in payload:
+        for key, value in payload["attrib"].items():
             if getattr(task.attrib, key) != value:
                 setattr(task.attrib, key, value)
                 if key not in task.own_attrib:
@@ -208,17 +210,18 @@ async def update_task(
         await dispatch_event(**event)
     return changed
 
+
 async def delete_task(
     project_name: str,
     task_id: str,
-    user: {},
+    user: "UserEntity",
     **kwargs,
 ) -> None:
     task = await TaskEntity.load(project_name, task_id)
-    
+
     # do we need this?
     await task.ensure_delete_access(user)
-    
+
     await task.delete()
     event = {
         "topic": "entity.task.deleted",

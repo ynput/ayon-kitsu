@@ -1,5 +1,4 @@
 import hashlib
-
 from typing import TYPE_CHECKING
 
 from ayon_server.entities import UserEntity
@@ -7,7 +6,7 @@ from ayon_server.events import dispatch_event, update_event
 from ayon_server.exceptions import ConflictException
 from ayon_server.helpers.deploy_project import create_project_from_anatomy
 from ayon_server.lib.postgres import Postgres
-from ayon_server.types import OPModel, Field, PROJECT_NAME_REGEX, PROJECT_CODE_REGEX
+from ayon_server.types import PROJECT_CODE_REGEX, PROJECT_NAME_REGEX, Field, OPModel
 
 from .anatomy import get_kitsu_project_anatomy
 
@@ -73,7 +72,7 @@ async def sync_request(
 
         await Postgres.execute(
             """
-            UPDATE events SET 
+            UPDATE events SET
                 updated_at = NOW(),
                 status = 'restarted',
                 retries = 0
