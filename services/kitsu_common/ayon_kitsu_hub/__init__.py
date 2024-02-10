@@ -22,6 +22,11 @@ from .shot import (
     kitsu_shot_new,
     kitsu_shot_update,
 )
+from .task import (
+    kitsu_task_delete,
+    kitsu_task_new,
+    kitsu_task_update,
+)
 
 PROJECT_NAME_REGEX = re.compile("^[a-zA-Z0-9_]+$")
 
@@ -294,6 +299,21 @@ class AyonKitsuHub:
                 )
             case "shot:delete":
                 kitsu_shot_delete(
+                    kitsu_event,
+                    self._ay_project,
+                )
+            case "task:new":
+                kitsu_task_new(
+                    kitsu_event,
+                    self._ay_project,
+                )
+            case "task:update":
+                kitsu_task_update(
+                    kitsu_event,
+                    self._ay_project,
+                )
+            case "task:delete":
+                kitsu_task_delete(
                     kitsu_event,
                     self._ay_project,
                 )

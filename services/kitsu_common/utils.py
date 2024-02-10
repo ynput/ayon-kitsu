@@ -6,7 +6,7 @@ from nxtools import logging, slugify
 
 if TYPE_CHECKING:
     import ayon_api
-    from ayon_api.entity_hub import BaseEntity, EntityHub, FolderEntity, TaskEntity
+    from ayon_api.entity_hub import BaseEntity, EntityHub, FolderEntity, ProjectEntity
 
 
 class KitsuServerError(Exception):
@@ -184,3 +184,10 @@ def get_entity_by_kitsu_id(
         result = scan_for_entity_by_kitsu_id(kitsu_id, child)
         if result:
             return result
+
+
+def get_task_type_short_name_by_task_name(name: str, project_entity: "ProjectEntity"):
+    tasks = project_entity.get_task_types()
+    for task in tasks:
+        if task["name"] == name:
+            return task["shortName"]
