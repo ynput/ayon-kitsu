@@ -187,7 +187,7 @@ async def sync_folder(
                     parent_id = parent_folder.id
 
         else:
-            logging.waring("Unsupported entity type: ", entity_dict["type"])
+            logging.warning("Unsupported entity type: ", entity_dict["type"])
             return
 
         # ensure folder type exists
