@@ -1,12 +1,11 @@
 import os
-import sys
 import socket
+import sys
 import time
 
 import ayon_api
 import gazu
-
-from nxtools import logging, log_traceback
+from nxtools import log_traceback, logging
 
 from .fullsync import full_sync
 from .update_from_kitsu import (
@@ -22,7 +21,6 @@ from .update_from_kitsu import (
     delete_shot,
     delete_task,
 )
-
 
 if service_name := os.environ.get("AYON_SERVICE_NAME"):
     logging.user = service_name
@@ -277,7 +275,7 @@ class KitsuProcessor:
                 self.set_paired_ayon_project(kitsu_project_id, ayon_project_name)
             except Exception:
                 log_traceback(f"Unable to sync kitsu project {ayon_project_name}")
-                
+
                 ayon_api.update_event(
                     job["id"],
                     sender=SENDER,

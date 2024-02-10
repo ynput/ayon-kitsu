@@ -5,7 +5,7 @@ from nxtools import logging
 from ayon_server.addons import BaseServerAddon
 from ayon_server.api.dependencies import CurrentUser
 from ayon_server.api.responses import EmptyResponse
-from ayon_server.exceptions import InvalidSettingsException, ForbiddenException
+from ayon_server.exceptions import ForbiddenException, InvalidSettingsException
 from ayon_server.secrets import Secrets
 from ayon_server.entities import FolderEntity, TaskEntity
 
@@ -21,7 +21,6 @@ from .kitsu.pairing_list import get_pairing_list, PairingItemModel
 from .kitsu.push import push_entities, remove_entities, PushEntitiesRequestModel, RemoveEntitiesRequestModel
 from .kitsu import utils
 
-
 #
 # Events:
 #
@@ -36,9 +35,11 @@ class KitsuAddon(BaseServerAddon):
     title = "Kitsu"
     version = __version__
     settings_model: Type[KitsuSettings] = KitsuSettings
-    frontend_scopes = {"settings": {}}
+    frontend_scopes = {
+        "settings": {},
+    }
     services = {
-        "processor": {"image": f"ynput/ayon-kitsu-processor:{__version__}"}
+        "processor": {"image": f"ynput/ayon-kitsu-processor:{__version__}"},
     }
 
     kitsu: Kitsu | None = None

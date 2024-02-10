@@ -2,13 +2,10 @@ from typing import TYPE_CHECKING
 
 import ayon_api
 import gazu
-
 from nxtools import logging
-from pprint import pprint
-import time
 
 if TYPE_CHECKING:
-    from .kitsu import KitsuProcessor
+    from .processor import KitsuProcessor
 
 from .utils import (
     get_asset_types, get_task_types, get_statuses, 
@@ -46,7 +43,35 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
     episodes = gazu.shot.all_episodes_for_project(kitsu_project_id)
     seqs = gazu.shot.all_sequences_for_project(kitsu_project_id)
     shots = gazu.shot.all_shots_for_project(kitsu_project_id)
-       
+
+    #
+    # Postprocess data
+    #
+
+    assets = []
+    for record in gazu.asset.all_assets_for_project(kitsu_project_id):
+        asset = {
+            **record,
+            "asset_type_name": asset_types[record["entity_type_id"]],
+        }
+        assets.append(asset)
+
+    tasks = []
+    for record in gazu.task.all_tasks_for_project(kitsu_project_id):
+        task_type_name = task_types.get(record["task_type_id"], "Generic")
+        task_status_name = task_statuses.get(record["task_status_id"], "Unknown")
+        task = {
+            **record,
+            "task_type_name": task_type_name,
+            "task_status_name": task_status_name,
+        }
+        if record["name"] == "main":
+            task["name"] = task["task_type_name"].lower()
+        tasks.append(task)
+
+        # TODO: replace user uuids in task.assigness with emails
+        # which can be used to pair with ayon users
+
     # compile list of entities
     # TODO: split folders and tasks if the list is huge
 
