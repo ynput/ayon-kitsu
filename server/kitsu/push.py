@@ -78,7 +78,7 @@ async def get_root_folder_id(
         )
         id = folder.id
 
-    if not (subfolder_id or subfolder_name):
+    if not subfolder_id or not subfolder_name:
         return id
 
     res = await Postgres.fetch(
@@ -116,81 +116,29 @@ async def sync_folder(
     )
 
     if target_folder is None:
-        if entity_dict["type"] == "Asset":
-            if entity_dict.get("entity_type_id") in existing_folders:
-                parent_id = existing_folders[entity_dict["entity_type_id"]]
-            else:
-                parent_id = await get_root_folder_id(
-                    user=user,
-                    project_name=project.name,
-                    kitsu_type="Assets",
-                    kitsu_type_id="asset",
-                    subfolder_id=entity_dict["entity_type_id"],
-                    subfolder_name=entity_dict["asset_type_name"],
-                )
-                existing_folders[entity_dict["entity_type_id"]] = parent_id
-
-        elif entity_dict["type"] == "Episode":
-            if entity_dict.get("parent_id") is None:
-                parent_id = await get_root_folder_id(
-                    user=user,
-                    project_name=project.name,
-                    kitsu_type="Episodes",
-                    kitsu_type_id="episode",
-                )
-            else:
-                if entity_dict.get("parent_id") in existing_folders:
-                    parent_id = existing_folders[entity_dict["parent_id"]]
-                else:
-                    parent_folder = await get_folder_by_kitsu_id(
-                        project.name,
-                        entity_dict["parent_id"],
-                        existing_folders,
-                    )
-                    parent_id = parent_folder.id
-
-        elif entity_dict["type"] == "Sequence":
-            if entity_dict.get("parent_id") is None:
-                parent_id = await get_root_folder_id(
-                    user=user,
-                    project_name=project.name,
-                    kitsu_type="Sequences",
-                    kitsu_type_id="sequence",
-                )
-            else:
-                if entity_dict.get("parent_id") in existing_folders:
-                    parent_id = existing_folders[entity_dict["parent_id"]]
-                else:
-                    parent_folder = await get_folder_by_kitsu_id(
-                        project.name, entity_dict["parent_id"], existing_folders
-                    )
-                    if parent_folder is None:
-                        logging.warning(
-                            f"Parent folder for {entity_dict['type']} {entity_dict['name']} not found. Skipping."  # noqa
-                        )
-                        return
-                    parent_id = parent_folder.id
-
-        elif entity_dict["type"] == "Shot":
-            if entity_dict.get("parent_id") is None:
-                parent_id = await get_root_folder_id(
-                    user=user,
-                    project_name=project.name,
-                    kitsu_type="Shots",
-                    kitsu_type_id="shot",
-                )
-            else:
-                if entity_dict.get("parent_id") in existing_folders:
-                    parent_id = existing_folders[entity_dict["parent_id"]]
-                else:
-                    parent_folder = await get_folder_by_kitsu_id(
-                        project.name, entity_dict["parent_id"], existing_folders
-                    )
-                    parent_id = parent_folder.id
-
+        print(entity_dict)
+        if entity_dict.get("parent_id") is None:
+            parent_id = await get_root_folder_id(
+                user=user,
+                project_name=project.name,
+                kitsu_type=f"{entity_dict['type']}s",
+                kitsu_type_id=entity_dict["id"],
+            )
         else:
-            logging.warning("Unsupported entity type: ", entity_dict["type"])
-            return
+            if entity_dict.get("parent_id") in existing_folders:
+                parent_id = existing_folders[entity_dict["parent_id"]]
+            else:
+                parent_folder = await get_folder_by_kitsu_id(
+                    project.name,
+                    entity_dict["parent_id"],
+                    existing_folders,
+                )
+                if parent_folder is None:
+                    logging.warning(
+                        f"Parent folder for {entity_dict['type']} {entity_dict['name']} not found. Skipping."  # noqa
+                    )
+                    return
+                parent_id = parent_folder.id
 
         # ensure folder type exists
         if entity_dict["type"] not in [f["name"] for f in project.folder_types]:
@@ -290,16 +238,15 @@ async def sync_task(
             parent_folder = await get_folder_by_kitsu_id(
                 project.name, entity_dict["entity_id"], existing_folders
             )
-
-            if parent_folder is None:
-                parent_id = await get_root_folder_id(
-                    user=user,
-                    project_name=project.name,
-                    kitsu_type="Edits",
-                    kitsu_type_id="edits",
-                )
-            else:
+            if parent_folder:
                 parent_id = parent_folder.id
+            else:
+                # The new task type haven't bin implemented in Ayon yet
+                logging.warning(
+                    f"The type '{entity_dict['name']}' isn't implemented yet."
+                    f"Currently they aren't supported"
+                )
+                return
 
         logging.info(f"Creating {entity_dict['type']} '{entity_dict['name']}'")
         target_task = await create_task(
@@ -345,7 +292,6 @@ async def push_entities(
     tasks = {}
 
     for entity_dict in payload.entities:
-
         # required fields
         assert "type" in entity_dict
         assert "id" in entity_dict
