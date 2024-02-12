@@ -29,10 +29,11 @@ EntityDict = dict[str, Any]
 
 KitsuEntityType = Literal[
     "Asset",
-    "Edits",
     "Shot",
     "Sequence",
     "Episode",
+    "Edit",
+    "Concept",
     "Task",
 ]
 

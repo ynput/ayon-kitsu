@@ -17,16 +17,19 @@ from .utils import (
 )
 
 
-def get_assets(kitsu_project_id: str, asset_types: dict[str, str]) -> list[dict[str, str]]:
-    assets:list[dict[str, str]] = []
+def get_assets(
+    kitsu_project_id: str, asset_types: dict[str, str]
+) -> list[dict[str, str]]:
+    assets: list[dict[str, str]] = []
     for record in gazu.asset.all_assets_for_project(kitsu_project_id):
-        assets.append(
-            preprocess_asset(kitsu_project_id, record, asset_types)
-        )
+        assets.append(preprocess_asset(kitsu_project_id, record, asset_types))
     return assets
 
-def get_tasks(kitsu_project_id: str, task_types: dict[str, str], task_statuses: dict[str, str]) -> list[dict[str, str]]:
-    tasks:list[dict[str, str]] = []
+
+def get_tasks(
+    kitsu_project_id: str, task_types: dict[str, str], task_statuses: dict[str, str]
+) -> list[dict[str, str]]:
+    tasks: list[dict[str, str]] = []
     for record in gazu.task.all_tasks_for_project(kitsu_project_id):
         tasks.append(
             preprocess_task(kitsu_project_id, record, task_types, task_statuses)
@@ -48,6 +51,8 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
     episodes = gazu.shot.all_episodes_for_project(kitsu_project_id)
     seqs = gazu.shot.all_sequences_for_project(kitsu_project_id)
     shots = gazu.shot.all_shots_for_project(kitsu_project_id)
+    edits = gazu.edit.all_edits_for_project(kitsu_project_id)
+    concepts = gazu.concept.all_concepts_for_project(kitsu_project_id)
 
     #
     # Postprocess data
@@ -80,7 +85,7 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
     # compile list of entities
     # TODO: split folders and tasks if the list is huge
 
-    entities = assets + episodes + seqs + shots + tasks
+    entities = assets + episodes + seqs + shots + edits + concepts + tasks
 
     ayon_api.post(
         f"{parent.entrypoint}/push",
