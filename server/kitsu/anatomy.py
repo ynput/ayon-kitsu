@@ -120,23 +120,25 @@ async def parse_statuses(addon: "KitsuAddon", kitsu_project_id: str) -> list[Sta
     if task_status_response.status_code != 200:
         raise AyonException("Could not get Kitsu statuses")
 
-    def get_state(kitsu_status: dict[str, str]) -> str:
-        if kitsu_status["is_done"]:
-            return "done"
-        elif kitsu_status["short_name"] == "ready":
-            return "not_started"
-        else:
-            return "in_progress"
-
     result: list[Status] = []
     kitsu_statuses = task_status_response.json()
     kitsu_statuses.sort(key=lambda x: not x.get("is_default"))
+
+    for status in kitsu_statuses:
+        kitsu_status = constant_kitsu_statuses.get(status["short_name"])
+        if kitsu_status:
+            status["icon"] = kitsu_status["icon"]
+            status["state"] = kitsu_status["state"]
+        else:
+            status["icon"] = "task_alt"
+            status["state"] = "in_progress"
+
     for kitsu_status in kitsu_statuses:
         status = Status(
             name=kitsu_status["name"],
             shortName=kitsu_status["short_name"],
             color=kitsu_status["color"],
-            state=get_state(kitsu_status),
+            state=kitsu_status["state"],
         )
         result.append(status)
     return result
