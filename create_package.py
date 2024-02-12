@@ -21,18 +21,24 @@ Package contains server side files directly,
 client side code zipped in `private` subfolder.
 """
 
+import argparse
+import collections
+import json
+import logging
 import os
-import sys
+import platform
 import re
 import shutil
-import json
-import platform
-import argparse
-import logging
-import collections
 import subprocess
+import sys
 import zipfile
-from typing import Any, Optional, Iterable, Pattern
+from typing import Any, Iterable, Optional, Pattern
+
+import ayon_api
+from ayon_api import get_server_api_connection
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Name of addon
 #   - e.g. 'maya'
@@ -386,6 +392,22 @@ def copy_client_code(current_dir: str, output_dir: str, log: logging.Logger):
         os.makedirs(os.path.dirname(full_dst_path), exist_ok=True)
         shutil.copy2(src_path, full_dst_path)
 
+def get_version() -> str:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+
+    version_filepath = os.path.join(current_dir, "version.py")
+    version_content: dict[str, Any] = {}
+    with open(version_filepath, "r") as stream:
+        exec(stream.read(), version_content)
+    return version_content["__version__"]
+
+def get_addon_output_root(output_dir: Optional[str]=None) -> str:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    if not output_dir:
+        output_dir = os.path.join(current_dir, "package")
+
+    addon_output_root = os.path.join(output_dir, ADDON_NAME)
+    return addon_output_root
 
 def main(
     output_dir: Optional[str]=None,
@@ -411,13 +433,8 @@ def main(
         log.info("Client folder created")
         return
 
-    version_filepath: str = os.path.join(current_dir, "version.py")
-    version_content: dict[str, Any] = {}
-    with open(version_filepath, "r") as stream:
-        exec(stream.read(), version_content)
-    addon_version: str = version_content["__version__"]
-
-    addon_output_root: str = os.path.join(output_dir, ADDON_NAME)
+    addon_version= get_version()
+    addon_output_root = get_addon_output_root(output_dir)
     addon_output_dir: str = os.path.join(
         addon_output_root, addon_version
     )
@@ -496,10 +513,37 @@ if __name__ == "__main__":
         action="store_true",
         help="Debug log messages."
     )
+    parser.add_argument(
+        "--upload",
+        dest="upload",
+        action="store_true",
+        help="Upload the build to your ayon server and reload"
+    )
 
     args = parser.parse_args(sys.argv[1:])
     level = logging.INFO
     if args.debug:
         level = logging.DEBUG
     logging.basicConfig(level=level)
-    main(args.output_dir, args.skip_zip, args.keep_sources, args.only_client)
+    output_dir = args.output_dir
+    main(output_dir, args.skip_zip, args.keep_sources, args.only_client)
+    if args.upload and not args.skip_zip:
+        addon_version= get_version()
+        addon_output_root = get_addon_output_root(output_dir)
+        addon_output_dir: str = os.path.join(
+            addon_output_root, addon_version
+        )
+
+        output_path = os.path.join(
+            output_dir, f"{ADDON_NAME}-{addon_version}.zip"
+        )
+
+        ayon_api.init_service()
+        log: logging.Logger = logging.getLogger("upload_package")
+        log.info("Trying to upload zip")
+        response = ayon_api.upload_addon_zip(output_path)
+        server = get_server_api_connection()
+        if server:
+            server.trigger_server_restart()
+        else:
+            log.warning("Could not restart server")
