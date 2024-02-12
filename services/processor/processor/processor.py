@@ -206,7 +206,7 @@ class KitsuProcessor:
         gazu.events.run_client(self.event_client)
 
     def get_pairing_list(self):
-        """ maintain a list of pairings so that we can check
+        """maintain a list of pairings so that we can check
         the kitsu change is in a paired project and get the ayon project name
         """
         logging.info("get_pairing_list")
@@ -216,7 +216,7 @@ class KitsuProcessor:
         # logging.info(f'get_pairing_list {res.status_code} {res.data}')
         return res.data
 
-    def get_paired_ayon_project(self, kitsu_project_id: str):
+    def get_paired_ayon_project(self, kitsu_project_id: str) -> str | None:
         """returns the ayon project if paired else None"""
         for pair in self.pairing_list:
             if pair["kitsuProjectId"] == kitsu_project_id:
@@ -232,7 +232,6 @@ class KitsuProcessor:
         )
 
     def start_processing(self):
-
         logging.info("KitsuProcessor started")
 
         while True:
