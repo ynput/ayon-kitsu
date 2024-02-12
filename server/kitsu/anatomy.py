@@ -47,13 +47,16 @@ async def parse_task_types(
     )
     if task_status_response.status_code != 200:
         raise AyonException("Could not get Kitsu task types")
-
     result: list[TaskType] = []
     for kitsu_task_type in task_status_response.json():
         name_slug = kitsu_task_type["name"].lower()
 
-        # Use ayon default task type if it exists
+        # Check if the task already exist
+        # eg. Concept under Assets and the hardcoded Concept under Concepts
+        if any(d.name == kitsu_task_type["name"] for d in result):
+            continue
 
+        # Use ayon default task type if it exists
         for default_task_type in default_task_types:
             if default_task_type.name.lower() == name_slug:
                 result.append(default_task_type)
