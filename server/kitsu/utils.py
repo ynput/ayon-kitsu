@@ -10,6 +10,25 @@ if TYPE_CHECKING:
     from ayon_server.entities import UserEntity
 
 
+def create_short_name(name: str) -> str:
+    code = name.lower()
+
+    if "_" in code:
+        subwords = code.split("_")
+        code = "".join([subword[0] for subword in subwords])[:4]
+    elif len(name) > 4:
+        vowels = ["a", "e", "i", "o", "u"]
+        filtered_word = "".join([char for char in code if char not in vowels])
+        code = filtered_word[:4]
+
+    # if there is a number at the end of the code, add it to the code
+    last_char = code[-1]
+    if last_char.isdigit():
+        code += last_char
+
+    return code
+
+
 def create_name_and_label(kitsu_name: str) -> dict[str, str]:
     """From a name coming from kitsu, create a name and label"""
     name_slug = slugify(kitsu_name, separator="_")
@@ -102,7 +121,6 @@ async def update_folder(
     name: str,
     **kwargs,
 ) -> bool:
-
     folder = await FolderEntity.load(project_name, folder_id)
     changed = False
 
@@ -181,7 +199,6 @@ async def update_task(
     name: str,
     **kwargs,
 ) -> bool:
-
     task = await TaskEntity.load(project_name, task_id)
     changed = False
 
