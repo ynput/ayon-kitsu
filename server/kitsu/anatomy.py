@@ -7,6 +7,8 @@ from ayon_server.settings.anatomy import Anatomy
 from ayon_server.settings.anatomy.statuses import Status
 from ayon_server.settings.anatomy.task_types import TaskType, default_task_types
 
+from .constants import kitsu_tasks
+
 if TYPE_CHECKING:
     from .. import KitsuAddon
 
@@ -65,11 +67,15 @@ async def parse_task_types(
             short_name = kitsu_task_type.get("short_name")
             if not short_name:
                 short_name = name_slug.replace("_", "")[:3]
+            icon = "task_alt"
+            if kitsu_tasks.get(name_slug):
+                icon = kitsu_tasks[name_slug]["icon"]
 
             result.append(
                 TaskType(
                     name=kitsu_task_type["name"],
                     shortName=short_name,
+                    icon=icon,
                 )
             )
 
