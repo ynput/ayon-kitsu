@@ -1,6 +1,7 @@
 import os
 import socket
 import sys
+import threading
 import time
 
 import ayon_api
@@ -116,7 +117,10 @@ class KitsuProcessor:
         self.event_client = gazu.events.init()
 
         # ============= Add Kitsu Event Listeners ==============
+        gazu_listener_thread = threading.Thread(target=self.run_gazu_listeners)
+        gazu_listener_thread.start()
 
+    def run_gazu_listeners(self):
         # gazu.events.add_listener(
         #     self.event_client, "project:new", self._new_project
         # )
