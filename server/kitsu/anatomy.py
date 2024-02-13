@@ -155,26 +155,26 @@ def parse_attrib(source: dict[str, Any] | None = None) -> dict[str, Any]:
     if source is None:
         return result
     for key, value in source.items():
-        if key == "fps":
+        if key == "fps" and value:
             with contextlib.suppress(ValueError):
                 result["fps"] = float(value)
-        elif key == "frame_in":
+        elif key == "frame_in" and value:
             with contextlib.suppress(ValueError):
                 result["frameStart"] = int(value)
-        elif key == "frame_out":
+        elif key == "frame_out" and value:
             with contextlib.suppress(ValueError):
                 result["frameEnd"] = int(value)
-        elif key == "resolution":
+        elif key == "resolution" and value:
             try:
                 result["resolutionWidth"] = int(value.split("x")[0])
                 result["resolutionHeight"] = int(value.split("x")[1])
             except (IndexError, ValueError):
                 pass
-        elif key == "description":
+        elif key == "description" and value:
             result["description"] = value
-        elif key == "start_date":
+        elif key == "start_date" and value:
             result["startDate"] = value + "T00:00:00Z"
-        elif key == "end_date":
+        elif key == "end_date" and value:
             result["endDate"] = value + "T00:00:00Z"
 
     return result
