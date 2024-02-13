@@ -3,13 +3,14 @@ from typing import TYPE_CHECKING, Any, Literal, get_args
 
 from nxtools import logging
 
-from ayon_server.entities import ProjectEntity
+from ayon_server.entities import ProjectEntity, FolderEntity
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Field, OPModel
 
 from .anatomy import parse_attrib
 from .constants import constant_kitsu_models
 from .utils import (
+    calculate_end_frame,
     create_folder,
     create_task,
     delete_folder,
@@ -117,11 +118,13 @@ async def sync_folder(
     )
 
     # Add description to attrib data
-    data: dict[str, str] = entity_dict.get("data", {})
+    data: dict[str, str | int | None] | None = entity_dict.get("data", {})
+    if data is None:
+        data = {}
     if entity_dict.get("description"):
         data["description"] = entity_dict["description"]
-
     if target_folder is None:
+        parent_folder = None
         if entity_dict["type"] == "Asset":
             if entity_dict.get("entity_type_id") in existing_folders:
                 parent_id = existing_folders[entity_dict["entity_type_id"]]
@@ -135,7 +138,6 @@ async def sync_folder(
                     subfolder_name=entity_dict["asset_type_name"],
                 )
                 existing_folders[entity_dict["entity_type_id"]] = parent_id
-
         elif entity_dict["type"] in KitsuEntityType.__args__:
             if entity_dict.get("parent_id") is None:
                 parent_id = await get_root_folder_id(
@@ -162,7 +164,6 @@ async def sync_folder(
         else:
             logging.warning("Unsupported entity type: ", entity_dict["type"])
             return
-
         # ensure folder type exists
         if entity_dict["type"] not in [f["name"] for f in project.folder_types]:
             logging.warning(
@@ -175,7 +176,12 @@ async def sync_folder(
             await project.save()
 
         logging.info(f"Creating {entity_dict['type']} {entity_dict['name']}")
-        target_folder = await create_folder(
+        # Calculate the end-frame
+        if not parent_folder:
+            parent_folder = await FolderEntity.load(project.name, parent_id)
+        data["frame_out"] = calculate_end_frame(entity_dict, parent_folder)
+
+        target_folder: FolderEntity = await create_folder(
             project_name=project.name,
             attrib=parse_attrib(data),
             name=entity_dict["name"],
@@ -186,6 +192,9 @@ async def sync_folder(
         existing_folders[entity_dict["id"]] = target_folder.id
 
     else:
+        # Calculate the end-frame
+        data["frame_out"] = calculate_end_frame(entity_dict, target_folder)
+
         changed = await update_folder(
             project_name=project.name,
             folder_id=target_folder.id,

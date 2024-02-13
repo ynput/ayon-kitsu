@@ -10,6 +10,22 @@ if TYPE_CHECKING:
     from ayon_server.entities import UserEntity
 
 
+def calculate_end_frame(
+    entity_dict: dict[str, int], folder: FolderEntity
+) -> int | None:
+    # Calculate the end-frame
+    if entity_dict.get("nb_frames") and not entity_dict["data"].get("frame_out"):
+        frame_start = entity_dict["data"].get("frame_in")
+        # If kitsu doesn't have a frame in, get it from the folder in Ayon
+        if frame_start is None:
+            for key, value in folder.attrib:
+                if key == "frameStart":
+                    frame_start = value
+                    break
+        if frame_start is not None:
+            return frame_start + entity_dict["nb_frames"]
+
+
 def create_short_name(name: str) -> str:
     code = name.lower()
 
@@ -58,8 +74,6 @@ async def get_folder_by_kitsu_id(
         folder_id = res[0]["id"]
 
     return await FolderEntity.load(project_name, folder_id)
-
-    return None
 
 
 async def get_task_by_kitsu_id(
