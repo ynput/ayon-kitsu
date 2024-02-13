@@ -208,3 +208,39 @@ def delete_edit(parent: "KitsuProcessor", data: dict[str, str]):
         project_name=project_name,
         entities=[entity],
     )
+
+
+def create_or_update_concept(parent: "KitsuProcessor", data: dict[str, str]):
+    logging.info(f"create_or_update_concept: {data}")
+    project_name = parent.get_paired_ayon_project(data["project_id"])
+    if not project_name:
+        return  # do nothing as this kitsu and ayon project are not paired
+
+    # Get concept entity
+    concept = gazu.concept.get_concept(data["concept_id"])
+    # concept = utils.preprocess_concept(concept["project_id"], concept)
+
+    logging.info(f"create_or_update_concept: {concept}")
+    res = ayon_api.post(
+        f"{parent.entrypoint}/push",
+        project_name=project_name,
+        entities=[concept],
+    )
+    return res
+
+
+def delete_concept(parent: "KitsuProcessor", data: dict[str, str]):
+    logging.info(f"delete_concept: {data}")
+    project_name = parent.get_paired_ayon_project(data["project_id"])
+    if not project_name:
+        return  # do nothing as this kitsu and ayon project are not paired
+
+    entity = {
+        "id": data["concept_id"],
+        "type": "Concept",
+    }
+    return ayon_api.post(
+        f"{parent.entrypoint}/remove",
+        project_name=project_name,
+        entities=[entity],
+    )

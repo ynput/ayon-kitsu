@@ -11,12 +11,14 @@ from nxtools import log_traceback, logging
 from .fullsync import full_sync
 from .update_from_kitsu import (
     create_or_update_asset,
+    create_or_update_concept,
     create_or_update_edit,
     create_or_update_episode,
     create_or_update_sequence,
     create_or_update_shot,
     create_or_update_task,
     delete_asset,
+    delete_concept,
     delete_edit,
     delete_episode,
     delete_sequence,
@@ -223,6 +225,25 @@ class KitsuProcessor:
             "edit:delete",
             lambda data: delete_edit(self, data),
         )
+        # Currently concepts executes both concepts and assets
+        # Talking to CGWire about this so they can fix it in Gazu
+        # The code below works as intended so when CGWire
+        # fixes the problem we can just uncomment this.
+        # gazu.events.add_listener(
+        #    self.event_client,
+        #    "concept:new",
+        #    lambda data: create_or_update_concept(self, data),
+        # )
+        # gazu.events.add_listener(
+        #    self.event_client,
+        #    "concept:update",
+        #    lambda data: create_or_update_concept(self, data),
+        # )
+        # gazu.events.add_listener(
+        #    self.event_client,
+        #    "concept:delete",
+        #    lambda data: delete_concept(self, data),
+        # )
         logging.info("Gazu event listeners added")
         gazu.events.run_client(self.event_client)
 
