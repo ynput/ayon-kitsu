@@ -256,15 +256,15 @@ async def sync_task(
                 project.name, entity_dict["entity_id"], existing_folders
             )
 
-            if parent_folder is None:
-                parent_id = await get_root_folder_id(
-                    user=user,
-                    project_name=project.name,
-                    kitsu_type="Edits",
-                    kitsu_type_id="edits",
-                )
-            else:
+            if parent_folder:
                 parent_id = parent_folder.id
+            else:
+                # The new task type haven't bin implemented in Ayon yet
+                logging.warning(
+                    f"The type '{entity_dict['name']}' isn't implemented yet."
+                    f"Currently they aren't supported"
+                )
+                return
 
         logging.info(f"Creating {entity_dict['type']} '{entity_dict['name']}'")
         target_task = await create_task(
@@ -274,7 +274,7 @@ async def sync_task(
             task_type=entity_dict["task_type_name"],
             name=entity_dict["name"],
             data={"kitsuId": entity_dict["id"]},
-            # TODO: assignees
+            assignees=entity_dict["assignees"],
         )
         existing_tasks[entity_dict["id"]] = target_task.id
 
