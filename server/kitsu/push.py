@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, Literal, get_args
 
 from nxtools import logging
 
-from ayon_server.entities import ProjectEntity, FolderEntity
+from ayon_server.entities import FolderEntity, ProjectEntity
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Field, OPModel
 
