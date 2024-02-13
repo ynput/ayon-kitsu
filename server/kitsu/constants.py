@@ -31,7 +31,7 @@ constant_kitsu_statuses: dict[str, dict[str, str]] = {
         "state": "not_started",
     },
     "neutral": {
-        "icon": "",
+        "icon": "timer",
         "state": "in_progress",
     },
     "wip": {
