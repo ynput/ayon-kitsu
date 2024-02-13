@@ -1,5 +1,6 @@
 """ utils shared between fullsync.py and update_from_kitsu.py """
 
+import ayon_api
 import gazu
 
 
@@ -42,10 +43,10 @@ def preprocess_asset(
 
 def preprocess_task(
     kitsu_project_id: str,
-    task: dict[str, str],
-    task_types: dict[str, str] = {},
+    task: dict[str, str | list[str]],
+    task_types: dict[str, str | list[str]] = {},
     statuses: dict[str, str] = {},
-) -> dict[str, str]:
+) -> dict[str, str | list[str]]:
     if not task_types:
         task_types = get_task_types(kitsu_project_id)
 
@@ -61,7 +62,14 @@ def preprocess_task(
     if "name" in task and "task_type_name" in task and task["name"] == "main":
         task["name"] = task["task_type_name"].lower()
 
-    # TODO: replace user uuids in task.assigness with emails
-    # which can be used to pair with ayon users
+    # Match the assigned ayon user with the assigned kitsu email
+    ayon_users = {
+        user["attrib"]["email"]: user["name"] for user in ayon_api.get_users()
+    }
+    task_emails = {user["email"] for user in task["persons"]}
+    task["assignees"] = []
+    task["assignees"].extend(
+        ayon_users[email] for email in task_emails if email in ayon_users
+    )
 
     return task

@@ -177,11 +177,11 @@ async def create_task(
     **kwargs,
 ) -> TaskEntity:
     payload = {**kwargs, **create_name_and_label(name)}
-
     task = TaskEntity(
         project_name=project_name,
         payload=payload,
     )
+
     await task.save()
     event = {
         "topic": "entity.task.created",
@@ -205,7 +205,7 @@ async def update_task(
     payload = {**kwargs, **create_name_and_label(name)}
 
     # keys that can be updated
-    for key in ["name", "label", "status", "task_type"]:
+    for key in ["name", "label", "status", "task_type", "assignees"]:
         if key in payload and getattr(task, key) != payload[key]:
             setattr(task, key, payload[key])
             changed = True

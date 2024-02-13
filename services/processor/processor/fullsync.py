@@ -31,6 +31,9 @@ def get_tasks(
 ) -> list[dict[str, str]]:
     tasks: list[dict[str, str]] = []
     for record in gazu.task.all_tasks_for_project(kitsu_project_id):
+        record["persons"]: list[dict[str, str]] = []
+        for id in record["assignees"]:
+            record["persons"].append({"email": gazu.person.get_person(id)["email"]})
         tasks.append(
             preprocess_task(kitsu_project_id, record, task_types, task_statuses)
         )
@@ -43,7 +46,7 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
 
     asset_types = get_asset_types(kitsu_project_id)
     task_types = get_task_types(kitsu_project_id)
-    task_statuses = get_statuses()
+    task_statuses: dict[str, str] = get_statuses()
 
     assets = get_assets(kitsu_project_id, asset_types)
     tasks = get_tasks(kitsu_project_id, task_types, task_statuses)
@@ -53,37 +56,6 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
     shots = gazu.shot.all_shots_for_project(kitsu_project_id)
     edits = gazu.edit.all_edits_for_project(kitsu_project_id)
     concepts = gazu.concept.all_concepts_for_project(kitsu_project_id)
-
-    #
-    # Postprocess data
-    #
-
-    assets = []
-    for record in gazu.asset.all_assets_for_project(kitsu_project_id):
-        asset = {
-            **record,
-            "asset_type_name": asset_types[record["entity_type_id"]],
-        }
-        assets.append(asset)
-
-    tasks = []
-    for record in gazu.task.all_tasks_for_project(kitsu_project_id):
-        task_type_name = task_types.get(record["task_type_id"], "Generic")
-        task_status_name = task_statuses.get(record["task_status_id"], "Unknown")
-        task = {
-            **record,
-            "task_type_name": task_type_name,
-            "task_status_name": task_status_name,
-        }
-        if record["name"] == "main":
-            task["name"] = task["task_type_name"].lower()
-        tasks.append(task)
-
-        # TODO: replace user uuids in task.assigness with emails
-        # which can be used to pair with ayon users
-
-    # compile list of entities
-    # TODO: split folders and tasks if the list is huge
 
     entities = assets + episodes + seqs + shots + edits + concepts + tasks
 

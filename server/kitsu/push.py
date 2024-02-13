@@ -283,6 +283,7 @@ async def sync_task(
             project_name=project.name,
             task_id=target_task.id,
             name=entity_dict.get("name", target_task.name),
+            assignees=entity_dict.get("assignees", target_task.assignees),
             status=entity_dict.get("task_status_name", target_task.status),
             task_type=entity_dict.get("task_type_name", target_task.task_type),
         )
