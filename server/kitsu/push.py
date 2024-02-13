@@ -8,6 +8,7 @@ from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Field, OPModel
 
 from .anatomy import parse_attrib
+from .constants import constant_kitsu_models
 from .utils import (
     create_folder,
     create_task,
@@ -162,8 +163,11 @@ async def sync_folder(
             logging.warning(
                 f"Folder type {entity_dict['type']} does not exist. Creating."
             )
-
-            project.folder_types.append({"name": entity_dict["type"]})
+            print(constant_kitsu_models.get(entity_dict["type"]))
+            project.folder_types.append(
+                {"name": entity_dict["type"]}
+                | constant_kitsu_models.get(entity_dict["type"], {})
+            )
             await project.save()
 
         logging.info(f"Creating {entity_dict['type']} {entity_dict['name']}")
