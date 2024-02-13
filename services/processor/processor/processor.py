@@ -11,11 +11,13 @@ from nxtools import log_traceback, logging
 from .fullsync import full_sync
 from .update_from_kitsu import (
     create_or_update_asset,
+    create_or_update_edit,
     create_or_update_episode,
     create_or_update_sequence,
     create_or_update_shot,
     create_or_update_task,
     delete_asset,
+    delete_edit,
     delete_episode,
     delete_sequence,
     delete_shot,
@@ -205,6 +207,21 @@ class KitsuProcessor:
             self.event_client,
             "task:delete",
             lambda data: delete_task(self, data),
+        )
+        gazu.events.add_listener(
+            self.event_client,
+            "edit:new",
+            lambda data: create_or_update_edit(self, data),
+        )
+        gazu.events.add_listener(
+            self.event_client,
+            "edit:update",
+            lambda data: create_or_update_edit(self, data),
+        )
+        gazu.events.add_listener(
+            self.event_client,
+            "edit:delete",
+            lambda data: delete_edit(self, data),
         )
         logging.info("Gazu event listeners added")
         gazu.events.run_client(self.event_client)

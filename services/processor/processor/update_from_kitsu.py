@@ -173,3 +173,38 @@ def delete_task(parent: "KitsuProcessor", data: dict[str, str]):
         project_name=project_name,
         entities=[entity],
     )
+
+
+def create_or_update_edit(parent: "KitsuProcessor", data: dict[str, str]):
+    logging.info(f"create_or_update_edit: {data}")
+    project_name = parent.get_paired_ayon_project(data["project_id"])
+    if not project_name:
+        return  # do nothing as this kitsu and ayon project are not paired
+
+    # Get edit entity
+    edit = gazu.edit.get_edit(data["edit_id"])
+    # edit = utils.preprocess_edit(edit["project_id"], edit)
+
+    res = ayon_api.post(
+        f"{parent.entrypoint}/push",
+        project_name=project_name,
+        entities=[edit],
+    )
+    return res
+
+
+def delete_edit(parent: "KitsuProcessor", data: dict[str, str]):
+    logging.info(f"delete_edit: {data}")
+    project_name = parent.get_paired_ayon_project(data["project_id"])
+    if not project_name:
+        return  # do nothing as this kitsu and ayon project are not paired
+
+    entity = {
+        "id": data["edit_id"],
+        "type": "Edit",
+    }
+    return ayon_api.post(
+        f"{parent.entrypoint}/remove",
+        project_name=project_name,
+        entities=[entity],
+    )
