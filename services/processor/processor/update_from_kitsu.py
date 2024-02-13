@@ -20,7 +20,6 @@ def create_or_update_asset(parent: "KitsuProcessor", data: dict[str, str]):
     asset = gazu.asset.get_asset(data["asset_id"])
     asset = utils.preprocess_asset(asset["project_id"], asset)
 
-    logging.info(f"create_or_update_asset: {asset}")
     res = ayon_api.post(
         f"{parent.entrypoint}/push",
         project_name=project_name,

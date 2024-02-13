@@ -116,6 +116,11 @@ async def sync_folder(
         existing_folders,
     )
 
+    # Add description to attrib data
+    data: dict[str, str] = entity_dict.get("data", {})
+    if entity_dict.get("description"):
+        data["description"] = entity_dict["description"]
+
     if target_folder is None:
         if entity_dict["type"] == "Asset":
             if entity_dict.get("entity_type_id") in existing_folders:
@@ -163,7 +168,6 @@ async def sync_folder(
             logging.warning(
                 f"Folder type {entity_dict['type']} does not exist. Creating."
             )
-            print(constant_kitsu_models.get(entity_dict["type"]))
             project.folder_types.append(
                 {"name": entity_dict["type"]}
                 | constant_kitsu_models.get(entity_dict["type"], {})
@@ -173,7 +177,7 @@ async def sync_folder(
         logging.info(f"Creating {entity_dict['type']} {entity_dict['name']}")
         target_folder = await create_folder(
             project_name=project.name,
-            attrib=parse_attrib(entity_dict.get("data", {})),
+            attrib=parse_attrib(data),
             name=entity_dict["name"],
             folder_type=entity_dict["type"],
             parent_id=parent_id,
@@ -185,7 +189,7 @@ async def sync_folder(
         changed = await update_folder(
             project_name=project.name,
             folder_id=target_folder.id,
-            attrib=parse_attrib(entity_dict.get("data", {})),
+            attrib=parse_attrib(data),
             name=entity_dict["name"],
             folder_type=entity_dict["type"],
         )
