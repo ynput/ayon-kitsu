@@ -2,12 +2,10 @@ from typing import TYPE_CHECKING
 
 import ayon_api
 import gazu
-
 from nxtools import logging
-from pprint import pprint
 
 if TYPE_CHECKING:
-    from .kitsu import KitsuProcessor
+    from .processor import KitsuProcessor
 
 
 def get_asset_types(kitsu_project_id: str):
@@ -59,10 +57,12 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
 
     tasks = []
     for record in gazu.task.all_tasks_for_project(kitsu_project_id):
+        task_type_name = task_types.get(record["task_type_id"], "Generic")
+        task_status_name = task_statuses.get(record["task_status_id"], "Unknown")
         task = {
             **record,
-            "task_type_name": task_types[record["task_type_id"]],
-            "task_status_name": task_statuses[record["task_status_id"]],
+            "task_type_name": task_type_name,
+            "task_status_name": task_status_name,
         }
         if record["name"] == "main":
             task["name"] = task["task_type_name"].lower()

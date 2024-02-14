@@ -93,7 +93,8 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
 
         return {
             "publish": self.get_publish_plugin_paths(),
-            "actions": [os.path.join(KITSU_ROOT, "plugins", "launcher")],
+            # The laucher action is not working since AYON conversion
+            # "actions": [os.path.join(KITSU_ROOT, "plugins", "launcher")],
         }
 
     def get_publish_plugin_paths(self, host_name=None):

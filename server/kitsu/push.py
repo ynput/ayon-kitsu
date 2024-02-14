@@ -155,6 +155,11 @@ async def sync_folder(
                     parent_folder = await get_folder_by_kitsu_id(
                         project.name, entity_dict["parent_id"], existing_folders
                     )
+                    if parent_folder is None:
+                        logging.warning(
+                            f"Parent folder for {entity_dict['type']} {entity_dict['name']} not found. Skipping."  # noqa
+                        )
+                        return
                     parent_id = parent_folder.id
 
         elif entity_dict["type"] == "Shot":
@@ -175,7 +180,17 @@ async def sync_folder(
                     parent_id = parent_folder.id
 
         else:
+            logging.waring("Unsupported entity type: ", entity_dict["type"])
             return
+
+        # ensure folder type exists
+        if entity_dict["type"] not in [f["name"] for f in project.folder_types]:
+            logging.warning(
+                f"Folder type {entity_dict['type']} does not exist. Creating."
+            )
+
+            project.folder_types.append({"name": entity_dict["type"]})
+            await project.save()
 
         logging.info(f"Creating {entity_dict['type']} {entity_dict['name']}")
         target_folder = await create_folder(
