@@ -7,7 +7,7 @@ from ayon_server.settings.anatomy import Anatomy
 from ayon_server.settings.anatomy.statuses import Status
 from ayon_server.settings.anatomy.task_types import TaskType, default_task_types
 
-from .constants import constant_kitsu_statuses, constant_kitsu_tasks
+from .constants import CONSTANT_KITSU_STATUSES, CONSTANT_KITSU_TASKS
 from .utils import create_short_name
 
 if TYPE_CHECKING:
@@ -69,8 +69,8 @@ async def parse_task_types(
             if not short_name:
                 short_name = create_short_name(name_slug)
             icon = "task_alt"
-            if constant_kitsu_tasks.get(name_slug):
-                icon = constant_kitsu_tasks[name_slug]["icon"]
+            if CONSTANT_KITSU_TASKS.get(name_slug):
+                icon = CONSTANT_KITSU_TASKS[name_slug]["icon"]
 
             result.append(
                 TaskType(
@@ -125,7 +125,7 @@ async def parse_statuses(addon: "KitsuAddon", kitsu_project_id: str) -> list[Sta
     kitsu_statuses.sort(key=lambda x: not x.get("is_default"))
 
     for status in kitsu_statuses:
-        kitsu_status = constant_kitsu_statuses.get(status["short_name"])
+        kitsu_status = CONSTANT_KITSU_STATUSES.get(status["short_name"])
         if kitsu_status:
             status["icon"] = kitsu_status["icon"]
             status["state"] = kitsu_status["state"]

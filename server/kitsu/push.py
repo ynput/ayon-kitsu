@@ -9,6 +9,7 @@ from ayon_server.types import Field, OPModel
 
 from .anatomy import parse_attrib
 from .constants import constant_kitsu_models
+    CONSTANT_KITSU_MODELS,
 from .utils import (
     calculate_end_frame,
     create_folder,
@@ -171,7 +172,7 @@ async def sync_folder(
             )
             project.folder_types.append(
                 {"name": entity_dict["type"]}
-                | constant_kitsu_models.get(entity_dict["type"], {})
+                | CONSTANT_KITSU_MODELS.get(entity_dict["type"], {})
             )
             await project.save()
 

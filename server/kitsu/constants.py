@@ -3,7 +3,7 @@
 # But for now they live here.
 
 # Add Kitsu models that Ayon doesn't have by default.
-constant_kitsu_models: dict[str, dict[str, str]] = {
+CONSTANT_KITSU_MODELS: dict[str, dict[str, str]] = {
     "Edit": {
         "shortName": "ed",
         "icon": "cut",
@@ -15,7 +15,7 @@ constant_kitsu_models: dict[str, dict[str, str]] = {
 }
 
 # Manualy set the icon (and Short Name in the future) for non ayon default task types
-constant_kitsu_tasks: dict[str, dict[str, str]] = {
+CONSTANT_KITSU_TASKS: dict[str, dict[str, str]] = {
     "concept": {
         "icon": "lightbulb",
     },
@@ -28,7 +28,7 @@ constant_kitsu_tasks: dict[str, dict[str, str]] = {
 }
 
 # Manualy set the data for the default kitsu task statuses
-constant_kitsu_statuses: dict[str, dict[str, str]] = {
+CONSTANT_KITSU_STATUSES: dict[str, dict[str, str]] = {
     "todo": {
         "icon": "fiber_new",
         "state": "not_started",
