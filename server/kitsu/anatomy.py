@@ -8,7 +8,7 @@ from ayon_server.settings.anatomy.statuses import Status
 from ayon_server.settings.anatomy.task_types import TaskType, default_task_types
 
 from .constants import CONSTANT_KITSU_STATUSES, CONSTANT_KITSU_TASKS
-from .utils import create_short_name
+from .utils import create_short_name, remove_accents
 
 if TYPE_CHECKING:
     from .. import KitsuAddon
@@ -52,7 +52,7 @@ async def parse_task_types(
         raise AyonException("Could not get Kitsu task types")
     result: list[TaskType] = []
     for kitsu_task_type in task_status_response.json():
-        name_slug = kitsu_task_type["name"].lower()
+        name_slug = remove_accents(kitsu_task_type["name"].lower())
 
         # Check if the task already exist
         # eg. Concept under Assets and the hardcoded Concept under Concepts
