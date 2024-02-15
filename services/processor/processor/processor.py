@@ -14,6 +14,7 @@ from .update_from_kitsu import (
     create_or_update_concept,
     create_or_update_edit,
     create_or_update_episode,
+    create_or_update_person,
     create_or_update_sequence,
     create_or_update_shot,
     create_or_update_task,
@@ -21,6 +22,7 @@ from .update_from_kitsu import (
     delete_concept,
     delete_edit,
     delete_episode,
+    delete_person,
     delete_sequence,
     delete_shot,
     delete_task,
@@ -224,6 +226,21 @@ class KitsuProcessor:
             self.event_client,
             "edit:delete",
             lambda data: delete_edit(self, data),
+        )
+        gazu.events.add_listener(
+            self.event_client,
+            "person:new",
+            lambda data: create_or_update_person(self, data),
+        )
+        gazu.events.add_listener(
+            self.event_client,
+            "person:update",
+            lambda data: create_or_update_person(self, data),
+        )
+        gazu.events.add_listener(
+            self.event_client,
+            "person:delete",
+            lambda data: delete_person(self, data),
         )
         # Currently concepts executes both concepts and assets
         # Talking to CGWire about this so they can fix it in Gazu

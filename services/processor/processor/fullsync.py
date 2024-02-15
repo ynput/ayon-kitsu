@@ -47,6 +47,7 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
     asset_types = get_asset_types(kitsu_project_id)
     task_types = get_task_types(kitsu_project_id)
     task_statuses: dict[str, str] = get_statuses()
+    persons = gazu.person.all_persons()
 
     assets = get_assets(kitsu_project_id, asset_types)
     tasks = get_tasks(kitsu_project_id, task_types, task_statuses)
@@ -57,7 +58,7 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
     edits = gazu.edit.all_edits_for_project(kitsu_project_id)
     concepts = gazu.concept.all_concepts_for_project(kitsu_project_id)
 
-    entities = assets + episodes + seqs + shots + edits + concepts + tasks
+    entities = assets + episodes + seqs + shots + edits + concepts + tasks + persons
 
     ayon_api.post(
         f"{parent.entrypoint}/push",

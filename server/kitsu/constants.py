@@ -2,6 +2,57 @@
 # moved to Ayons settings.
 # But for now they live here.
 
+# Default password for newly created users
+CONSTANT_KITSU_USER_PASSWORD = "default_password"
+
+# The default kitsu access group name
+CONSTANT_KITSU_ACCESS_GROUP_NAME = "kitsu_group"
+
+# The default kitsu access group name
+# Kitsu roles:
+# Studio manager = admin
+# Vendor = vendor
+# Client = client
+# Production manager = manager
+# Supervisor = supervisor
+# Artist = user
+CONSTANT_KITSU_ROLES = {
+    "admin": {
+        "data": {
+            "defaultAccessGroups": [CONSTANT_KITSU_ACCESS_GROUP_NAME],
+        },
+        "isAdmin": True,
+    },
+    "vendor": {
+        "data": {
+            "defaultAccessGroups": [CONSTANT_KITSU_ACCESS_GROUP_NAME],
+        },
+    },
+    "client": {
+        "data": {
+            "defaultAccessGroups": [CONSTANT_KITSU_ACCESS_GROUP_NAME],
+        },
+        "isGuest": True,
+    },
+    "manager": {
+        "data": {
+            "defaultAccessGroups": [CONSTANT_KITSU_ACCESS_GROUP_NAME],
+        },
+        "isManager": True,
+    },
+    "supervisor": {
+        "data": {
+            "defaultAccessGroups": [CONSTANT_KITSU_ACCESS_GROUP_NAME],
+        },
+        "isManager": True,
+    },
+    "user": {
+        "data": {
+            "defaultAccessGroups": [CONSTANT_KITSU_ACCESS_GROUP_NAME],
+        },
+    },
+}
+
 # Add Kitsu models that Ayon doesn't have by default.
 CONSTANT_KITSU_MODELS: dict[str, dict[str, str]] = {
     "Edit": {

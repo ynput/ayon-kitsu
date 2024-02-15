@@ -1,15 +1,22 @@
+import json
 import time
 from typing import TYPE_CHECKING, Any, Literal, get_args
 
+import httpx
 from nxtools import logging
 
-from ayon_server.entities import FolderEntity, ProjectEntity
+from ayon_server.auth.session import Session
+from ayon_server.entities import FolderEntity, ProjectEntity, UserEntity
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Field, OPModel
 
 from .anatomy import parse_attrib
-from .constants import constant_kitsu_models
+from .constants import (
+    CONSTANT_KITSU_ACCESS_GROUP_NAME,
     CONSTANT_KITSU_MODELS,
+    CONSTANT_KITSU_ROLES,
+    CONSTANT_KITSU_USER_PASSWORD,
+)
 from .utils import (
     calculate_end_frame,
     create_folder,
@@ -18,13 +25,13 @@ from .utils import (
     delete_task,
     get_folder_by_kitsu_id,
     get_task_by_kitsu_id,
+    get_user_by_kitsu_id,
+    remove_accents,
     update_folder,
     update_task,
 )
 
 if TYPE_CHECKING:
-    from ayon_server.entities import UserEntity
-
     from .. import KitsuAddon
 
 
@@ -38,6 +45,7 @@ KitsuEntityType = Literal[
     "Edit",
     "Concept",
     "Task",
+    "Person",
 ]
 
 
@@ -103,6 +111,120 @@ async def get_root_folder_id(
         )
         sub_id = sub_folder.id
     return sub_id
+
+
+async def create_access_group(
+    user: "UserEntity",
+    name: str,
+    entity_dict: "EntityDict",
+):
+    try:
+        session = await Session.create(user)
+        headers = {"Authorization": f"Bearer {session.token}"}
+        # Check if group already exists
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{entity_dict['ayon_server_url']}/api/accessGroups/_",
+                headers=headers,
+            )
+
+        for group in response.json():
+            if group["name"] == name:
+                # access group already exists
+                return
+
+        # Create a new access group
+        payload = json.dumps(
+            {
+                "create": {"enabled": False, "access_list": []},
+                "read": {"enabled": False, "access_list": []},
+                "update": {"enabled": False, "access_list": []},
+                "publish": {"enabled": False, "access_list": []},
+                "delete": {"enabled": False, "access_list": []},
+                "attrib_read": {"enabled": False, "attributes": []},
+                "attrib_write": {"enabled": False, "attributes": []},
+                "endpoints": {"enabled": False, "endpoints": []},
+            }
+        )
+
+        async with httpx.AsyncClient() as client:
+            return await client.put(
+                f"{entity_dict['ayon_server_url']}/api/accessGroups/{name}/_",
+                content=payload,
+                headers=headers,
+            )
+    except Exception as e:
+        print(e)
+
+
+async def sync_person(
+    addon: "KitsuAddon",
+    user: "UserEntity",
+    entity_dict: "EntityDict",
+):
+    logging.info("sync_person")
+    target_user = await get_user_by_kitsu_id(entity_dict["id"])
+    if target_user:
+        try:
+            session = await Session.create(user)
+            headers = {"Authorization": f"Bearer {session.token}"}
+
+            payload = {
+                "attrib": {
+                    "fullName": entity_dict["full_name"],
+                    "email": entity_dict["email"],
+                },
+                "data": {
+                    "isAdmin": CONSTANT_KITSU_ROLES[entity_dict["role"]].get(
+                        "isAdmin", False
+                    ),
+                    "isManager": CONSTANT_KITSU_ROLES[entity_dict["role"]].get(
+                        "isManager", False
+                    ),
+                    "isGuest": CONSTANT_KITSU_ROLES[entity_dict["role"]].get(
+                        "isGuest", False
+                    ),
+                },
+            }
+
+            async with httpx.AsyncClient() as client:
+                await client.patch(
+                    f"{entity_dict['ayon_server_url']}/api/users/{target_user.name}",
+                    json=payload,
+                    headers=headers,
+                )
+
+            # Rename the user
+            payload = {
+                "newName": remove_accents(
+                    f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower()
+                )
+            }
+            async with httpx.AsyncClient() as client:
+                await client.patch(
+                    f"{entity_dict['ayon_server_url']}/api/users/{target_user.name}/rename",
+                    json=payload,
+                    headers=headers,
+                )
+        except Exception as e:
+            print(e)
+    else:
+        payload = {
+            "name": remove_accents(
+                f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower()
+            ),
+            "attrib": {
+                "fullName": entity_dict["full_name"],
+                "email": entity_dict["email"],
+            },
+        } | CONSTANT_KITSU_ROLES[entity_dict["role"]]
+        payload["data"]["kitsuId"] = entity_dict["id"]
+
+        user = UserEntity(payload)
+        user.set_password(CONSTANT_KITSU_USER_PASSWORD)
+        await user.save()
+
+    logging.info("sync_person done")
 
 
 async def sync_folder(
@@ -316,7 +438,9 @@ async def push_entities(
     payload: PushEntitiesRequestModel,
 ) -> dict[str, dict[Any, Any]]:
     start_time = time.time()
-    project = await ProjectEntity.load(payload.project_name)
+    project = None
+    if payload.project_name != "":
+        project = await ProjectEntity.load(payload.project_name)
 
     # A mapping of kitsu entity ids to folder ids
     # they are added when a task or folder is created or updated and returned by the method - useful for testing
@@ -337,8 +461,18 @@ async def push_entities(
             logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")
             continue
 
-        # we need to sync folders first
-        if entity_dict["type"] != "Task":
+        if entity_dict["type"] == "Person":
+            await create_access_group(
+                user,
+                CONSTANT_KITSU_ACCESS_GROUP_NAME,
+                entity_dict,
+            )
+            await sync_person(
+                addon,
+                user,
+                entity_dict,
+            )
+        elif entity_dict["type"] != "Task":
             await sync_folder(
                 addon,
                 user,
@@ -346,7 +480,6 @@ async def push_entities(
                 folders,
                 entity_dict,
             )
-
         else:
             await sync_task(
                 addon,
@@ -383,7 +516,14 @@ async def remove_entities(
             logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")
             continue
 
-        if entity_dict["type"] == "Task":
+        if entity_dict["type"] == "Person":
+            target_user = await get_user_by_kitsu_id(entity_dict["id"])
+            if not target_user:
+                continue
+
+            await target_user.delete()
+
+        elif entity_dict["type"] == "Task":
             task = await get_task_by_kitsu_id(
                 project.name,
                 entity_dict["id"],

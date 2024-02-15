@@ -1,13 +1,11 @@
-from typing import TYPE_CHECKING, Any
+import unicodedata
+from typing import Any
 
 from nxtools import slugify
 
-from ayon_server.entities import FolderEntity, TaskEntity
+from ayon_server.entities import FolderEntity, TaskEntity, UserEntity
 from ayon_server.events import dispatch_event
 from ayon_server.lib.postgres import Postgres
-
-if TYPE_CHECKING:
-    from ayon_server.entities import UserEntity
 
 
 def calculate_end_frame(
@@ -24,6 +22,11 @@ def calculate_end_frame(
                     break
         if frame_start is not None:
             return frame_start + entity_dict["nb_frames"]
+
+
+def remove_accents(input_str: str) -> str:
+    nfkd_form = unicodedata.normalize("NFKD", input_str)
+    return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
 
 
 def create_short_name(name: str) -> str:
@@ -49,6 +52,20 @@ def create_name_and_label(kitsu_name: str) -> dict[str, str]:
     """From a name coming from kitsu, create a name and label"""
     name_slug = slugify(kitsu_name, separator="_")
     return {"name": name_slug, "label": kitsu_name}
+
+
+async def get_user_by_kitsu_id(
+    kitsu_id: str,
+) -> UserEntity | None:
+    """Get an Ayon UserEndtity by its Kitsu ID"""
+    res = await Postgres.fetch(
+        "SELECT name FROM public.users WHERE data->>'kitsuId' = $1",
+        kitsu_id,
+    )
+    if not res:
+        return None
+    user = await UserEntity.load(res[0]["name"])
+    return user
 
 
 async def get_folder_by_kitsu_id(
