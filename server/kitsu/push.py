@@ -270,8 +270,6 @@ async def sync_person(
         user.set_password(settings.sync_users.default_password)
         await user.save()
 
-    logging.info("sync_person done")
-
 
 async def sync_folder(
     addon: "KitsuAddon",
@@ -499,6 +497,7 @@ async def push_entities(
     folders = {}
     tasks = {}
 
+    settings = await addon.get_studio_settings()
     for entity_dict in payload.entities:
         # required fields
         assert "type" in entity_dict
@@ -509,16 +508,17 @@ async def push_entities(
             continue
 
         if entity_dict["type"] == "Person":
-            await create_access_group(
-                addon,
-                user,
-                entity_dict,
-            )
-            await sync_person(
-                addon,
-                user,
-                entity_dict,
-            )
+            if settings.sync_users.enabled:
+                await create_access_group(
+                    addon,
+                    user,
+                    entity_dict,
+                )
+                await sync_person(
+                    addon,
+                    user,
+                    entity_dict,
+                )
         elif entity_dict["type"] != "Task":
             await sync_folder(
                 addon,

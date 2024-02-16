@@ -45,8 +45,8 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
     logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
 
     asset_types = get_asset_types(kitsu_project_id)
+    task_statuses = get_statuses()
     task_types = get_task_types(kitsu_project_id)
-    task_statuses: dict[str, str] = get_statuses()
     persons = gazu.person.all_persons()
 
     assets = get_assets(kitsu_project_id, asset_types)
