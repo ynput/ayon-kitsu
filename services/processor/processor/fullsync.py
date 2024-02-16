@@ -60,6 +60,9 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
 
     entities = assets + episodes + seqs + shots + edits + concepts + tasks + persons
 
+    for entity in entities:
+        entity["ayon_server_url"] = ayon_api.get_base_url()
+
     ayon_api.post(
         f"{parent.entrypoint}/push",
         project_name=project_name,
