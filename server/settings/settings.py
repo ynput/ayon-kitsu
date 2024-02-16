@@ -129,16 +129,7 @@ class TaskCondition(BaseSettingsModel):
     icon: str = Field("task_alt", title="Icon", widget="icon")
 
 
-class TaskCondition(BaseSettingsModel):
-    _layout: str = "compact"
-    name: str = Field("", title="Name")
-    short_name: str = Field("", title="Short name")
-    icon: str = Field("task_alt", title="Icon", widget="icon")
-
-
 class StatusCondition(BaseSettingsModel):
-    """As statuses already have names and short names we only need the short name to match Kitsu with Ayon"""
-
     _layout: str = "compact"
     short_name: str = Field("", title="Short name")
     state: str = Field("in_progress", enum_resolver=_states_enum, title="State")
@@ -146,6 +137,8 @@ class StatusCondition(BaseSettingsModel):
 
 
 class DefaultSyncInfo(BaseSettingsModel):
+    """As statuses already have names and short names we only need the short name to match Kitsu with Ayon"""
+
     default_task_info: list[TaskCondition] = Field(default_factory=list, title="Tasks")
     default_status_info: list[StatusCondition] = Field(
         default_factory=list, title="Statuses"

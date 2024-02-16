@@ -288,6 +288,7 @@ async def sync_folder(
 
     # Add description to attrib data
     data: dict[str, str | int | None] | None = entity_dict.get("data", {})
+    # The value of key data might be None, in that case, create a new dict
     if data is None:
         data = {}
     if entity_dict.get("description"):
@@ -345,12 +346,12 @@ async def sync_folder(
             await project.save()
 
         logging.info(f"Creating {entity_dict['type']} {entity_dict['name']}")
-        # Calculate the end-frame
         if not parent_folder:
             parent_folder = await FolderEntity.load(project.name, parent_id)
+        # Calculate the end-frame
         data["frame_out"] = calculate_end_frame(entity_dict, parent_folder)
 
-        target_folder: FolderEntity = await create_folder(
+        target_folder = await create_folder(
             project_name=project.name,
             attrib=parse_attrib(data),
             name=entity_dict["name"],
