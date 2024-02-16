@@ -5,9 +5,8 @@ from ayon_server.exceptions import AyonException
 from ayon_server.lib.postgres import Postgres
 from ayon_server.settings.anatomy import Anatomy
 from ayon_server.settings.anatomy.statuses import Status
-from ayon_server.settings.anatomy.task_types import TaskType, default_task_types
+from ayon_server.settings.anatomy.task_types import TaskType
 
-from .constants import CONSTANT_KITSU_STATUSES, CONSTANT_KITSU_TASKS
 from .utils import create_short_name, remove_accents
 
 if TYPE_CHECKING:
@@ -52,33 +51,36 @@ async def parse_task_types(
         raise AyonException("Could not get Kitsu task types")
     result: list[TaskType] = []
     for kitsu_task_type in task_status_response.json():
-        name_slug = remove_accents(kitsu_task_type["name"].lower())
-
         # Check if the task already exist
         # eg. Concept under Assets and the hardcoded Concept under Concepts
         if any(d.name == kitsu_task_type["name"] for d in result):
             continue
 
-        # Use ayon default task type if it exists
-        for default_task_type in default_task_types:
-            if default_task_type.name.lower() == name_slug:
-                result.append(default_task_type)
-                break
-        else:
+        short_name = None
+        icon = None
+
+        settings = await addon.get_studio_settings()
+        found = False
+        for task in settings.default_sync_info.default_task_info:
+            if task.name.lower() == kitsu_task_type["name"].lower():
+                found = True
+                short_name = task.short_name
+                icon = task.icon
+
+        if not found:
             short_name = kitsu_task_type.get("short_name")
             if not short_name:
+                name_slug = remove_accents(kitsu_task_type["name"].lower())
                 short_name = create_short_name(name_slug)
             icon = "task_alt"
-            if CONSTANT_KITSU_TASKS.get(name_slug):
-                icon = CONSTANT_KITSU_TASKS[name_slug]["icon"]
 
-            result.append(
-                TaskType(
-                    name=kitsu_task_type["name"],
-                    shortName=short_name,
-                    icon=icon,
-                )
+        result.append(
+            TaskType(
+                name=kitsu_task_type["name"],
+                shortName=short_name,
+                icon=icon,
             )
+        )
 
     return result
 
@@ -123,13 +125,16 @@ async def parse_statuses(addon: "KitsuAddon", kitsu_project_id: str) -> list[Sta
     result: list[Status] = []
     kitsu_statuses = task_status_response.json()
     kitsu_statuses.sort(key=lambda x: not x.get("is_default"))
+    settings = await addon.get_studio_settings()
 
     for status in kitsu_statuses:
-        kitsu_status = CONSTANT_KITSU_STATUSES.get(status["short_name"])
-        if kitsu_status:
-            status["icon"] = kitsu_status["icon"]
-            status["state"] = kitsu_status["state"]
-        else:
+        found = False
+        for settings_status in settings.default_sync_info.default_status_info:
+            if status["short_name"] == settings_status.short_name:
+                found = True
+                status["icon"] = settings_status.icon
+                status["state"] = settings_status.state
+        if not found:
             status["icon"] = "task_alt"
             status["state"] = "in_progress"
 

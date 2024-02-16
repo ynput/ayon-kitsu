@@ -12,10 +12,7 @@ from ayon_server.types import Field, OPModel
 
 from .anatomy import parse_attrib
 from .constants import (
-    CONSTANT_KITSU_ACCESS_GROUP_NAME,
     CONSTANT_KITSU_MODELS,
-    CONSTANT_KITSU_ROLES,
-    CONSTANT_KITSU_USER_PASSWORD,
 )
 from .utils import (
     calculate_end_frame,
@@ -114,11 +111,15 @@ async def get_root_folder_id(
 
 
 async def create_access_group(
+    addon: "KitsuAddon",
     user: "UserEntity",
-    name: str,
     entity_dict: "EntityDict",
+    name: str | None = None,
 ):
     try:
+        if not name:
+            settings = await addon.get_studio_settings()
+            name = settings.sync_users.access_group
         session = await Session.create(user)
         headers = {"Authorization": f"Bearer {session.token}"}
         # Check if group already exists
@@ -157,6 +158,55 @@ async def create_access_group(
         print(e)
 
 
+def match_ayon_roles_with_kitsu_role(role: str) -> dict[str, bool] | None:
+    match role:
+        case "admin":
+            return {
+                "isAdmin": True,
+                "isManager": False,
+            }
+        case "manager":
+            return {
+                "isAdmin": False,
+                "isManager": True,
+            }
+        case "user":
+            return {
+                "isAdmin": False,
+                "isManager": False,
+            }
+        case _:
+            return
+
+
+async def generate_user_settings(
+    addon: "KitsuAddon",
+    entity_dict: "EntityDict",
+):
+    settings = await addon.get_studio_settings()
+    data: dict[str, str] = {}
+    match entity_dict["role"]:
+        case "admin":  # Studio manager
+            data = match_ayon_roles_with_kitsu_role(settings.sync_users.roles.admin)
+        case "vendor":  # Vendor
+            data = match_ayon_roles_with_kitsu_role(settings.sync_users.roles.vendor)
+        case "client":  # Client
+            data = match_ayon_roles_with_kitsu_role(settings.sync_users.roles.client)
+        case "manager":  # Manager
+            data = match_ayon_roles_with_kitsu_role(settings.sync_users.roles.manager)
+        case "supervisor":  # Supervisor
+            data = match_ayon_roles_with_kitsu_role(
+                settings.sync_users.roles.supervisor
+            )
+        case "user":  # Artist
+            data = match_ayon_roles_with_kitsu_role(settings.sync_users.roles.user)
+    return data | {
+        "data": {
+            "defaultAccessGroups": [settings.sync_users.access_group],
+        },
+    }
+
+
 async def sync_person(
     addon: "KitsuAddon",
     user: "UserEntity",
@@ -164,7 +214,7 @@ async def sync_person(
 ):
     logging.info("sync_person")
     target_user = await get_user_by_kitsu_id(entity_dict["id"])
-    if target_user:
+    if target_user:  # Update user
         try:
             session = await Session.create(user)
             headers = {"Authorization": f"Bearer {session.token}"}
@@ -174,18 +224,10 @@ async def sync_person(
                     "fullName": entity_dict["full_name"],
                     "email": entity_dict["email"],
                 },
-                "data": {
-                    "isAdmin": CONSTANT_KITSU_ROLES[entity_dict["role"]].get(
-                        "isAdmin", False
-                    ),
-                    "isManager": CONSTANT_KITSU_ROLES[entity_dict["role"]].get(
-                        "isManager", False
-                    ),
-                    "isGuest": CONSTANT_KITSU_ROLES[entity_dict["role"]].get(
-                        "isGuest", False
-                    ),
-                },
-            }
+            } | await generate_user_settings(
+                addon,
+                entity_dict,
+            )
 
             async with httpx.AsyncClient() as client:
                 await client.patch(
@@ -208,7 +250,7 @@ async def sync_person(
                 )
         except Exception as e:
             print(e)
-    else:
+    else:  # Create user
         payload = {
             "name": remove_accents(
                 f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower()
@@ -217,11 +259,15 @@ async def sync_person(
                 "fullName": entity_dict["full_name"],
                 "email": entity_dict["email"],
             },
-        } | CONSTANT_KITSU_ROLES[entity_dict["role"]]
+        } | await generate_user_settings(
+            addon,
+            entity_dict,
+        )
         payload["data"]["kitsuId"] = entity_dict["id"]
 
         user = UserEntity(payload)
-        user.set_password(CONSTANT_KITSU_USER_PASSWORD)
+        settings = await addon.get_studio_settings()
+        user.set_password(settings.sync_users.default_password)
         await user.save()
 
     logging.info("sync_person done")
@@ -463,8 +509,8 @@ async def push_entities(
 
         if entity_dict["type"] == "Person":
             await create_access_group(
+                addon,
                 user,
-                CONSTANT_KITSU_ACCESS_GROUP_NAME,
                 entity_dict,
             )
             await sync_person(

@@ -65,7 +65,6 @@ class KitsuAddon(BaseServerAddon):
         self.add_endpoint("/push", self.push, method="POST")
         self.add_endpoint("/remove", self.remove, method="POST")
 
-
     async def setup(self):
         pass
 
@@ -88,7 +87,7 @@ class KitsuAddon(BaseServerAddon):
             user=user,
             payload=payload,
         )
-    
+
     async def remove(
         self,
         user: CurrentUser,
@@ -103,8 +102,7 @@ class KitsuAddon(BaseServerAddon):
             payload=payload,
         )
 
-
-    async def list_pairings(self, mock=False) -> list[PairingItemModel]: 
+    async def list_pairings(self, mock=False) -> list[PairingItemModel]:
         await self.ensure_kitsu(mock)
         return await get_pairing_list(self)
 
@@ -122,11 +120,10 @@ class KitsuAddon(BaseServerAddon):
     #
     # Helpers
     #
-
     async def ensure_kitsu(self, mock=False):
         if self.kitsu is not None:
             return
-        
+
         if mock == "True":
             self.kitsu = KitsuMock()
             return
@@ -143,5 +140,5 @@ class KitsuAddon(BaseServerAddon):
 
         if not actual_password:
             raise InvalidSettingsException("Kitsu password secret is not set")
-        
+
         self.kitsu = Kitsu(settings.server, actual_email, actual_password)
