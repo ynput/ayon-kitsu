@@ -308,7 +308,7 @@ async def sync_folder(
                     subfolder_name=entity_dict["asset_type_name"],
                 )
                 existing_folders[entity_dict["entity_type_id"]] = parent_id
-        elif entity_dict["type"] in KitsuEntityType.__args__:
+        elif entity_dict["type"] in get_args(KitsuEntityType):
             if entity_dict.get("parent_id") is None:
                 parent_id = await get_root_folder_id(
                     user=user,
