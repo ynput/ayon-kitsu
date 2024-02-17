@@ -151,6 +151,7 @@ class DefaultSyncInfo(BaseSettingsModel):
 class SyncSettings(BaseSettingsModel):
     """Enabling 'Delete projects' will remove projects on Ayon when they get deleted on Kitsu"""
 
+    delete_projects: bool = Field(title="Delete projects")
     sync_users: SyncUsers = Field(
         default_factory=SyncUsers,
         title="Sync users",

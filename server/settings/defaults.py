@@ -19,6 +19,7 @@ DEFAULT_VALUES = {
         }
     },
     "sync_settings": {
+        "delete_projects": False,
         "sync_users": {
             "enabled": False,
             "default_password": "default_password",

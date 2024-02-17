@@ -23,9 +23,11 @@ from .update_from_kitsu import (
     delete_edit,
     delete_episode,
     delete_person,
+    delete_project,
     delete_sequence,
     delete_shot,
     delete_task,
+    update_project,
 )
 
 if service_name := os.environ.get("AYON_SERVICE_NAME"):
@@ -127,16 +129,16 @@ class KitsuProcessor:
         gazu_listener_thread.start()
 
     def run_gazu_listeners(self):
-        # gazu.events.add_listener(
-        #     self.event_client, "project:new", self._new_project
-        # )
-        # gazu.events.add_listener(
-        #     self.event_client, "project:update", self._update_project
-        # )
-        # gazu.events.add_listener(
-        #     self.event_client, "project:delete", self._delete_project
-        # )
-
+        gazu.events.add_listener(
+            self.event_client,
+            "project:update",
+            lambda data: update_project(self, data),
+        )
+        gazu.events.add_listener(
+            self.event_client,
+            "project:delete",
+            lambda data: delete_project(self, data),
+        )
         gazu.events.add_listener(
             self.event_client,
             "asset:new",

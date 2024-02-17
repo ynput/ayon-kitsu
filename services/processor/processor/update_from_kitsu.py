@@ -10,6 +10,42 @@ if TYPE_CHECKING:
     from .processor import KitsuProcessor
 
 
+def update_project(parent: "KitsuProcessor", data: dict[str, str]):
+    logging.info(f"update_project: {data}")
+    project_name = parent.get_paired_ayon_project(data["project_id"])
+    if not project_name:
+        return  # do nothing as this kitsu and ayon project are not paired
+
+    # Get asset entity
+    entity = gazu.project.get_project(data["project_id"])
+
+    # Add ayon base url so we can use it in REST calls later on
+    entity["ayon_server_url"] = ayon_api.get_base_url()
+
+    return ayon_api.post(
+        f"{parent.entrypoint}/push",
+        project_name=project_name,
+        entities=[entity],
+    )
+
+
+def delete_project(parent: "KitsuProcessor", data: dict[str, str]):
+    logging.info(f"delete_project: {data}")
+    project_name = parent.get_paired_ayon_project(data["project_id"])
+    if not project_name:
+        return  # do nothing as this kitsu and ayon project are not paired
+
+    # Add ayon base url so we can use it in REST calls later on
+    entity = {}
+    entity["ayon_server_url"] = ayon_api.get_base_url()
+
+    return ayon_api.post(
+        f"{parent.entrypoint}/push",
+        project_name=project_name,
+        entities=[entity],
+    )
+
+
 def create_or_update_asset(parent: "KitsuProcessor", data: dict[str, str]):
     logging.info(f"create_or_update_asset: {data}")
     project_name = parent.get_paired_ayon_project(data["project_id"])

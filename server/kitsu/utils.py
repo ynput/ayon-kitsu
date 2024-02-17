@@ -3,7 +3,12 @@ from typing import Any
 
 from nxtools import slugify
 
-from ayon_server.entities import FolderEntity, TaskEntity, UserEntity
+from ayon_server.entities import (
+    FolderEntity,
+    ProjectEntity,
+    TaskEntity,
+    UserEntity,
+)
 from ayon_server.events import dispatch_event
 from ayon_server.lib.postgres import Postgres
 

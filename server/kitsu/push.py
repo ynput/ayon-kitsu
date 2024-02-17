@@ -10,7 +10,7 @@ from ayon_server.entities import FolderEntity, ProjectEntity, UserEntity
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Field, OPModel
 
-from .anatomy import parse_attrib
+from .anatomy import get_kitsu_project_anatomy, parse_attrib
 from .constants import (
     CONSTANT_KITSU_MODELS,
 )
@@ -43,6 +43,7 @@ KitsuEntityType = Literal[
     "Concept",
     "Task",
     "Person",
+    "Project",
 ]
 
 
@@ -281,6 +282,46 @@ async def sync_person(
         await user.save()
 
 
+async def update_project(
+    addon: "KitsuAddon",
+    user: "UserEntity",
+    project: "ProjectEntity",
+    entity_dict: "EntityDict",
+):
+    logging.info("update_project")
+    await addon.ensure_kitsu()
+    anatomy = await get_kitsu_project_anatomy(addon, entity_dict["id"])
+    payload = {
+        "attrib": json.loads(anatomy.attributes.json()),
+    }
+    session = await Session.create(user)
+    headers = {"Authorization": f"Bearer {session.token}"}
+    # Check if group already exists
+    async with httpx.AsyncClient() as client:
+        await client.patch(
+            f"{entity_dict['ayon_server_url']}/api/projects/{project.name}",
+            json=payload,
+            headers=headers,
+        )
+
+
+async def delete_project(
+    addon: "KitsuAddon",
+    user: "UserEntity",
+    project: "ProjectEntity",
+    entity_dict: "EntityDict",
+):
+    logging.info("delete_project")
+    session = await Session.create(user)
+    headers = {"Authorization": f"Bearer {session.token}"}
+    # Check if group already exists
+    async with httpx.AsyncClient() as client:
+        await client.delete(
+            f"{entity_dict['ayon_server_url']}/api/projects/{project.name}",
+            headers=headers,
+        )
+
+
 async def sync_folder(
     addon: "KitsuAddon",
     user: "UserEntity",
@@ -517,8 +558,15 @@ async def push_entities(
             logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")
             continue
 
-        if entity_dict["type"] == "Person":
-            if settings.sync_users.enabled:
+        if entity_dict["type"] == "Project":
+            await update_project(
+                addon,
+                user,
+                project,
+                entity_dict,
+            )
+        elif entity_dict["type"] == "Person":
+            if settings.sync_settings.sync_users.enabled:
                 await create_access_group(
                     addon,
                     user,
@@ -568,12 +616,21 @@ async def remove_entities(
     folders = {}
     tasks = {}
 
+    settings = await addon.get_studio_settings()
     for entity_dict in payload.entities:
         if entity_dict["type"] not in get_args(KitsuEntityType):
             logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")
             continue
 
-        if entity_dict["type"] == "Person":
+        if entity_dict["type"] == "Project":
+            if settings.delete_ayon_projects.enabled:
+                await update_project(
+                    addon,
+                    user,
+                    project,
+                    entity_dict,
+                )
+        elif entity_dict["type"] == "Person":
             target_user = await get_user_by_kitsu_id(entity_dict["id"])
             if not target_user:
                 continue
