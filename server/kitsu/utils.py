@@ -5,7 +5,6 @@ from nxtools import slugify
 
 from ayon_server.entities import (
     FolderEntity,
-    ProjectEntity,
     TaskEntity,
     UserEntity,
 )
