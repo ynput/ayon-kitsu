@@ -119,7 +119,7 @@ async def create_access_group(
     try:
         if not name:
             settings = await addon.get_studio_settings()
-            name = settings.sync_users.access_group
+            name = settings.sync_settings.sync_users.access_group
         session = await Session.create(user)
         headers = {"Authorization": f"Bearer {session.token}"}
         # Check if group already exists
@@ -187,22 +187,32 @@ async def generate_user_settings(
     data: dict[str, str] = {}
     match entity_dict["role"]:
         case "admin":  # Studio manager
-            data = match_ayon_roles_with_kitsu_role(settings.sync_users.roles.admin)
+            data = match_ayon_roles_with_kitsu_role(
+                settings.sync_settings.sync_users.roles.admin
+            )
         case "vendor":  # Vendor
-            data = match_ayon_roles_with_kitsu_role(settings.sync_users.roles.vendor)
+            data = match_ayon_roles_with_kitsu_role(
+                settings.sync_settings.sync_users.roles.vendor
+            )
         case "client":  # Client
-            data = match_ayon_roles_with_kitsu_role(settings.sync_users.roles.client)
+            data = match_ayon_roles_with_kitsu_role(
+                settings.sync_settings.sync_users.roles.client
+            )
         case "manager":  # Manager
-            data = match_ayon_roles_with_kitsu_role(settings.sync_users.roles.manager)
+            data = match_ayon_roles_with_kitsu_role(
+                settings.sync_settings.sync_users.roles.manager
+            )
         case "supervisor":  # Supervisor
             data = match_ayon_roles_with_kitsu_role(
-                settings.sync_users.roles.supervisor
+                settings.sync_settings.sync_users.roles.supervisor
             )
         case "user":  # Artist
-            data = match_ayon_roles_with_kitsu_role(settings.sync_users.roles.user)
+            data = match_ayon_roles_with_kitsu_role(
+                settings.sync_settings.sync_users.roles.user
+            )
     return data | {
         "data": {
-            "defaultAccessGroups": [settings.sync_users.access_group],
+            "defaultAccessGroups": [settings.sync_settings.sync_users.access_group],
         },
     }
 
@@ -267,7 +277,7 @@ async def sync_person(
 
         user = UserEntity(payload)
         settings = await addon.get_studio_settings()
-        user.set_password(settings.sync_users.default_password)
+        user.set_password(settings.sync_settings.sync_users.default_password)
         await user.save()
 
 

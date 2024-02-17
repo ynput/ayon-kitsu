@@ -145,6 +145,22 @@ class DefaultSyncInfo(BaseSettingsModel):
     )
 
 
+#
+## Sync settings
+#
+class SyncSettings(BaseSettingsModel):
+    """Enabling 'Delete projects' will remove projects on Ayon when they get deleted on Kitsu"""
+
+    sync_users: SyncUsers = Field(
+        default_factory=SyncUsers,
+        title="Sync users",
+    )
+    default_sync_info: DefaultSyncInfo = Field(
+        default_factory=DefaultSyncInfo,
+        title="Default sync info",
+    )
+
+
 class KitsuSettings(BaseSettingsModel):
     #
     ## Root fields
@@ -178,11 +194,7 @@ class KitsuSettings(BaseSettingsModel):
         default_factory=PublishPlugins,
         title="Publish plugins",
     )
-    sync_users: SyncUsers = Field(
-        default_factory=SyncUsers,
-        title="Sync users",
-    )
-    default_sync_info: DefaultSyncInfo = Field(
-        default_factory=DefaultSyncInfo,
-        title="Default sync info",
+    sync_settings: SyncSettings = Field(
+        default_factory=SyncSettings,
+        title="Sync settings",
     )

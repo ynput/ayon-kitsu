@@ -61,7 +61,7 @@ async def parse_task_types(
 
         settings = await addon.get_studio_settings()
         found = False
-        for task in settings.default_sync_info.default_task_info:
+        for task in settings.sync_settings.default_sync_info.default_task_info:
             if task.name.lower() == kitsu_task_type["name"].lower():
                 found = True
                 short_name = task.short_name
@@ -129,7 +129,9 @@ async def parse_statuses(addon: "KitsuAddon", kitsu_project_id: str) -> list[Sta
 
     for status in kitsu_statuses:
         found = False
-        for settings_status in settings.default_sync_info.default_status_info:
+        for (
+            settings_status
+        ) in settings.sync_settings.default_sync_info.default_status_info:
             if status["short_name"] == settings_status.short_name:
                 found = True
                 status["icon"] = settings_status.icon
@@ -201,10 +203,6 @@ async def get_kitsu_project_anatomy(
         raise AyonException("Could not get Kitsu project")
 
     kitsu_project = kitsu_project_response.json()
-
-    resolution_width, resolution_height = [
-        int(x) for x in kitsu_project.get("resolution", "1920x1080").split("x")
-    ]
 
     attributes = parse_attrib(kitsu_project)
     statuses = await parse_statuses(addon, kitsu_project_id)
