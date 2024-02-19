@@ -102,7 +102,7 @@ class KitsuAddon(BaseServerAddon):
             payload=payload,
         )
 
-    async def list_pairings(self, mock=False) -> list[PairingItemModel]:
+    async def list_pairings(self, mock: bool = False) -> list[PairingItemModel]:
         await self.ensure_kitsu(mock)
         return await get_pairing_list(self)
 
@@ -120,11 +120,11 @@ class KitsuAddon(BaseServerAddon):
     #
     # Helpers
     #
-    async def ensure_kitsu(self, mock=False):
+    async def ensure_kitsu(self, mock: bool = False):
         if self.kitsu is not None:
             return
 
-        if mock == "True":
+        if mock is True:
             self.kitsu = KitsuMock()
             return
 

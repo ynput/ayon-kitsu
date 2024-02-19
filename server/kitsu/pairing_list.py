@@ -20,7 +20,6 @@ async def get_pairing_list(addon: "KitsuAddon") -> list[PairingItemModel]:
     # Load kitsu projects
     #
     # return vars(addon)
-
     kitsu_projects_response = await addon.kitsu.get("data/projects")
 
     if kitsu_projects_response.status_code != 200:

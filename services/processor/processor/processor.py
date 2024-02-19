@@ -50,7 +50,6 @@ class KitsuProcessor:
         # Connect to Ayon
         #
         try:
-            # ayon_api.init_service(addon_name='kitsu', addon_version='1.0.2-dev1', service_name='processor')
             ayon_api.init_service()
             connected = True
         except Exception:
