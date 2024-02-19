@@ -224,28 +224,41 @@ async def sync_person(
     entity_dict: "EntityDict",
 ):
     logging.info("sync_person")
+
+    username = remove_accents(
+        f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower().strip()
+    )
+
+    payload = {
+        "name": username,
+        "attrib": {
+            "fullName": entity_dict["full_name"],
+            "email": entity_dict["email"],
+        },
+    } | await generate_user_settings(
+        addon,
+        entity_dict,
+    )
+    payload["data"]["kitsuId"] = entity_dict["id"]
+
+    user = UserEntity.load(username)
     target_user = await get_user_by_kitsu_id(entity_dict["id"])
+
+    # User exists but doesn't have a kitsuId assigned it it
+    if user and not target_user:
+        target_user = user
+
     if target_user:  # Update user
         try:
             session = await Session.create(user)
             headers = {"Authorization": f"Bearer {session.token}"}
 
-            payload = {
-                "attrib": {
-                    "fullName": entity_dict["full_name"],
-                    "email": entity_dict["email"],
-                },
-            } | await generate_user_settings(
-                addon,
-                entity_dict,
-            )
             async with httpx.AsyncClient() as client:
                 await client.patch(
                     f"{entity_dict['ayon_server_url']}/api/users/{target_user.name}",
                     json=payload,
                     headers=headers,
                 )
-
             # Rename the user
             payload = {
                 "newName": remove_accents(
@@ -261,20 +274,6 @@ async def sync_person(
         except Exception as e:
             print(e)
     else:  # Create user
-        payload = {
-            "name": remove_accents(
-                f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower().strip()
-            ),
-            "attrib": {
-                "fullName": entity_dict["full_name"],
-                "email": entity_dict["email"],
-            },
-        } | await generate_user_settings(
-            addon,
-            entity_dict,
-        )
-        payload["data"]["kitsuId"] = entity_dict["id"]
-
         user = UserEntity(payload)
         settings = await addon.get_studio_settings()
         user.set_password(settings.sync_settings.sync_users.default_password)
