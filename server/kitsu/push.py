@@ -239,7 +239,6 @@ async def sync_person(
                 addon,
                 entity_dict,
             )
-
             async with httpx.AsyncClient() as client:
                 await client.patch(
                     f"{entity_dict['ayon_server_url']}/api/users/{target_user.name}",
@@ -250,7 +249,7 @@ async def sync_person(
             # Rename the user
             payload = {
                 "newName": remove_accents(
-                    f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower()
+                    f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower().strip()
                 )
             }
             async with httpx.AsyncClient() as client:
