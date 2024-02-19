@@ -56,7 +56,12 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
     seqs = gazu.shot.all_sequences_for_project(kitsu_project_id)
     shots = gazu.shot.all_shots_for_project(kitsu_project_id)
     edits = gazu.edit.all_edits_for_project(kitsu_project_id)
-    concepts = gazu.concept.all_concepts_for_project(kitsu_project_id)
+    # Concepts were introduced at Kitsu/Zou v0.18.0.
+    # If the user runs an older version if Kitsu, gazu.concept will throw an error.
+    try:
+        concepts = gazu.concept.all_concepts_for_project(kitsu_project_id)
+    except Exception as e:
+        concepts = []
 
     entities = assets + episodes + seqs + shots + edits + concepts + tasks + persons
 
