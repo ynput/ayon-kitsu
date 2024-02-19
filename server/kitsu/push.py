@@ -264,7 +264,7 @@ async def sync_person(
     else:  # Create user
         payload = {
             "name": remove_accents(
-                f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower()
+                f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower().strip()
             ),
             "attrib": {
                 "fullName": entity_dict["full_name"],
