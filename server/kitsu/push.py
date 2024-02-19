@@ -241,12 +241,16 @@ async def sync_person(
     )
     payload["data"]["kitsuId"] = entity_dict["id"]
 
-    user = UserEntity.load(username)
+    ayon_user = None
+    try:
+        ayon_user = await UserEntity.load(username)
+    except Exception:
+        pass
     target_user = await get_user_by_kitsu_id(entity_dict["id"])
 
     # User exists but doesn't have a kitsuId assigned it it
-    if user and not target_user:
-        target_user = user
+    if ayon_user and not target_user:
+        target_user = ayon_user
 
     if target_user:  # Update user
         try:
