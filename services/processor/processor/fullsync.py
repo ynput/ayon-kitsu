@@ -63,7 +63,7 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
     except Exception as e:
         concepts = []
 
-    entities = assets + episodes + seqs + shots + edits + concepts + tasks + persons
+    entities = persons + assets + episodes + seqs + shots + edits + concepts + tasks
 
     for entity in entities:
         entity["ayon_server_url"] = ayon_api.get_base_url()
