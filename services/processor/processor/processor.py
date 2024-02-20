@@ -243,25 +243,24 @@ class KitsuProcessor:
             "person:delete",
             lambda data: delete_person(self, data),
         )
-        # Currently concepts executes both concepts and assets
-        # Talking to CGWire about this so they can fix it in Gazu
-        # The code below works as intended so when CGWire
-        # fixes the problem we can just uncomment this.
-        # gazu.events.add_listener(
-        #    self.event_client,
-        #    "concept:new",
-        #    lambda data: create_or_update_concept(self, data),
-        # )
-        # gazu.events.add_listener(
-        #    self.event_client,
-        #    "concept:update",
-        #    lambda data: create_or_update_concept(self, data),
-        # )
-        # gazu.events.add_listener(
-        #    self.event_client,
-        #    "concept:delete",
-        #    lambda data: delete_concept(self, data),
-        # )
+        # Concept events were fixed in Zou 0.19.0, so listen only if
+        # the user is running Zou euqual or above 0.19.0
+        if tuple(gazu.client.get_api_version().split(".")) >= ("0", "19", "0"):
+            gazu.events.add_listener(
+                self.event_client,
+                "concept:new",
+                lambda data: create_or_update_concept(self, data),
+            )
+            gazu.events.add_listener(
+                self.event_client,
+                "concept:update",
+                lambda data: create_or_update_concept(self, data),
+            )
+            gazu.events.add_listener(
+                self.event_client,
+                "concept:delete",
+                lambda data: delete_concept(self, data),
+            )
         logging.info("Gazu event listeners added")
         gazu.events.run_client(self.event_client)
 
