@@ -49,6 +49,16 @@ class IntegrateKitsuNote(pyblish.api.ContextPlugin):
         return re.sub(pattern, replace_missing_key, template)
 
     def process(self, context):
+        # Backwards compatibility for wront key
+        if "product_type_requirements" in self.status_change_conditions:
+            family_requirements = self.status_change_conditions[
+                "product_type_requirements"
+            ]
+        else:
+            family_requirements = self.status_change_conditions[
+                "family_requirements"
+            ]
+
         for instance in context:
             # Check if instance is a review by checking its family
             # Allow a match to primary family or any of families
@@ -87,9 +97,8 @@ class IntegrateKitsuNote(pyblish.api.ContextPlugin):
                 }
 
                 # Check if any family requirement is met
-                for family_requirement in self.status_change_conditions[
-                    "family_requirements"
-                ]:
+
+                for family_requirement in family_requirements:
                     condition = family_requirement["condition"] == "equal"
 
                     for family in families:
