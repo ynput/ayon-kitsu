@@ -1,6 +1,6 @@
-import httpx
-
 from typing import Literal
+
+import httpx
 
 
 class KitsuLoginException(Exception):

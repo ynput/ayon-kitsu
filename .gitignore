@@ -8,3 +8,6 @@ server/frontend/node_modules
 server/frontend/dist
 server/frontend/yarn.lock
 server/frontend/yarn-error.log
+server/frontend/.yarn
+server/frontend/.pnp.cjs
+server/frontend/.pnp.loader.mjs

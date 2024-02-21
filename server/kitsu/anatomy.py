@@ -1,12 +1,13 @@
 import contextlib
-
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ayon_server.exceptions import AyonException
 from ayon_server.lib.postgres import Postgres
 from ayon_server.settings.anatomy import Anatomy
 from ayon_server.settings.anatomy.statuses import Status
-from ayon_server.settings.anatomy.task_types import TaskType, default_task_types
+from ayon_server.settings.anatomy.task_types import TaskType
+
+from .utils import create_short_name, remove_accents
 
 if TYPE_CHECKING:
     from .. import KitsuAddon
@@ -48,28 +49,38 @@ async def parse_task_types(
     )
     if task_status_response.status_code != 200:
         raise AyonException("Could not get Kitsu task types")
-
     result: list[TaskType] = []
     for kitsu_task_type in task_status_response.json():
-        name_slug = kitsu_task_type["name"].lower()
+        # Check if the task already exist
+        # eg. Concept under Assets and the hardcoded Concept under Concepts
+        if any(d.name == kitsu_task_type["name"] for d in result):
+            continue
 
-        # Use ayon default task type if it exists
+        short_name = None
+        icon = None
 
-        for default_task_type in default_task_types:
-            if default_task_type.name.lower() == name_slug:
-                result.append(default_task_type)
-                break
-        else:
+        settings = await addon.get_studio_settings()
+        found = False
+        for task in settings.sync_settings.default_sync_info.default_task_info:
+            if task.name.lower() == kitsu_task_type["name"].lower():
+                found = True
+                short_name = task.short_name
+                icon = task.icon
+
+        if not found:
             short_name = kitsu_task_type.get("short_name")
             if not short_name:
-                short_name = name_slug.replace("_", "")[:3]
+                name_slug = remove_accents(kitsu_task_type["name"].lower())
+                short_name = create_short_name(name_slug)
+            icon = "task_alt"
 
-            result.append(
-                TaskType(
-                    name=kitsu_task_type["name"],
-                    shortName=short_name,
-                )
+        result.append(
+            TaskType(
+                name=kitsu_task_type["name"],
+                shortName=short_name,
+                icon=icon,
             )
+        )
 
     return result
 
@@ -111,23 +122,31 @@ async def parse_statuses(addon: "KitsuAddon", kitsu_project_id: str) -> list[Sta
     if task_status_response.status_code != 200:
         raise AyonException("Could not get Kitsu statuses")
 
-    def get_state(kitsu_status: dict[str, str]) -> str:
-        if kitsu_status["is_done"]:
-            return "done"
-        elif kitsu_status["short_name"] == "ready":
-            return "not_started"
-        else:
-            return "in_progress"
-
     result: list[Status] = []
     kitsu_statuses = task_status_response.json()
     kitsu_statuses.sort(key=lambda x: not x.get("is_default"))
+    settings = await addon.get_studio_settings()
+
+    for status in kitsu_statuses:
+        found = False
+        for (
+            settings_status
+        ) in settings.sync_settings.default_sync_info.default_status_info:
+            if status["short_name"] == settings_status.short_name:
+                found = True
+                status["icon"] = settings_status.icon
+                status["state"] = settings_status.state
+        if not found:
+            status["icon"] = "task_alt"
+            status["state"] = "in_progress"
+
     for kitsu_status in kitsu_statuses:
         status = Status(
             name=kitsu_status["name"],
             shortName=kitsu_status["short_name"],
             color=kitsu_status["color"],
-            state=get_state(kitsu_status),
+            state=kitsu_status["state"],
+            icon=kitsu_status["icon"],
         )
         result.append(status)
     return result
@@ -138,31 +157,31 @@ async def parse_statuses(addon: "KitsuAddon", kitsu_project_id: str) -> list[Sta
 #
 
 
-def parse_attrib(source: dict[str, Any] | None = None):
+def parse_attrib(source: dict[str, Any] | None = None) -> dict[str, Any]:
     result = {}
     if source is None:
         return result
     for key, value in source.items():
-        if key == "fps":
+        if key == "fps" and value:
             with contextlib.suppress(ValueError):
                 result["fps"] = float(value)
-        elif key == "frame_in":
+        elif key == "frame_in" and value:
             with contextlib.suppress(ValueError):
                 result["frameStart"] = int(value)
-        elif key == "frame_out":
+        elif key == "frame_out" and value:
             with contextlib.suppress(ValueError):
                 result["frameEnd"] = int(value)
-        elif key == "resolution":
+        elif key == "resolution" and value:
             try:
                 result["resolutionWidth"] = int(value.split("x")[0])
                 result["resolutionHeight"] = int(value.split("x")[1])
             except (IndexError, ValueError):
                 pass
-        elif key == "description":
+        elif key == "description" and value:
             result["description"] = value
-        elif key == "start_date":
+        elif key == "start_date" and value:
             result["startDate"] = value + "T00:00:00Z"
-        elif key == "end_date":
+        elif key == "end_date" and value:
             result["endDate"] = value + "T00:00:00Z"
 
     return result
@@ -184,10 +203,6 @@ async def get_kitsu_project_anatomy(
         raise AyonException("Could not get Kitsu project")
 
     kitsu_project = kitsu_project_response.json()
-
-    resolution_width, resolution_height = [
-        int(x) for x in kitsu_project.get("resolution", "1920x1080").split("x")
-    ]
 
     attributes = parse_attrib(kitsu_project)
     statuses = await parse_statuses(addon, kitsu_project_id)

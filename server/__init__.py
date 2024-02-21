@@ -1,15 +1,23 @@
 from typing import Type
 
+from nxtools import logging
+
+# from fastapi import BackgroundTasks
 from ayon_server.addons import BaseServerAddon
 from ayon_server.api.dependencies import CurrentUser
 from ayon_server.api.responses import EmptyResponse
 from ayon_server.exceptions import ForbiddenException, InvalidSettingsException
 from ayon_server.secrets import Secrets
 
-from .kitsu import Kitsu
+from .kitsu import Kitsu, KitsuMock
 from .kitsu.init_pairing import InitPairingRequest, init_pairing, sync_request
 from .kitsu.pairing_list import PairingItemModel, get_pairing_list
-from .kitsu.push import PushEntitiesRequestModel, push_entities
+from .kitsu.push import (
+    PushEntitiesRequestModel,
+    RemoveEntitiesRequestModel,
+    push_entities,
+    remove_entities,
+)
 from .settings import DEFAULT_VALUES, KitsuSettings
 
 try:
@@ -55,6 +63,7 @@ class KitsuAddon(BaseServerAddon):
         self.add_endpoint("/pairing", self.init_pairing, method="POST")
         self.add_endpoint("/sync/{project_name}", self.sync, method="POST")
         self.add_endpoint("/push", self.push, method="POST")
+        self.add_endpoint("/remove", self.remove, method="POST")
 
     async def setup(self):
         pass
@@ -73,14 +82,28 @@ class KitsuAddon(BaseServerAddon):
     ):
         if not user.is_manager:
             raise ForbiddenException("Only managers can sync Kitsu projects")
-        await push_entities(
+        return await push_entities(
             self,
             user=user,
             payload=payload,
         )
 
-    async def list_pairings(self) -> list[PairingItemModel]:
-        await self.ensure_kitsu()
+    async def remove(
+        self,
+        user: CurrentUser,
+        payload: RemoveEntitiesRequestModel,
+    ):
+        logging.info(f"payload: {str(payload)}")
+        if not user.is_manager:
+            raise ForbiddenException("Only managers can sync Kitsu projects")
+        return await remove_entities(
+            self,
+            user=user,
+            payload=payload,
+        )
+
+    async def list_pairings(self, mock: bool = False) -> list[PairingItemModel]:
+        await self.ensure_kitsu(mock)
         return await get_pairing_list(self)
 
     async def init_pairing(
@@ -97,9 +120,12 @@ class KitsuAddon(BaseServerAddon):
     #
     # Helpers
     #
-
-    async def ensure_kitsu(self):
+    async def ensure_kitsu(self, mock: bool = False):
         if self.kitsu is not None:
+            return
+
+        if mock is True:
+            self.kitsu = KitsuMock()
             return
 
         settings = await self.get_studio_settings()
