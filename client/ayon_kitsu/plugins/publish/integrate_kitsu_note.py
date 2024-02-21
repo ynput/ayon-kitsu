@@ -12,6 +12,7 @@ class IntegrateKitsuNote(pyblish.api.ContextPlugin):
     families = ["render", "image", "online", "plate", "kitsu"]
 
     # status settings
+    settings_category = "kitsu"
     set_status_note = False
     note_status_shortname = "wfa"
     status_change_conditions = {
@@ -69,9 +70,7 @@ class IntegrateKitsuNote(pyblish.api.ContextPlugin):
 
             # Check if any status condition is not met
             allow_status_change = True
-            for status_cond in self.status_change_conditions[
-                "status_conditions"
-            ]:
+            for status_cond in self.status_change_conditions["status_conditions"]:
                 condition = status_cond["condition"] == "equal"
                 match = status_cond["short_name"].upper() == shortname
                 if match and not condition or condition and not match:
@@ -126,9 +125,7 @@ class IntegrateKitsuNote(pyblish.api.ContextPlugin):
                 self.log.debug("Comment is `{}`".format(publish_comment))
 
             # Add comment to kitsu task
-            self.log.debug(
-                "Add new note in tasks id {}".format(kitsu_task["id"])
-            )
+            self.log.debug("Add new note in tasks id {}".format(kitsu_task["id"]))
             kitsu_comment = gazu.task.add_comment(
                 kitsu_task, note_status, comment=publish_comment
             )
