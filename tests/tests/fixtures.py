@@ -16,6 +16,8 @@ PROJECT_ID = "kitsu-project-id-1"
 PROJECT_CODE = "TK"
 PAIR_PROJECT_NAME = "another_test_kitsu_project"
 PAIR_PROJECT_CODE = "ATK"
+USER1_NAME = "test_kitsu.user_1"
+USER2_NAME = "test_kitsu.user_2"
 
 PROJECT_META = {
     "code": PROJECT_CODE,
@@ -101,6 +103,46 @@ def init_data(api, kitsu_url):
     print("init_data...")
     pprint(res.data)
     assert res.status_code == 200
+
+
+@pytest.fixture(scope="module")
+def studio_settings(api, kitsu_url):
+    """update kitsu addon settings"""
+    # lets get the settings for the addon
+    res = api.get(f"{kitsu_url}/settings")
+    assert res.status_code == 200
+    settings = res.data
+
+    # get original values
+    users_enabled = settings["sync_settings"]["sync_users"]["enabled"]
+
+    # set settings for tests
+    if not users_enabled:
+        settings["sync_settings"]["sync_users"]["enabled"] = True
+        res = api.post(f"{kitsu_url}/settings", **settings)
+
+    yield
+
+    # set settings back to orginal values
+    if not users_enabled:
+        settings["sync_settings"]["sync_users"]["enabled"] = users_enabled
+        res = api.post(f"{kitsu_url}/settings", **settings)
+
+
+@pytest.fixture(scope="module")
+def users(api, kitsu_url):
+    """create ayon users"""
+    api.delete(f"/users/{USER1_NAME}")
+    api.delete(f"/users/{USER2_NAME}")
+    api.put(f"/users/{USER1_NAME}")
+    api.put(f"/users/{USER2_NAME}")
+    print(f"created user: {USER1_NAME}")
+    print(f"created user: {USER2_NAME}")
+
+    yield
+
+    api.delete(f"/users/{USER1_NAME}")
+    api.delete(f"/users/{USER2_NAME}")
 
 
 @pytest.fixture(scope="module")
