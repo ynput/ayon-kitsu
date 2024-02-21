@@ -60,16 +60,22 @@ def create_name_and_label(kitsu_name: str) -> dict[str, str]:
 
 async def get_user_by_kitsu_id(
     kitsu_id: str,
+    existing_users: dict[str, str] | None = None,
 ) -> UserEntity | None:
     """Get an Ayon UserEndtity by its Kitsu ID"""
-    res = await Postgres.fetch(
-        "SELECT name FROM public.users WHERE data->>'kitsuId' = $1",
-        kitsu_id,
-    )
-    if not res:
-        return None
-    user = await UserEntity.load(res[0]["name"])
-    return user
+
+    if existing_users and (kitsu_id in existing_users):
+        user_name = existing_users[kitsu_id]
+    else:
+        res = await Postgres.fetch(
+            "SELECT name FROM public.users WHERE data->>'kitsuId' = $1",
+            kitsu_id,
+        )
+        if not res:
+            return None
+        user_name = res[0]["name"]
+
+    return await UserEntity.load(user_name)
 
 
 async def get_folder_by_kitsu_id(

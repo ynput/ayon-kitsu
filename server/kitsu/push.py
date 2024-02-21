@@ -221,6 +221,7 @@ async def generate_user_settings(
 async def sync_person(
     addon: "KitsuAddon",
     user: "UserEntity",
+    existing_users: dict[str, Any],
     entity_dict: "EntityDict",
 ):
     logging.info("sync_person")
@@ -246,7 +247,7 @@ async def sync_person(
         ayon_user = await UserEntity.load(username)
     except Exception:
         pass
-    target_user = await get_user_by_kitsu_id(entity_dict["id"])
+    target_user = await get_user_by_kitsu_id(entity_dict["id"], existing_users)
 
     # User exists but doesn't have a kitsuId assigned it it
     if ayon_user and not target_user:
@@ -278,10 +279,12 @@ async def sync_person(
         except Exception as e:
             print(e)
     else:  # Create user
+        logging.info(f"user payload: {payload}")
         user = UserEntity(payload)
         settings = await addon.get_studio_settings()
         user.set_password(settings.sync_settings.sync_users.default_password)
         await user.save()
+        existing_users[entity_dict["id"]] = username
 
 
 async def update_project(
@@ -549,12 +552,15 @@ async def push_entities(
 
     folders = {}
     tasks = {}
+    users = {}
 
     settings = await addon.get_studio_settings()
     for entity_dict in payload.entities:
         # required fields
         assert "type" in entity_dict
         assert "id" in entity_dict
+
+        logging.info(f"push entity type: {entity_dict['type']}")
 
         if entity_dict["type"] not in get_args(KitsuEntityType):
             logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")
@@ -577,6 +583,7 @@ async def push_entities(
                 await sync_person(
                     addon,
                     user,
+                    users,
                     entity_dict,
                 )
         elif entity_dict["type"] != "Task":
@@ -602,7 +609,7 @@ async def push_entities(
     )
 
     # pass back the map of kitsu to ayon ids
-    return {"folders": folders, "tasks": tasks}
+    return {"folders": folders, "tasks": tasks, "users": users}
 
 
 async def remove_entities(
