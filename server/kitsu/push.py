@@ -284,7 +284,9 @@ async def sync_person(
         logging.info(f"creating user: {username}")
         user = UserEntity(payload)
         settings = await addon.get_studio_settings()
-        user.set_password(settings.sync_settings.sync_users.default_password)
+        password = settings.sync_settings.sync_users.default_password.trim()
+        if password:
+            user.set_password(password)
         await user.save()
 
     # update the id map
