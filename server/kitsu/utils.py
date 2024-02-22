@@ -16,17 +16,18 @@ from ayon_server.lib.postgres import Postgres
 def calculate_end_frame(
     entity_dict: dict[str, int], folder: FolderEntity
 ) -> int | None:
+    # return end-frame if set
+    if "data" in entity_dict and entity_dict["data"].get("frame_out"):
+        return entity_dict["data"].get("frame_out")
+
     # Calculate the end-frame
     if entity_dict.get("nb_frames") and not entity_dict["data"].get("frame_out"):
         frame_start = entity_dict["data"].get("frame_in")
         # If kitsu doesn't have a frame in, get it from the folder in Ayon
-        if frame_start is None:
-            for key, value in folder.attrib:
-                if key == "frameStart":
-                    frame_start = value
-                    break
+        if frame_start is None and hasattr(folder.attrib, "frameStart"):
+            frame_start = folder.attrib.frameStart
         if frame_start is not None:
-            return frame_start + entity_dict["nb_frames"]
+            return int(frame_start) + int(entity_dict["nb_frames"])
 
 
 def remove_accents(input_str: str) -> str:

@@ -326,6 +326,7 @@ async def sync_folder(
         data = {}
     if entity_dict.get("description"):
         data["description"] = entity_dict["description"]
+
     if target_folder is None:
         parent_folder = None
         if entity_dict["type"] == "Asset":
@@ -381,8 +382,11 @@ async def sync_folder(
         logging.info(f"Creating {entity_dict['type']} {entity_dict['name']}")
         if not parent_folder:
             parent_folder = await FolderEntity.load(project.name, parent_id)
+
         # Calculate the end-frame
-        data["frame_out"] = calculate_end_frame(entity_dict, parent_folder)
+        frame_out = calculate_end_frame(entity_dict, parent_folder)
+        if frame_out:
+            data["frame_out"] = frame_out
 
         target_folder = await create_folder(
             project_name=project.name,
@@ -396,7 +400,9 @@ async def sync_folder(
 
     else:
         # Calculate the end-frame
-        data["frame_out"] = calculate_end_frame(entity_dict, target_folder)
+        frame_out = calculate_end_frame(entity_dict, target_folder)
+        if frame_out:
+            data["frame_out"] = frame_out
 
         changed = await update_folder(
             project_name=project.name,
