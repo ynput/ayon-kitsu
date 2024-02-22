@@ -60,7 +60,7 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
     # If the user runs an older version if Kitsu, gazu.concept will throw an error.
     try:
         concepts = gazu.concept.all_concepts_for_project(kitsu_project_id)
-    except Exception as e:
+    except Exception:
         concepts = []
 
     entities = persons + assets + episodes + seqs + shots + edits + concepts + tasks

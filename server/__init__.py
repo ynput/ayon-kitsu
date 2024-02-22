@@ -2,7 +2,6 @@ from typing import Type
 
 from nxtools import logging
 
-# from fastapi import BackgroundTasks
 from ayon_server.addons import BaseServerAddon
 from ayon_server.api.dependencies import CurrentUser
 from ayon_server.api.responses import EmptyResponse

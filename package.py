@@ -1,2 +1,3 @@
 name = "kitsu"
-version = "1.0.3"
+title = "Kitsu"
+version = "1.1.0"
