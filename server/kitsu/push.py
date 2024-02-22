@@ -7,8 +7,10 @@ from nxtools import logging
 
 from ayon_server.auth.session import Session
 from ayon_server.entities import FolderEntity, ProjectEntity, UserEntity
+from ayon_server.helpers.deploy_project import anatomy_to_project_data
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Field, OPModel
+
 
 from .anatomy import get_kitsu_project_anatomy, parse_attrib
 from .constants import (
@@ -21,6 +23,7 @@ from .utils import (
     create_user,
     delete_folder,
     delete_task,
+    delete_user,
     get_folder_by_kitsu_id,
     get_task_by_kitsu_id,
     get_user_by_kitsu_id,
@@ -28,6 +31,7 @@ from .utils import (
     update_folder,
     update_task,
     update_user,
+    update_project,
 )
 
 if TYPE_CHECKING:
@@ -52,6 +56,7 @@ KitsuEntityType = Literal[
 class PushEntitiesRequestModel(OPModel):
     project_name: str
     entities: list[EntityDict] = Field(..., title="List of entities to sync")
+    mock: bool = False
 
 
 class RemoveEntitiesRequestModel(OPModel):
@@ -266,27 +271,33 @@ async def sync_person(
     existing_users[entity_dict["id"]] = username
 
 
-async def update_project(
+async def sync_project(
     addon: "KitsuAddon",
     user: "UserEntity",
     project: "ProjectEntity",
     entity_dict: "EntityDict",
+    mock: bool = False,
 ):
-    logging.info("update_project")
-    await addon.ensure_kitsu()
+    await addon.ensure_kitsu(mock)
     anatomy = await get_kitsu_project_anatomy(addon, entity_dict["id"])
-    payload = {
-        "attrib": json.loads(anatomy.attributes.json()),
-    }
-    session = await Session.create(user)
-    headers = {"Authorization": f"Bearer {session.token}"}
-    # Check if group already exists
-    async with httpx.AsyncClient() as client:
-        await client.patch(
-            f"{entity_dict['ayon_server_url']}/api/projects/{project.name}",
-            json=payload,
-            headers=headers,
-        )
+    anatomy_data = anatomy_to_project_data(anatomy)
+
+    logging.info(f"anatomy_data: {anatomy_data}")
+
+    await update_project(project.name, **anatomy_data)
+
+    # payload = {
+    #     "attrib": json.loads(anatomy.attributes.json()),
+    # }
+    # session = await Session.create(user)
+    # headers = {"Authorization": f"Bearer {session.token}"}
+    # # Check if group already exists
+    # async with httpx.AsyncClient() as client:
+    #     await client.patch(
+    #         f"{entity_dict['ayon_server_url']}/api/projects/{project.name}",
+    #         json=payload,
+    #         headers=headers,
+    #     )
 
 
 async def delete_project(
@@ -542,20 +553,19 @@ async def push_entities(
     settings = await addon.get_studio_settings()
     for entity_dict in payload.entities:
         # required fields
-        assert "type" in entity_dict
-        assert "id" in entity_dict
+        if "type" not in entity_dict:
+            logging.error(f"No kitsu entity type found for entity: {entity_dict}")
+            continue
+        if "id" not in entity_dict:
+            logging.error(f"No kitsu id found for entity: {entity_dict}")
+            continue
 
         if entity_dict["type"] not in get_args(KitsuEntityType):
             logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")
             continue
 
         if entity_dict["type"] == "Project":
-            await update_project(
-                addon,
-                user,
-                project,
-                entity_dict,
-            )
+            await sync_project(addon, user, project, entity_dict, payload.mock)
         elif entity_dict["type"] == "Person":
             if settings.sync_settings.sync_users.enabled:
                 await create_access_group(
@@ -627,7 +637,7 @@ async def remove_entities(
             if not target_user:
                 continue
 
-            await target_user.delete()
+            await delete_user(target_user.name, user=user)
 
         elif entity_dict["type"] == "Task":
             task = await get_task_by_kitsu_id(

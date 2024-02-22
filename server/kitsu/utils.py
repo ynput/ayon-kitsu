@@ -8,6 +8,7 @@ from ayon_server.entities import (
     FolderEntity,
     TaskEntity,
     UserEntity,
+    ProjectEntity,
 )
 from ayon_server.events import dispatch_event
 from ayon_server.lib.postgres import Postgres
@@ -351,3 +352,52 @@ async def create_user(
     }
     await dispatch_event(**event)
     return user
+
+
+async def delete_user(
+    name: str,
+    user: "UserEntity",
+) -> None:
+    _user = await UserEntity.load(name)
+
+    # do we need this?
+    await user.ensure_delete_access(_user)
+
+    await _user.delete()
+    event = {
+        "topic": "entity.user.deleted",
+        "description": f"User {_user.name} deleted",
+        "summary": {"userName": _user.name},
+    }
+    await dispatch_event(**event)
+
+
+async def update_project(
+    name: str,
+    **kwargs,
+):
+    project = await ProjectEntity.load(name)
+    changed = False
+
+    for key, value in kwargs.items():
+        if key == "attrib":
+            for k, v in value.items():
+                if getattr(project.attrib, k) != v:
+                    setattr(project.attrib, k, v)
+                    if k not in project.own_attrib:
+                        project.own_attrib.append(k)
+                    changed = True
+
+        elif getattr(project, key) != value:
+            setattr(project, key, value)
+            changed = True
+
+    if changed:
+        await project.save()
+        event = {
+            "topic": "entity.project.updated",
+            "description": f"Project {project.name} updated",
+            "summary": {"ProjectName": project.name},
+        }
+        await dispatch_event(**event)
+    return changed

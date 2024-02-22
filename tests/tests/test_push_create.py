@@ -277,7 +277,7 @@ def test_push_tasks(api, kitsu_url, monkeypatch):
     assert task_1["taskType"] == "Animation"
     assert task_1["name"] == "animation"
     assert task_1["active"] is True
-    assert task_1["assignees"] == []
+    assert task_1["assignees"] == ["testkitsu.user1", "testkitsu.user3"]
     assert task_1["label"] == "animation"
     assert task_1["data"] == {"kitsuId": "task-id-1"}
     assert task_1["status"] == "Todo"
