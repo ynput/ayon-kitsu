@@ -18,6 +18,7 @@ from .utils import (
     calculate_end_frame,
     create_folder,
     create_task,
+    create_user,
     delete_folder,
     delete_task,
     get_folder_by_kitsu_id,
@@ -26,6 +27,7 @@ from .utils import (
     remove_accents,
     update_folder,
     update_task,
+    update_user,
 )
 
 if TYPE_CHECKING:
@@ -231,7 +233,6 @@ async def sync_person(
     )
 
     payload = {
-        "name": username,
         "attrib": {
             "fullName": entity_dict["full_name"],
             "email": entity_dict["email"],
@@ -251,43 +252,16 @@ async def sync_person(
 
     # User exists but doesn't have a kitsuId assigned it it
     if ayon_user and not target_user:
-        logging.info(f"updating ayon user with kitsu_id: {username}")
         target_user = ayon_user
 
     if target_user:  # Update user
-        try:
-            session = await Session.create(user)
-            headers = {"Authorization": f"Bearer {session.token}"}
-            logging.info(f"updating user: {username}")
+        await update_user(target_user, username, **payload)
 
-            async with httpx.AsyncClient() as client:
-                await client.patch(
-                    f"{entity_dict['ayon_server_url']}/api/users/{target_user.name}",
-                    json=payload,
-                    headers=headers,
-                )
-            # Rename the user
-            payload = {
-                "newName": remove_accents(
-                    f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower().strip()
-                )
-            }
-            async with httpx.AsyncClient() as client:
-                await client.patch(
-                    f"{entity_dict['ayon_server_url']}/api/users/{target_user.name}/rename",
-                    json=payload,
-                    headers=headers,
-                )
-        except Exception as e:
-            print(e)
     else:  # Create user
         logging.info(f"creating user: {username}")
-        user = UserEntity(payload)
         settings = await addon.get_studio_settings()
-        password = settings.sync_settings.sync_users.default_password.trim()
-        if password:
-            user.set_password(password)
-        await user.save()
+        password = settings.sync_settings.sync_users.default_password.strip()
+        await create_user(username, password, **payload)
 
     # update the id map
     existing_users[entity_dict["id"]] = username
@@ -565,8 +539,6 @@ async def push_entities(
         # required fields
         assert "type" in entity_dict
         assert "id" in entity_dict
-
-        logging.info(f"push entity type: {entity_dict['type']}")
 
         if entity_dict["type"] not in get_args(KitsuEntityType):
             logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")

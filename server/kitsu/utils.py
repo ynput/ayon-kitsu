@@ -291,3 +291,58 @@ async def delete_task(
         "project": project_name,
     }
     await dispatch_event(**event)
+
+
+async def update_user(
+    user: Any,
+    name: str,
+    **kwargs,
+) -> bool:
+    changed = False
+    payload = kwargs
+
+    # update name
+    if user.name != name:
+        user.name = name
+        changed = True
+
+    # keys that can be updated
+    for key in ["data"]:
+        if key in payload and getattr(user, key) != payload[key]:
+            setattr(user, key, payload[key])
+            changed = True
+    if "attrib" in payload:
+        for key, value in payload["attrib"].items():
+            if getattr(user.attrib, key) != value:
+                setattr(user.attrib, key, value)
+                if key not in user.own_attrib:
+                    user.own_attrib.append(key)
+                changed = True
+    if changed:
+        await user.save()
+        event = {
+            "topic": "entity.user.updated",
+            "description": f"User {user.name} updated",
+            "summary": {"userName": user.name},
+        }
+        await dispatch_event(**event)
+    return changed
+
+
+async def create_user(
+    name: str,
+    password: str | None,
+    **kwargs,
+):
+    user = UserEntity({"name": name, **kwargs})
+
+    if password:
+        user.set_password(password)
+    await user.save()
+    event = {
+        "topic": "entity.user.created",
+        "description": f"User {user.name} created",
+        "summary": {"userName": user.name},
+    }
+    await dispatch_event(**event)
+    return user
