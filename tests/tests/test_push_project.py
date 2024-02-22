@@ -18,8 +18,8 @@ from .fixtures import (
     api,
     kitsu_url,
     users,
-    users_enabled,
-    users_disabled,
+    delete_projects_enabled,
+    delete_projects_disabled,
 )
 
 
@@ -35,6 +35,7 @@ def test_update_project(api, kitsu_url):
         "folderTypes": [{"name": "Folder"}],
         "taskTypes": [{"name": "Animation"}],
         "statuses": [{"name": "Todo"}],
+        "data": {"kitsuProjectId": "kitsu-project-id-1"},
     }
 
     # create the 2nd test project
@@ -85,3 +86,67 @@ def test_update_project(api, kitsu_url):
         {"icon": "layers", "name": "Compositing", "shortName": "comp"},
         {"icon": "task_alt", "name": "Grading", "shortName": "Grad"},
     ]
+
+
+def test_push_unsynced_project(api, kitsu_url):
+    entity = mock_data.projects[1]
+
+    project_meta = {
+        "code": "ATK",
+        "folderTypes": [
+            {"name": "Folder"},
+            {"name": "Library"},
+            {"name": "Asset"},
+            {"name": "Episode"},
+            {"name": "Sequence"},
+            {"name": "Shot"},
+        ],
+        "taskTypes": [{"name": "Animation"}],
+        "statuses": [{"name": "Todo"}],
+    }
+
+    # create the 2nd test project
+    api.put(f"/projects/{entity['name']}", **project_meta)
+
+    project = api.get_project(entity["name"])
+    assert project
+
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=entity["name"],
+        entities=[entity],
+        mock=True,
+    )
+    assert res.status_code == 200
+
+    # no project changes as project is not synced
+    target_project = api.get_project(entity["name"])
+    assert project == target_project
+
+
+def test_delete_project_disabled(api, kitsu_url, delete_projects_disabled):
+    """testing attempting to remove a project
+    when delete_projects is False in the kitsu settings"""
+    entity = mock_data.projects[0]
+
+    res = api.post(
+        f"{kitsu_url}/remove", project_name=entity["name"], entities=[entity]
+    )
+    assert res.status_code == 200
+
+    # project should still exist
+    assert api.get_project(entity["name"])
+
+
+def test_delete_project_enabled(api, kitsu_url, delete_projects_enabled):
+    """testing attempting to remove a project
+    when delete_projects is True in the kitsu settings"""
+    entity = mock_data.projects[0]
+
+    res = api.post(
+        f"{kitsu_url}/remove", project_name=entity["name"], entities=[entity]
+    )
+    assert res.status_code == 200
+
+    # project should be deleted
+    assert not api.get_project(entity["name"])

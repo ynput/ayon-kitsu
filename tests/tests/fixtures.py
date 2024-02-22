@@ -190,16 +190,89 @@ def users_disabled(api, kitsu_url):
     settings = res.data
 
     # get original values
-    users_enabled = settings["sync_settings"]["sync_users"]["enabled"]
+    users_enabled = settings["sync_settings"]["delete_projects"]
 
     # set settings for tests
-    if not users_enabled:
-        settings["sync_settings"]["sync_users"]["enabled"] = False
+    if users_enabled:
+        settings["sync_settings"]["delete_projects"] = False
         res = api.post(f"{kitsu_url}/settings", **settings)
 
     yield
 
     # set settings back to orginal values
-    if not users_enabled:
-        settings["sync_settings"]["sync_users"]["enabled"] = users_enabled
+    if users_enabled:
+        settings["sync_settings"]["delete_projects"] = users_enabled
+        res = api.post(f"{kitsu_url}/settings", **settings)
+
+
+@pytest.fixture()
+def delete_projects_enabled(api, kitsu_url):
+    """update kitsu addon settings.sync_settings.delete_projects"""
+    # lets get the settings for the addon
+    res = api.get(f"{kitsu_url}/settings")
+    assert res.status_code == 200
+    settings = res.data
+
+    # get original values
+    delete_ayon_projects = settings["sync_settings"]["delete_projects"]
+
+    # set settings for tests
+    if not delete_ayon_projects:
+        settings["sync_settings"]["delete_projects"] = True
+        res = api.post(f"{kitsu_url}/settings", **settings)
+
+    yield
+
+    # set settings back to orginal values
+    if not delete_ayon_projects:
+        settings["sync_settings"]["delete_projects"] = False
+        res = api.post(f"{kitsu_url}/settings", **settings)
+
+
+@pytest.fixture()
+def delete_projects_disabled(api, kitsu_url):
+    """update kitsu addon settings.sync_settings.delete_projects"""
+    # lets get the settings for the addon
+    res = api.get(f"{kitsu_url}/settings")
+    assert res.status_code == 200
+    settings = res.data
+
+    # get original values
+    delete_ayon_projects = settings["sync_settings"]["delete_projects"]
+
+    # set settings for tests
+    if delete_ayon_projects:
+        settings["sync_settings"]["delete_projects"] = False
+        res = api.post(f"{kitsu_url}/settings", **settings)
+
+    yield
+
+    # set settings back to orginal values
+    if delete_ayon_projects:
+        settings["sync_settings"]["delete_projects"] = True
+        res = api.post(f"{kitsu_url}/settings", **settings)
+
+
+@pytest.fixture()
+def access_group(api, kitsu_url):
+    """update kitsu addon settings.sync_settings.sync_users.access_group"""
+
+    # lets get the settings for the addon
+    res = api.get(f"{kitsu_url}/settings")
+    assert res.status_code == 200
+    settings = res.data
+
+    # get original values
+    access_group = settings["sync_settings"]["sync_users"]["access_group"]
+
+    # set settings for tests
+    if access_group != "test_kitsu_group":
+        settings["sync_settings"]["sync_users"]["access_group"] = "test_kitsu_group"
+        res = api.post(f"{kitsu_url}/settings", **settings)
+
+    yield
+
+    # set settings back to orginal values
+    if access_group != "test_kitsu_group":
+        settings["sync_settings"]["sync_users"]["access_group"] = access_group
         res = api.post(f"{kitsu_url}/settings", **settings)

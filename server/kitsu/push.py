@@ -6,11 +6,16 @@ import httpx
 from nxtools import logging
 
 from ayon_server.auth.session import Session
-from ayon_server.entities import FolderEntity, ProjectEntity, UserEntity
+from ayon_server.entities import (
+    FolderEntity,
+    ProjectEntity,
+    UserEntity,
+)
 from ayon_server.helpers.deploy_project import anatomy_to_project_data
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Field, OPModel
-
+from ayon_server.access.access_groups import AccessGroups
+from ayon_server.access.permissions import Permissions
 
 from .anatomy import get_kitsu_project_anatomy, parse_attrib
 from .constants import (
@@ -24,9 +29,11 @@ from .utils import (
     delete_folder,
     delete_task,
     delete_user,
+    delete_project,
     get_folder_by_kitsu_id,
     get_task_by_kitsu_id,
     get_user_by_kitsu_id,
+    get_project_by_kitsu_id,
     remove_accents,
     update_folder,
     update_task,
@@ -128,22 +135,19 @@ async def create_access_group(
         if not name:
             settings = await addon.get_studio_settings()
             name = settings.sync_settings.sync_users.access_group
-        session = await Session.create(user)
-        headers = {"Authorization": f"Bearer {session.token}"}
-        # Check if group already exists
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{entity_dict['ayon_server_url']}/api/accessGroups/_",
-                headers=headers,
-            )
 
-        for group in response.json():
-            if group["name"] == name:
-                # access group already exists
+        scope = "_"
+
+        # get access group by name
+        for ag_key, _perms in AccessGroups.access_groups.items():
+            access_group_name, pname = ag_key
+
+            # if it already exists go no further
+            if pname == scope and access_group_name == name:
                 return
 
         # Create a new access group
-        payload = json.dumps(
+        permissions = Permissions.from_record(
             {
                 "create": {"enabled": False, "access_list": []},
                 "read": {"enabled": False, "access_list": []},
@@ -156,12 +160,8 @@ async def create_access_group(
             }
         )
 
-        async with httpx.AsyncClient() as client:
-            return await client.put(
-                f"{entity_dict['ayon_server_url']}/api/accessGroups/{name}/_",
-                content=payload,
-                headers=headers,
-            )
+        AccessGroups.add_access_group(name, scope, permissions)
+
     except Exception as e:
         print(e)
 
@@ -274,47 +274,21 @@ async def sync_person(
 async def sync_project(
     addon: "KitsuAddon",
     user: "UserEntity",
-    project: "ProjectEntity",
     entity_dict: "EntityDict",
     mock: bool = False,
 ):
+    logging.info(f"sync_project {entity_dict['id']}")
+
+    project = await get_project_by_kitsu_id(entity_dict["id"])
+    logging.info(f"project {project}")
+    if not project:
+        return
+
     await addon.ensure_kitsu(mock)
     anatomy = await get_kitsu_project_anatomy(addon, entity_dict["id"])
     anatomy_data = anatomy_to_project_data(anatomy)
 
-    logging.info(f"anatomy_data: {anatomy_data}")
-
     await update_project(project.name, **anatomy_data)
-
-    # payload = {
-    #     "attrib": json.loads(anatomy.attributes.json()),
-    # }
-    # session = await Session.create(user)
-    # headers = {"Authorization": f"Bearer {session.token}"}
-    # # Check if group already exists
-    # async with httpx.AsyncClient() as client:
-    #     await client.patch(
-    #         f"{entity_dict['ayon_server_url']}/api/projects/{project.name}",
-    #         json=payload,
-    #         headers=headers,
-    #     )
-
-
-async def delete_project(
-    addon: "KitsuAddon",
-    user: "UserEntity",
-    project: "ProjectEntity",
-    entity_dict: "EntityDict",
-):
-    logging.info("delete_project")
-    session = await Session.create(user)
-    headers = {"Authorization": f"Bearer {session.token}"}
-    # Check if group already exists
-    async with httpx.AsyncClient() as client:
-        await client.delete(
-            f"{entity_dict['ayon_server_url']}/api/projects/{project.name}",
-            headers=headers,
-        )
 
 
 async def sync_folder(
@@ -565,7 +539,7 @@ async def push_entities(
             continue
 
         if entity_dict["type"] == "Project":
-            await sync_project(addon, user, project, entity_dict, payload.mock)
+            await sync_project(addon, user, entity_dict, payload.mock)
         elif entity_dict["type"] == "Person":
             if settings.sync_settings.sync_users.enabled:
                 await create_access_group(
@@ -625,13 +599,12 @@ async def remove_entities(
             continue
 
         if entity_dict["type"] == "Project":
-            if settings.delete_ayon_projects.enabled:
-                await update_project(
-                    addon,
-                    user,
-                    project,
-                    entity_dict,
-                )
+            if settings.sync_settings.delete_projects:
+                target_project = await get_project_by_kitsu_id(entity_dict["id"])
+                if not target_project:
+                    continue
+                await delete_project(project_name=target_project.name, user=user)
+
         elif entity_dict["type"] == "Person":
             target_user = await get_user_by_kitsu_id(entity_dict["id"])
             if not target_user:

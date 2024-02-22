@@ -12,6 +12,7 @@ from ayon_server.entities import (
 )
 from ayon_server.events import dispatch_event
 from ayon_server.lib.postgres import Postgres
+from ayon_server.exceptions import ForbiddenException
 
 
 def calculate_end_frame(
@@ -61,6 +62,20 @@ def create_name_and_label(kitsu_name: str) -> dict[str, str]:
     """From a name coming from kitsu, create a name and label"""
     name_slug = slugify(kitsu_name, separator="_")
     return {"name": name_slug, "label": kitsu_name}
+
+
+async def get_project_by_kitsu_id(
+    kitsu_id: str,
+) -> ProjectEntity | None:
+    """Get an Ayon ProjectEntity by its Kitsu ID"""
+
+    res = await Postgres.fetch(
+        "SELECT name FROM projects WHERE data->>'kitsuProjectId' = $1",
+        kitsu_id,
+    )
+    if not res:
+        return None
+    return await ProjectEntity.load(res[0]["name"])
 
 
 async def get_user_by_kitsu_id(
@@ -305,7 +320,7 @@ async def update_user(
 
     # update name
     if user.name != name:
-        await Postgres.fetch(
+        await Postgres.execute(
             "UPDATE users SET name = $1 WHERE name = $2",
             name,
             user.name,
@@ -401,3 +416,16 @@ async def update_project(
         }
         await dispatch_event(**event)
     return changed
+
+
+async def delete_project(project_name: str, user: "UserEntity"):
+    project = await ProjectEntity.load(project_name)
+    if not user.is_manager:
+        raise ForbiddenException("You need to be a manager in order to delete projects")
+    await project.delete()
+    event = {
+        "topic": "entity.project.deleted",
+        "description": f"Project {project_name} deleted",
+        "summary": {"projectName": project_name},
+    }
+    await dispatch_event(**event)

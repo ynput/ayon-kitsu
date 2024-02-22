@@ -20,10 +20,11 @@ from .fixtures import (
     users,
     users_enabled,
     users_disabled,
+    access_group,
 )
 
 
-def test_push_persons(api, kitsu_url, users, users_enabled):
+def test_push_persons(api, kitsu_url, users, users_enabled, access_group):
     """entities of kitsu type: Person
 
     testkitsu.user1 & testkitsu.user2 already created by the users fixture but have no kitsu_id
@@ -48,18 +49,18 @@ def test_push_persons(api, kitsu_url, users, users_enabled):
     # kitsu id should be added to newly CREATED user
     user = api.get_user("testkitsu.user3")
     assert user["data"]["kitsuId"] == "person-id-3"
-    assert user["data"]["defaultAccessGroups"] == ["kitsu_group"]
+    assert user["data"]["defaultAccessGroups"] == ["test_kitsu_group"]
 
     # kitsu id should be added to EXISTING users
     user = api.get_user("testkitsu.user1")
     assert user["data"]["kitsuId"] == "person-id-1"
-    assert user["data"]["defaultAccessGroups"] == ["kitsu_group"]
+    assert user["data"]["defaultAccessGroups"] == ["test_kitsu_group"]
     user = api.get_user("testkitsu.user2")
     assert user["data"]["kitsuId"] == "person-id-2"
-    assert user["data"]["defaultAccessGroups"] == ["kitsu_group"]
+    assert user["data"]["defaultAccessGroups"] == ["test_kitsu_group"]
 
 
-def test_push_persons_disabled(api, kitsu_url, users, users_disabled):
+def test_push_persons_disabled(api, kitsu_url, users, users_disabled, access_group):
     """same as test_push_persons but with
     kitsu addon settings.sync_settings.sync_users.enabled = False
 
@@ -77,7 +78,7 @@ def test_push_persons_disabled(api, kitsu_url, users, users_disabled):
     assert res.data["users"] == {}
 
 
-def test_user_name_change(api, kitsu_url, users_enabled):
+def test_user_name_change(api, kitsu_url, users_enabled, access_group):
     entities = mock_data.all_persons
     res = api.post(
         f"{kitsu_url}/push",
@@ -104,7 +105,7 @@ def test_user_name_change(api, kitsu_url, users_enabled):
 
     user = api.get_user("testkitsu.newusername")
     assert user["data"]["kitsuId"] == "person-id-1"
-    assert user["data"]["defaultAccessGroups"] == ["kitsu_group"]
+    assert user["data"]["defaultAccessGroups"] == ["test_kitsu_group"]
 
     # check the old user does not exist
     with pytest.raises(Exception):
@@ -114,7 +115,7 @@ def test_user_name_change(api, kitsu_url, users_enabled):
     api.delete("/users/testkitsu.newusername")
 
 
-def test_asignees(api, kitsu_url, users_enabled):
+def test_asignees(api, kitsu_url, users_enabled, access_group):
     """check that assignees are correctly"""
     entities = (
         mock_data.all_persons
