@@ -46,6 +46,19 @@ def test_push_persons(api, kitsu_url, users, users_enabled):
         "person-id-3": "testkitsu.user3",
     }
 
+    # kitsu id should be added to newly CREATED user
+    user = api.get_user("testkitsu.user3")
+    assert user["data"]["kitsuId"] == "person-id-3"
+    assert user["data"]["defaultAccessGroups"] == ["kitsu_group"]
+
+    # kitsu id should be added to EXISTING users
+    user = api.get_user("testkitsu.user1")
+    assert user["data"]["kitsuId"] == "person-id-1"
+    assert user["data"]["defaultAccessGroups"] == ["kitsu_group"]
+    user = api.get_user("testkitsu.user2")
+    assert user["data"]["kitsuId"] == "person-id-2"
+    assert user["data"]["defaultAccessGroups"] == ["kitsu_group"]
+
 
 def test_push_persons_disabled(api, kitsu_url, users, users_disabled):
     """same as test_push_persons but with
@@ -86,4 +99,6 @@ def test_asignees(api, kitsu_url, users_enabled):
 
     res = api.get(f"/projects/{PROJECT_NAME}/tasks/{tasks['task-id-1']}")
     pprint(res.data)
-    assert False
+
+    # ayon user names are added as assignees in processor/utils.py
+    assert res.data["assignees"] == ["testkitsu.user1", "testkitsu.user3"]

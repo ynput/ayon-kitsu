@@ -337,8 +337,9 @@ all_tasks_for_project = [
         "data": None,
         "shotgun_id": None,
         "assignees": [
-            "person-id-1",
-            "person-id-3",
+            # assignees are given the ayon user name in processor/utils
+            "testkitsu.user1",
+            "testkitsu.user3",
         ],
         "project_id": "project-id-1",
         "task_type_id": "task-type-id-1",
