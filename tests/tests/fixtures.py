@@ -125,6 +125,9 @@ def users(api, kitsu_url):
     api.delete(f"/users/{USER2_NAME}")
     api.delete(f"/users/{USER3_NAME}")
 
+    # ensure renamed user is deleted
+    api.delete("/users/testkitsu.newusername")
+
 
 @pytest.fixture(scope="module")
 def gazu():

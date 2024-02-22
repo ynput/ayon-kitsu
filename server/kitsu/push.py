@@ -258,7 +258,6 @@ async def sync_person(
         await update_user(target_user, username, **payload)
 
     else:  # Create user
-        logging.info(f"creating user: {username}")
         settings = await addon.get_studio_settings()
         password = settings.sync_settings.sync_users.default_password.strip()
         await create_user(username, password, **payload)

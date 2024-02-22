@@ -6,8 +6,7 @@
 
 from pprint import pprint
 
-import gazu
-from processor import fullsync
+import pytest
 
 from . import mock_data
 from .fixtures import (
@@ -76,6 +75,43 @@ def test_push_persons_disabled(api, kitsu_url, users, users_disabled):
     assert "users" in res.data
     # no users created or updated
     assert res.data["users"] == {}
+
+
+def test_user_name_change(api, kitsu_url, users_enabled):
+    entities = mock_data.all_persons
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=PROJECT_NAME,
+        entities=entities,
+    )
+    assert res.status_code == 200
+
+    user = mock_data.all_persons[0]
+
+    # ensure user is deleted
+    api.delete("/users/testkitsu.newusername")
+
+    # change the name
+    user["last_name"] = "New Username"
+
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=PROJECT_NAME,
+        entities=[user],
+    )
+    assert res.status_code == 200
+    assert res.data["users"] == {"person-id-1": "testkitsu.newusername"}
+
+    user = api.get_user("testkitsu.newusername")
+    assert user["data"]["kitsuId"] == "person-id-1"
+    assert user["data"]["defaultAccessGroups"] == ["kitsu_group"]
+
+    # check the old user does not exist
+    with pytest.raises(Exception):
+        user = api.get_user("testkitsu.user1")
+
+    # ensure user is deleted
+    api.delete("/users/testkitsu.newusername")
 
 
 def test_asignees(api, kitsu_url, users_enabled):

@@ -303,7 +303,11 @@ async def update_user(
 
     # update name
     if user.name != name:
-        user.name = name
+        await Postgres.fetch(
+            "UPDATE users SET name = $1 WHERE name = $2",
+            name,
+            user.name,
+        )
         changed = True
 
     # keys that can be updated
