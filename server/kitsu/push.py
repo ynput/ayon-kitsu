@@ -251,12 +251,14 @@ async def sync_person(
 
     # User exists but doesn't have a kitsuId assigned it it
     if ayon_user and not target_user:
+        logging.info(f"updating ayon user with kitsu_id: {username}")
         target_user = ayon_user
 
     if target_user:  # Update user
         try:
             session = await Session.create(user)
             headers = {"Authorization": f"Bearer {session.token}"}
+            logging.info(f"updating user: {username}")
 
             async with httpx.AsyncClient() as client:
                 await client.patch(
@@ -279,12 +281,14 @@ async def sync_person(
         except Exception as e:
             print(e)
     else:  # Create user
-        logging.info(f"user payload: {payload}")
+        logging.info(f"creating user: {username}")
         user = UserEntity(payload)
         settings = await addon.get_studio_settings()
         user.set_password(settings.sync_settings.sync_users.default_password)
         await user.save()
-        existing_users[entity_dict["id"]] = username
+
+    # update the id map
+    existing_users[entity_dict["id"]] = username
 
 
 async def update_project(

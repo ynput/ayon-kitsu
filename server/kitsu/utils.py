@@ -1,5 +1,6 @@
 import unicodedata
 from typing import Any
+import re
 
 from nxtools import slugify
 
@@ -30,7 +31,9 @@ def calculate_end_frame(
 
 def remove_accents(input_str: str) -> str:
     nfkd_form = unicodedata.normalize("NFKD", input_str)
-    return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
+    result = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
+    # remove any unsupported characters
+    return re.sub(r"[^a-zA-Z0-9_\.\-]", "", result)
 
 
 def create_short_name(name: str) -> str:
