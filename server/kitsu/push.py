@@ -178,17 +178,16 @@ def match_ayon_roles_with_kitsu_role(role: str) -> dict[str, bool] | None:
                 "isAdmin": False,
                 "isManager": True,
             }
-        case "user":
+        case _:
             return {
                 "isAdmin": False,
                 "isManager": False,
             }
-        case _:
-            return
 
 
 async def generate_user_settings(
     addon: "KitsuAddon",
+    project: "ProjectEntity",
     entity_dict: "EntityDict",
 ):
     settings = await addon.get_studio_settings()
@@ -214,12 +213,17 @@ async def generate_user_settings(
             data = match_ayon_roles_with_kitsu_role(
                 settings.sync_settings.sync_users.roles.supervisor
             )
-        case "user":  # Artist
+        case _:  # Artist
             data = match_ayon_roles_with_kitsu_role(
                 settings.sync_settings.sync_users.roles.user
             )
-    return data | {
-        "data": {
+
+    return {
+        "data": data
+        | {
+            "accessGroups": {
+                project.name: [settings.sync_settings.sync_users.access_group]
+            },
             "defaultAccessGroups": [settings.sync_settings.sync_users.access_group],
         },
     }
@@ -228,6 +232,7 @@ async def generate_user_settings(
 async def sync_person(
     addon: "KitsuAddon",
     user: "UserEntity",
+    project: "ProjectEntity",
     existing_users: dict[str, Any],
     entity_dict: "EntityDict",
 ):
@@ -237,15 +242,16 @@ async def sync_person(
         f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower().strip()
     )
 
-    payload = {
+    payload = await generate_user_settings(
+        addon,
+        project,
+        entity_dict,
+    ) | {
         "attrib": {
             "fullName": entity_dict["full_name"],
             "email": entity_dict["email"],
-        },
-    } | await generate_user_settings(
-        addon,
-        entity_dict,
-    )
+        }
+    }
     payload["data"]["kitsuId"] = entity_dict["id"]
 
     ayon_user = None
@@ -551,6 +557,7 @@ async def push_entities(
                     await sync_person(
                         addon,
                         user,
+                        project,
                         users,
                         entity_dict,
                     )

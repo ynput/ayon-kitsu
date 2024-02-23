@@ -50,14 +50,26 @@ def test_push_persons(api, kitsu_url, users, users_enabled, access_group):
     user = api.get_user("testkitsu.user3")
     assert user["data"]["kitsuId"] == "person-id-3"
     assert user["data"]["defaultAccessGroups"] == ["test_kitsu_group"]
+    assert user["data"]["accessGroups"] == {"test_kitsu_project": ["test_kitsu_group"]}
+    assert user["data"]["isAdmin"] is False
+    assert user["data"]["isManager"] is False
 
     # kitsu id should be added to EXISTING users
     user = api.get_user("testkitsu.user1")
     assert user["data"]["kitsuId"] == "person-id-1"
     assert user["data"]["defaultAccessGroups"] == ["test_kitsu_group"]
+    assert user["data"]["accessGroups"] == {"test_kitsu_project": ["test_kitsu_group"]}
+    # role is admin (Studio Manager)
+    assert user["data"]["isAdmin"] is True
+    assert user["data"]["isManager"] is False
+
     user = api.get_user("testkitsu.user2")
     assert user["data"]["kitsuId"] == "person-id-2"
     assert user["data"]["defaultAccessGroups"] == ["test_kitsu_group"]
+    assert user["data"]["accessGroups"] == {"test_kitsu_project": ["test_kitsu_group"]}
+    # role is user (Artist)
+    assert user["data"]["isAdmin"] is False
+    assert user["data"]["isManager"] is True
 
 
 def test_push_persons_disabled(api, kitsu_url, users, users_disabled, access_group):
@@ -74,6 +86,7 @@ def test_push_persons_disabled(api, kitsu_url, users, users_disabled, access_gro
     )
     assert res.status_code == 200
     assert "users" in res.data
+
     # no users created or updated
     assert res.data["users"] == {}
 
