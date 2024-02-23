@@ -231,7 +231,7 @@ async def sync_person(
     existing_users: dict[str, Any],
     entity_dict: "EntityDict",
 ):
-    logging.info("sync_person")
+    logging.info(f"sync_person: {entity_dict['first_name']} {entity_dict['last_name']}")
 
     username = remove_accents(
         f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower().strip()
@@ -538,38 +538,41 @@ async def push_entities(
             logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")
             continue
 
-        if entity_dict["type"] == "Project":
-            await sync_project(addon, user, entity_dict, payload.mock)
-        elif entity_dict["type"] == "Person":
-            if settings.sync_settings.sync_users.enabled:
-                await create_access_group(
+        try:
+            if entity_dict["type"] == "Project":
+                await sync_project(addon, user, entity_dict, payload.mock)
+            elif entity_dict["type"] == "Person":
+                if settings.sync_settings.sync_users.enabled:
+                    await create_access_group(
+                        addon,
+                        user,
+                        entity_dict,
+                    )
+                    await sync_person(
+                        addon,
+                        user,
+                        users,
+                        entity_dict,
+                    )
+            elif entity_dict["type"] != "Task":
+                await sync_folder(
                     addon,
                     user,
+                    project,
+                    folders,
                     entity_dict,
                 )
-                await sync_person(
+            else:
+                await sync_task(
                     addon,
                     user,
-                    users,
+                    project,
+                    tasks,
+                    folders,
                     entity_dict,
                 )
-        elif entity_dict["type"] != "Task":
-            await sync_folder(
-                addon,
-                user,
-                project,
-                folders,
-                entity_dict,
-            )
-        else:
-            await sync_task(
-                addon,
-                user,
-                project,
-                tasks,
-                folders,
-                entity_dict,
-            )
+        except Exception as e:
+            logging.error(f"Sync failed for entity {entity_dict} with exception: {e}")
 
     logging.info(
         f"Synced {len(payload.entities)} entities in {time.time() - start_time}s"
