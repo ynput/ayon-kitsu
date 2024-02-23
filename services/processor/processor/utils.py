@@ -12,8 +12,9 @@ def get_asset_types(kitsu_project_id: str) -> dict[str, str]:
     return kitsu_asset_types
 
 
-def get_task_types(kitsu_project_id: str) -> dict[str, str]:
-    raw_task_types = gazu.task.all_task_types_for_project(kitsu_project_id)
+def get_task_types() -> dict[str, str]:
+    # we need all task types as concept has its own task type outside of the project
+    raw_task_types = gazu.task.all_task_types()
     kitsu_task_types = {}
     for task_type in raw_task_types:
         kitsu_task_types[task_type["id"]] = task_type["name"]
@@ -48,7 +49,7 @@ def preprocess_task(
     statuses: dict[str, str] = {},
 ) -> dict[str, str | list[str]]:
     if not task_types:
-        task_types = get_task_types(kitsu_project_id)
+        task_types = get_task_types()
 
     if not statuses:
         statuses = get_statuses()

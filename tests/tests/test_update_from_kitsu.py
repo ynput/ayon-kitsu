@@ -109,8 +109,8 @@ def test_new_task(api, gazu, processor, monkeypatch):
     monkeypatch.setattr(gazu.task, "get_task", lambda x: new_task)
     monkeypatch.setattr(
         gazu.task,
-        "all_task_types_for_project",
-        lambda x: mock_data.all_task_types_for_project,
+        "all_task_types",
+        lambda: mock_data.all_task_types,
     )
     monkeypatch.setattr(
         gazu.task, "all_task_statuses", lambda: mock_data.all_task_statuses
@@ -155,8 +155,8 @@ def test_update_task(api, gazu, processor, monkeypatch):
     monkeypatch.setattr(gazu.task, "get_task", lambda x: updated_task)
     monkeypatch.setattr(
         gazu.task,
-        "all_task_types_for_project",
-        lambda x: mock_data.all_task_types_for_project,
+        "all_task_types",
+        lambda: mock_data.all_task_types,
     )
     monkeypatch.setattr(
         gazu.task, "all_task_statuses", lambda: mock_data.all_task_statuses
