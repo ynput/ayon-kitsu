@@ -35,8 +35,14 @@ def calculate_end_frame(
 def remove_accents(input_str: str) -> str:
     nfkd_form = unicodedata.normalize("NFKD", input_str)
     result = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
-    # remove any unsupported characters
-    return re.sub(r"[^a-zA-Z0-9_\.\-]", "", result)
+    # bugfix - remove any unsupported characters
+    result = re.sub(r"[^a-zA-Z0-9_\.\-]", "", result)
+
+    # bugfix for Person where last name is blank
+    # first and last characters cannot be . or -
+    result = re.sub(r"^[^a-zA-Z0-9_]+", "", result)
+    result = re.sub(r"[^a-zA-Z0-9_]+$", "", result)
+    return result
 
 
 def create_short_name(name: str) -> str:
