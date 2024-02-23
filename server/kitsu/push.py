@@ -63,7 +63,7 @@ KitsuEntityType = Literal[
 class PushEntitiesRequestModel(OPModel):
     project_name: str
     entities: list[EntityDict] = Field(..., title="List of entities to sync")
-    mock: bool = False
+    mock: bool | None = None  # optional param for tests
 
 
 class RemoveEntitiesRequestModel(OPModel):

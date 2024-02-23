@@ -190,18 +190,19 @@ def users_disabled(api, kitsu_url):
     settings = res.data
 
     # get original values
-    users_enabled = settings["sync_settings"]["delete_projects"]
+    value = settings["sync_settings"]["sync_users"]["enabled"]
+    print(f"users_disabled: {value}")
 
     # set settings for tests
-    if users_enabled:
-        settings["sync_settings"]["delete_projects"] = False
+    if value:
+        settings["sync_settings"]["sync_users"]["enabled"] = False
         res = api.post(f"{kitsu_url}/settings", **settings)
 
     yield
 
     # set settings back to orginal values
-    if users_enabled:
-        settings["sync_settings"]["delete_projects"] = users_enabled
+    if value:
+        settings["sync_settings"]["sync_users"]["enabled"] = value
         res = api.post(f"{kitsu_url}/settings", **settings)
 
 
@@ -214,17 +215,17 @@ def delete_projects_enabled(api, kitsu_url):
     settings = res.data
 
     # get original values
-    delete_ayon_projects = settings["sync_settings"]["delete_projects"]
+    value = settings["sync_settings"]["delete_projects"]
 
     # set settings for tests
-    if not delete_ayon_projects:
+    if not value:
         settings["sync_settings"]["delete_projects"] = True
         res = api.post(f"{kitsu_url}/settings", **settings)
 
     yield
 
     # set settings back to orginal values
-    if not delete_ayon_projects:
+    if not value:
         settings["sync_settings"]["delete_projects"] = False
         res = api.post(f"{kitsu_url}/settings", **settings)
 
@@ -238,17 +239,17 @@ def delete_projects_disabled(api, kitsu_url):
     settings = res.data
 
     # get original values
-    delete_ayon_projects = settings["sync_settings"]["delete_projects"]
+    value = settings["sync_settings"]["delete_projects"]
 
     # set settings for tests
-    if delete_ayon_projects:
+    if value:
         settings["sync_settings"]["delete_projects"] = False
         res = api.post(f"{kitsu_url}/settings", **settings)
 
     yield
 
     # set settings back to orginal values
-    if delete_ayon_projects:
+    if value:
         settings["sync_settings"]["delete_projects"] = True
         res = api.post(f"{kitsu_url}/settings", **settings)
 
@@ -263,16 +264,16 @@ def access_group(api, kitsu_url):
     settings = res.data
 
     # get original values
-    access_group = settings["sync_settings"]["sync_users"]["access_group"]
+    value = settings["sync_settings"]["sync_users"]["access_group"]
 
     # set settings for tests
-    if access_group != "test_kitsu_group":
+    if value != "test_kitsu_group":
         settings["sync_settings"]["sync_users"]["access_group"] = "test_kitsu_group"
         res = api.post(f"{kitsu_url}/settings", **settings)
 
     yield
 
     # set settings back to orginal values
-    if access_group != "test_kitsu_group":
-        settings["sync_settings"]["sync_users"]["access_group"] = access_group
+    if value != "test_kitsu_group":
+        settings["sync_settings"]["sync_users"]["access_group"] = value
         res = api.post(f"{kitsu_url}/settings", **settings)

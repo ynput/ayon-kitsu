@@ -14,6 +14,35 @@ from tests.fixtures import (
     $ poetry run pytest tests/test_pairing.py
 """
 
+expected = [
+    {
+        "kitsuProjectId": "kitsu-project-id-1",
+        "kitsuProjectName": "Kitsu Test Project",
+        "kitsuProjectCode": "KTP",
+        "ayonProjectName": PROJECT_NAME,
+    },
+    {
+        "kitsuProjectId": "kitsu-project-id-2",
+        "kitsuProjectName": "Another Project",
+        "kitsuProjectCode": "AP",
+        "ayonProjectName": None,
+    },
+]
+
+
+def test_get_pairing_no_mock(api, kitsu_url):
+    # ensure the kitsu project does not exist
+    api.delete(f"/projects/{PAIR_PROJECT_NAME}")
+
+    res = api.get(f"{kitsu_url}/pairing", mock=False)
+    assert res.status_code == 200
+    assert res.data != expected
+
+    # mock should default to False
+    res = api.get(f"{kitsu_url}/pairing")
+    assert res.status_code == 200
+    assert res.data != expected
+
 
 def test_get_pairing(api, kitsu_url):
     # ensure the kitsu project does not exist
@@ -21,20 +50,7 @@ def test_get_pairing(api, kitsu_url):
 
     res = api.get(f"{kitsu_url}/pairing", mock=True)
     assert res.status_code == 200
-    assert res.data == [
-        {
-            "kitsuProjectId": "kitsu-project-id-1",
-            "kitsuProjectName": "Kitsu Test Project",
-            "kitsuProjectCode": "KTP",
-            "ayonProjectName": PROJECT_NAME,
-        },
-        {
-            "kitsuProjectId": "kitsu-project-id-2",
-            "kitsuProjectName": "Another Project",
-            "kitsuProjectCode": "AP",
-            "ayonProjectName": None,
-        },
-    ]
+    assert res.data == expected
 
 
 def _test_post_pairing_success(api, kitsu_url):
