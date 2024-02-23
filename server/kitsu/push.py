@@ -608,53 +608,57 @@ async def remove_entities(
             logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")
             continue
 
-        if entity_dict["type"] == "Project":
-            if settings.sync_settings.delete_projects:
-                target_project = await get_project_by_kitsu_id(entity_dict["id"])
-                if not target_project:
+        try:
+            if entity_dict["type"] == "Project":
+                if settings.sync_settings.delete_projects:
+                    target_project = await get_project_by_kitsu_id(entity_dict["id"])
+                    if not target_project:
+                        continue
+                    await delete_project(project_name=target_project.name, user=user)
+
+            elif entity_dict["type"] == "Person":
+                target_user = await get_user_by_kitsu_id(entity_dict["id"])
+                if not target_user:
                     continue
-                await delete_project(project_name=target_project.name, user=user)
 
-        elif entity_dict["type"] == "Person":
-            target_user = await get_user_by_kitsu_id(entity_dict["id"])
-            if not target_user:
-                continue
+                await delete_user(target_user.name, user=user)
 
-            await delete_user(target_user.name, user=user)
+            elif entity_dict["type"] == "Task":
+                task = await get_task_by_kitsu_id(
+                    project.name,
+                    entity_dict["id"],
+                    tasks,
+                )
+                if not task:
+                    continue
 
-        elif entity_dict["type"] == "Task":
-            task = await get_task_by_kitsu_id(
-                project.name,
-                entity_dict["id"],
-                tasks,
-            )
-            if not task:
-                continue
+                await delete_task(
+                    project_name=project.name,
+                    task_id=task.id,
+                    user=user,
+                )
+                logging.info(f"Deleted {entity_dict['type']} '{task.name}'")
+                tasks[entity_dict["id"]] = task.id
 
-            await delete_task(
-                project_name=project.name,
-                task_id=task.id,
-                user=user,
-            )
-            logging.info(f"Deleted {entity_dict['type']} '{task.name}'")
-            tasks[entity_dict["id"]] = task.id
+            else:
+                folder = await get_folder_by_kitsu_id(
+                    project.name,
+                    entity_dict["id"],
+                    folders,
+                )
+                if not folder:
+                    continue
 
-        else:
-            folder = await get_folder_by_kitsu_id(
-                project.name,
-                entity_dict["id"],
-                folders,
-            )
-            if not folder:
-                continue
+                await delete_folder(
+                    project_name=project.name,
+                    folder_id=folder.id,
+                    user=user,
+                )
+                logging.info(f"Deleted {entity_dict['type']} '{folder.name}'")
+                folders[entity_dict["id"]] = folder.id
 
-            await delete_folder(
-                project_name=project.name,
-                folder_id=folder.id,
-                user=user,
-            )
-            logging.info(f"Deleted {entity_dict['type']} '{folder.name}'")
-            folders[entity_dict["id"]] = folder.id
+        except Exception as e:
+            logging.error(f"Remove failed for entity {entity_dict} with exception: {e}")
 
     logging.info(
         f"Deleted {len(payload.entities)} entities in {time.time() - start_time}s"
