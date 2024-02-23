@@ -18,8 +18,12 @@ from ayon_server.exceptions import ForbiddenException
 def calculate_end_frame(
     entity_dict: dict[str, int], folder: FolderEntity
 ) -> int | None:
+    # for concepts data=None
+    if "data" not in entity_dict or not isinstance(entity_dict["data"], dict):
+        return
+
     # return end-frame if set
-    if "data" in entity_dict and entity_dict["data"].get("frame_out"):
+    if entity_dict["data"].get("frame_out"):
         return entity_dict["data"].get("frame_out")
 
     # Calculate the end-frame
