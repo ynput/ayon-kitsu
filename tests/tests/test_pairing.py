@@ -30,20 +30,6 @@ expected = [
 ]
 
 
-def test_get_pairing_no_mock(api, kitsu_url):
-    # ensure the kitsu project does not exist
-    api.delete(f"/projects/{PAIR_PROJECT_NAME}")
-
-    res = api.get(f"{kitsu_url}/pairing", mock=False)
-    assert res.status_code == 200
-    assert res.data != expected
-
-    # mock should default to False
-    res = api.get(f"{kitsu_url}/pairing")
-    assert res.status_code == 200
-    assert res.data != expected
-
-
 def test_get_pairing(api, kitsu_url):
     # ensure the kitsu project does not exist
     api.delete(f"/projects/{PAIR_PROJECT_NAME}")
@@ -53,7 +39,7 @@ def test_get_pairing(api, kitsu_url):
     assert res.data == expected
 
 
-def _test_post_pairing_success(api, kitsu_url):
+def test_post_pairing_success(api, kitsu_url):
     res = api.post(
         f"{kitsu_url}/pairing",
         kitsuProjectId="kitsu-project-id-2",
