@@ -45,7 +45,7 @@ def test_post_pairing_success(api, kitsu_url):
         kitsuProjectId="kitsu-project-id-2",
         ayonProjectName=PAIR_PROJECT_NAME,
         ayonProjectCode=PAIR_PROJECT_CODE,
-        mock=True,
+        # mock=True,
     )
     assert res.status_code == 201  # created
 
@@ -76,7 +76,7 @@ def test_post_pairing_success(api, kitsu_url):
         "color": "#f5f5f5",
         "state": "in_progress",
         "shortName": "TODO",
-        "icon": "",
+        "icon": "task_alt",
     }
 
     assert project["statuses"][1] == {
@@ -84,7 +84,7 @@ def test_post_pairing_success(api, kitsu_url):
         "color": "#22D160",
         "state": "in_progress",
         "shortName": "App",
-        "icon": "",
+        "icon": "task_alt",
     }
 
     assert project["tags"] == []  # could be useful for kitsu info

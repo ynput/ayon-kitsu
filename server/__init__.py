@@ -112,7 +112,7 @@ class KitsuAddon(BaseServerAddon):
     ) -> EmptyResponse:
         if not user.is_manager:
             raise ForbiddenException("Only managers can pair Kitsu projects")
-        await self.ensure_kitsu()
+        await self.ensure_kitsu(request.mock)
         await init_pairing(self, user, request)
         return EmptyResponse(status_code=201)
 
