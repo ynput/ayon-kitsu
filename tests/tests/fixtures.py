@@ -71,11 +71,13 @@ def kitsu_url(api):
 
     # /api/addons
     res = api.get("addons")
-    assert res.data.get("addons"), "No addons found"
+    assert res.data, "No addons found"
 
     # map addons list into a dict
     versions = {
-        addon["name"]: addon["productionVersion"] for addon in res.data["addons"]
+        addon["name"]: addon["productionVersion"]
+        for addon in res.data["addons"]
+        if "productionVersion" in addon
     }
 
     # get the latest version of the addon

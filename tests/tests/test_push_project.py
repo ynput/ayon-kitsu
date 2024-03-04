@@ -58,11 +58,11 @@ def test_update_project(api, kitsu_url):
 
     assert project["folderTypes"] == [
         {"icon": "folder", "name": "Folder", "shortName": ""},
-        {"icon": "category", "name": "Library", "shortName": "lib"},
-        {"icon": "smart_toy", "name": "Asset", "shortName": ""},
+        {"icon": "library_books", "name": "Library", "shortName": "lib"},
+        {"icon": "web_asset", "name": "Asset", "shortName": ""},
         {"icon": "live_tv", "name": "Episode", "shortName": "ep"},
         {"icon": "theaters", "name": "Sequence", "shortName": "sq"},
-        {"icon": "movie", "name": "Shot", "shortName": "sh"},
+        {"icon": "screenshot_keyboard", "name": "Shot", "shortName": "sh"},
     ]
 
     assert project["statuses"] == [

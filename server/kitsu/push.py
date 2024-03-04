@@ -14,15 +14,15 @@ from ayon_server.entities import (
 from ayon_server.helpers.deploy_project import anatomy_to_project_data
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Field, OPModel
-from ayon_server.access.access_groups import AccessGroups
-from ayon_server.access.permissions import Permissions
+
 
 from .anatomy import get_kitsu_project_anatomy, parse_attrib
 from .constants import (
     CONSTANT_KITSU_MODELS,
 )
-from .utils import (
+from .model_utils import (
     calculate_end_frame,
+    create_access_group,
     create_folder,
     create_task,
     create_user,
@@ -34,11 +34,15 @@ from .utils import (
     get_task_by_kitsu_id,
     get_user_by_kitsu_id,
     get_project_by_kitsu_id,
-    remove_accents,
+    get_root_folder_id,
+    generate_user_settings,
     update_folder,
     update_task,
     update_user,
     update_project,
+)
+from .format_utils import (
+    to_username,
 )
 
 if TYPE_CHECKING:
@@ -71,181 +75,22 @@ class RemoveEntitiesRequestModel(OPModel):
     entities: list[EntityDict] = Field(..., title="List of entities to remove")
 
 
-async def get_root_folder_id(
-    user: "UserEntity",
-    project_name: str,
-    kitsu_type: KitsuEntityType,
-    kitsu_type_id: str,
-    subfolder_id: str | None = None,
-    subfolder_name: str | None = None,
-) -> str:
-    """
-    Get the root folder ID for a given Kitsu type and ID.
-    If a folder/subfolder does not exist, it will be created.
-    """
-    res = await Postgres.fetch(
-        f"""
-        SELECT id FROM project_{project_name}.folders
-        WHERE data->>'kitsuId' = $1
-        """,
-        kitsu_type_id,
-    )
-
-    if res:
-        id = res[0]["id"]
-    else:
-        folder = await create_folder(
-            project_name=project_name,
-            name=kitsu_type,
-            data={"kitsuId": kitsu_type_id},
-        )
-        id = folder.id
-
-    if not (subfolder_id or subfolder_name):
-        return id
-
-    res = await Postgres.fetch(
-        f"""
-        SELECT id FROM project_{project_name}.folders
-        WHERE data->>'kitsuId' = $1
-        """,
-        subfolder_id,
-    )
-
-    if res:
-        sub_id = res[0]["id"]
-    else:
-        sub_folder = await create_folder(
-            project_name=project_name,
-            name=subfolder_name,
-            parent_id=id,
-            data={"kitsuId": subfolder_id},
-        )
-        sub_id = sub_folder.id
-    return sub_id
-
-
-async def create_access_group(
-    addon: "KitsuAddon",
-    user: "UserEntity",
-    entity_dict: "EntityDict",
-    name: str | None = None,
-):
-    try:
-        if not name:
-            settings = await addon.get_studio_settings()
-            name = settings.sync_settings.sync_users.access_group
-
-        scope = "_"
-
-        # get access group by name
-        for ag_key, _perms in AccessGroups.access_groups.items():
-            access_group_name, pname = ag_key
-
-            # if it already exists go no further
-            if pname == scope and access_group_name == name:
-                return
-
-        # Create a new access group
-        permissions = Permissions.from_record(
-            {
-                "create": {"enabled": False, "access_list": []},
-                "read": {"enabled": False, "access_list": []},
-                "update": {"enabled": False, "access_list": []},
-                "publish": {"enabled": False, "access_list": []},
-                "delete": {"enabled": False, "access_list": []},
-                "attrib_read": {"enabled": False, "attributes": []},
-                "attrib_write": {"enabled": False, "attributes": []},
-                "endpoints": {"enabled": False, "endpoints": []},
-            }
-        )
-
-        AccessGroups.add_access_group(name, scope, permissions)
-
-    except Exception as e:
-        print(e)
-
-
-def match_ayon_roles_with_kitsu_role(role: str) -> dict[str, bool] | None:
-    match role:
-        case "admin":
-            return {
-                "isAdmin": True,
-                "isManager": False,
-            }
-        case "manager":
-            return {
-                "isAdmin": False,
-                "isManager": True,
-            }
-        case _:
-            return {
-                "isAdmin": False,
-                "isManager": False,
-            }
-
-
-async def generate_user_settings(
-    addon: "KitsuAddon",
-    project: "ProjectEntity",
-    entity_dict: "EntityDict",
-):
-    settings = await addon.get_studio_settings()
-    data: dict[str, str] = {}
-    match entity_dict["role"]:
-        case "admin":  # Studio manager
-            data = match_ayon_roles_with_kitsu_role(
-                settings.sync_settings.sync_users.roles.admin
-            )
-        case "vendor":  # Vendor
-            data = match_ayon_roles_with_kitsu_role(
-                settings.sync_settings.sync_users.roles.vendor
-            )
-        case "client":  # Client
-            data = match_ayon_roles_with_kitsu_role(
-                settings.sync_settings.sync_users.roles.client
-            )
-        case "manager":  # Manager
-            data = match_ayon_roles_with_kitsu_role(
-                settings.sync_settings.sync_users.roles.manager
-            )
-        case "supervisor":  # Supervisor
-            data = match_ayon_roles_with_kitsu_role(
-                settings.sync_settings.sync_users.roles.supervisor
-            )
-        case _:  # Artist
-            data = match_ayon_roles_with_kitsu_role(
-                settings.sync_settings.sync_users.roles.user
-            )
-
-    return {
-        "data": data
-        | {
-            "accessGroups": {
-                project.name: [settings.sync_settings.sync_users.access_group]
-            },
-            "defaultAccessGroups": [settings.sync_settings.sync_users.access_group],
-        },
-    }
-
-
 async def sync_person(
     addon: "KitsuAddon",
     user: "UserEntity",
     project: "ProjectEntity",
     existing_users: dict[str, Any],
     entity_dict: "EntityDict",
+    settings: Any,
 ):
     logging.info(f"sync_person: {entity_dict['first_name']} {entity_dict['last_name']}")
 
-    username = remove_accents(
-        f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower().strip()
-    )
+    username = to_username(entity_dict["first_name"], entity_dict["last_name"])
 
     payload = await generate_user_settings(
-        addon,
-        project,
-        entity_dict,
+        entity_dict["role"],
+        project.name,
+        settings,
     ) | {
         "attrib": {
             "fullName": entity_dict["full_name"],
@@ -549,17 +394,14 @@ async def push_entities(
                 await sync_project(addon, user, entity_dict, payload.mock)
             elif entity_dict["type"] == "Person":
                 if settings.sync_settings.sync_users.enabled:
-                    await create_access_group(
-                        addon,
-                        user,
-                        entity_dict,
-                    )
+                    await create_access_group(settings)
                     await sync_person(
                         addon,
                         user,
                         project,
                         users,
                         entity_dict,
+                        settings,
                     )
             elif entity_dict["type"] != "Task":
                 await sync_folder(

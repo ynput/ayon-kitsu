@@ -10,9 +10,166 @@ from ayon_server.entities import (
     UserEntity,
     ProjectEntity,
 )
+from ayon_server.access.access_groups import AccessGroups
+from ayon_server.access.permissions import Permissions
 from ayon_server.events import dispatch_event
 from ayon_server.lib.postgres import Postgres
 from ayon_server.exceptions import ForbiddenException
+from .format_utils import create_name_and_label
+
+
+async def get_root_folder_id(
+    user: "UserEntity",
+    project_name: str,
+    kitsu_type: str,
+    kitsu_type_id: str,
+    subfolder_id: str | None = None,
+    subfolder_name: str | None = None,
+) -> str:
+    """
+    Get the root folder ID for a given Kitsu type and ID.
+    If a folder/subfolder does not exist, it will be created.
+    """
+    res = await Postgres.fetch(
+        f"""
+        SELECT id FROM project_{project_name}.folders
+        WHERE data->>'kitsuId' = $1
+        """,
+        kitsu_type_id,
+    )
+
+    if res:
+        id = res[0]["id"]
+    else:
+        folder = await create_folder(
+            project_name=project_name,
+            name=kitsu_type,
+            data={"kitsuId": kitsu_type_id},
+        )
+        id = folder.id
+
+    if not (subfolder_id or subfolder_name):
+        return id
+
+    res = await Postgres.fetch(
+        f"""
+        SELECT id FROM project_{project_name}.folders
+        WHERE data->>'kitsuId' = $1
+        """,
+        subfolder_id,
+    )
+
+    if res:
+        sub_id = res[0]["id"]
+    else:
+        sub_folder = await create_folder(
+            project_name=project_name,
+            name=subfolder_name,
+            parent_id=id,
+            data={"kitsuId": subfolder_id},
+        )
+        sub_id = sub_folder.id
+    return sub_id
+
+
+async def create_access_group(
+    settings: Any,
+    name: str | None = None,
+):
+    try:
+        if not name:
+            name = settings.sync_settings.sync_users.access_group
+
+        scope = "_"
+
+        # get access group by name
+        for ag_key, _perms in AccessGroups.access_groups.items():
+            access_group_name, pname = ag_key
+
+            # if it already exists go no further
+            if pname == scope and access_group_name == name:
+                return
+
+        # Create a new access group
+        permissions = Permissions.from_record(
+            {
+                "create": {"enabled": False, "access_list": []},
+                "read": {"enabled": False, "access_list": []},
+                "update": {"enabled": False, "access_list": []},
+                "publish": {"enabled": False, "access_list": []},
+                "delete": {"enabled": False, "access_list": []},
+                "attrib_read": {"enabled": False, "attributes": []},
+                "attrib_write": {"enabled": False, "attributes": []},
+                "endpoints": {"enabled": False, "endpoints": []},
+            }
+        )
+
+        return AccessGroups.add_access_group(name, scope, permissions)
+
+    except Exception as e:
+        print(e)
+
+
+async def generate_user_settings(
+    role: str,
+    project_name: str,
+    settings: Any,
+):
+    data: dict[str, str] = {}
+    match role:
+        case "admin":  # Studio manager
+            data = match_ayon_roles_with_kitsu_role(
+                settings.sync_settings.sync_users.roles.admin
+            )
+        case "vendor":  # Vendor
+            data = match_ayon_roles_with_kitsu_role(
+                settings.sync_settings.sync_users.roles.vendor
+            )
+        case "client":  # Client
+            data = match_ayon_roles_with_kitsu_role(
+                settings.sync_settings.sync_users.roles.client
+            )
+        case "manager":  # Manager
+            data = match_ayon_roles_with_kitsu_role(
+                settings.sync_settings.sync_users.roles.manager
+            )
+        case "supervisor":  # Supervisor
+            data = match_ayon_roles_with_kitsu_role(
+                settings.sync_settings.sync_users.roles.supervisor
+            )
+        case _:  # Artist
+            data = match_ayon_roles_with_kitsu_role(
+                settings.sync_settings.sync_users.roles.user
+            )
+
+    return {
+        "data": data
+        | {
+            "accessGroups": {
+                project_name: [settings.sync_settings.sync_users.access_group]
+            },
+            "defaultAccessGroups": [settings.sync_settings.sync_users.access_group],
+        },
+    }
+
+
+def match_ayon_roles_with_kitsu_role(role: str) -> dict[str, bool] | None:
+    match role:
+        case "admin":
+            return {
+                "isAdmin": True,
+                "isManager": False,
+            }
+        case "manager":
+            return {
+                "isAdmin": False,
+                "isManager": True,
+            }
+        case _:
+            return {
+                "isAdmin": False,
+                "isManager": False,
+            }
 
 
 def calculate_end_frame(
@@ -34,44 +191,6 @@ def calculate_end_frame(
             frame_start = folder.attrib.frameStart
         if frame_start is not None:
             return int(frame_start) + int(entity_dict["nb_frames"])
-
-
-def remove_accents(input_str: str) -> str:
-    nfkd_form = unicodedata.normalize("NFKD", input_str)
-    result = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
-    # bugfix - remove any unsupported characters
-    result = re.sub(r"[^a-zA-Z0-9_\.\-]", "", result)
-
-    # bugfix for Person where last name is blank
-    # first and last characters cannot be . or -
-    result = re.sub(r"^[^a-zA-Z0-9_]+", "", result)
-    result = re.sub(r"[^a-zA-Z0-9_]+$", "", result)
-    return result
-
-
-def create_short_name(name: str) -> str:
-    code = name.lower()
-
-    if "_" in code:
-        subwords = code.split("_")
-        code = "".join([subword[0] for subword in subwords])[:4]
-    elif len(name) > 4:
-        vowels = ["a", "e", "i", "o", "u"]
-        filtered_word = "".join([char for char in code if char not in vowels])
-        code = filtered_word[:4]
-
-    # if there is a number at the end of the code, add it to the code
-    last_char = code[-1]
-    if last_char.isdigit():
-        code += last_char
-
-    return code
-
-
-def create_name_and_label(kitsu_name: str) -> dict[str, str]:
-    """From a name coming from kitsu, create a name and label"""
-    name_slug = slugify(kitsu_name, separator="_")
-    return {"name": name_slug, "label": kitsu_name}
 
 
 async def get_project_by_kitsu_id(
