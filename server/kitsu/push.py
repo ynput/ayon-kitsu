@@ -83,9 +83,19 @@ async def sync_person(
     entity_dict: "EntityDict",
     settings: Any,
 ):
-    logging.info(f"sync_person: {entity_dict['first_name']} {entity_dict['last_name']}")
+    logging.info(
+        f"sync_person: {entity_dict.get('first_name')} {entity_dict.get('last_name')}"
+    )
 
-    username = to_username(entity_dict["first_name"], entity_dict["last_name"])
+    # == check should Person entity be synced ==
+    # do not sync Kitsu API bots
+    if entity_dict.get("is_bot"):
+        logging.info(
+            f"skipping sync_person for Kitsu Bot: {entity_dict.get('first_name')} {entity_dict.get('last_name')}"
+        )
+        return
+
+    username = to_username(entity_dict.get("first_name"), entity_dict.get("last_name"))
 
     payload = await generate_user_settings(
         entity_dict["role"],
