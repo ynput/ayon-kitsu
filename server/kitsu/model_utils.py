@@ -321,6 +321,11 @@ async def update_folder(
             setattr(folder, key, payload[key])
             changed = True
 
+    for key, value in payload["data"].items():
+        if folder.data.get(key) != value:
+            folder.data[key] = value
+            changed = True
+
     for key, value in payload["attrib"].items():
         if getattr(folder.attrib, key) != value:
             setattr(folder.attrib, key, value)

@@ -3,7 +3,8 @@ import time
 from typing import TYPE_CHECKING, Any, Literal, get_args
 
 import httpx
-from nxtools import logging
+from nxtools import logging, log_traceback
+
 
 from ayon_server.auth.session import Session
 from ayon_server.entities import (
@@ -240,7 +241,10 @@ async def sync_folder(
             name=entity_dict["name"],
             folder_type=entity_dict["type"],
             parent_id=parent_id,
-            data={"kitsuId": entity_dict["id"]},
+            data={
+                "kitsuId": entity_dict["id"],
+                "kitsuType": entity_dict["type"],
+            },
         )
         existing_folders[entity_dict["id"]] = target_folder.id
 
@@ -256,6 +260,11 @@ async def sync_folder(
             attrib=parse_attrib(data),
             name=entity_dict["name"],
             folder_type=entity_dict["type"],
+            # use data to update kitsuType on existing assets that do not have a type yet
+            data={
+                "kitsuId": entity_dict["id"],
+                "kitsuType": entity_dict["type"],
+            },
         )
         if changed:
             logging.info(f"Updating {entity_dict['type']} '{entity_dict['name']}'")
@@ -334,7 +343,7 @@ async def sync_task(
                 # The new task type haven't bin implemented in Ayon yet
                 logging.warning(
                     f"The type '{entity_dict['name']}' isn't implemented yet."
-                    f"Currently they aren't supported"
+                    f" Currently they aren't supported"
                 )
                 return
 
@@ -432,6 +441,7 @@ async def push_entities(
                 )
         except Exception as e:
             logging.error(f"Sync failed for entity {entity_dict} with exception: {e}")
+            log_traceback()
 
     logging.info(
         f"Synced {len(payload.entities)} entities in {time.time() - start_time}s"
@@ -511,6 +521,7 @@ async def remove_entities(
 
         except Exception as e:
             logging.error(f"Remove failed for entity {entity_dict} with exception: {e}")
+            log_traceback()
 
     logging.info(
         f"Deleted {len(payload.entities)} entities in {time.time() - start_time}s"
