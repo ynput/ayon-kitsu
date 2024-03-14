@@ -138,6 +138,51 @@ def test_update_folder_no_changes(api, kitsu_url):
     assert res.data["folders"] == {}
 
 
+def test_update_folder_kitsu_type(api, kitsu_url):
+    """kitsuType was added in 1.1.1 sync should update existing folders with data.kitsuType"""
+
+    # do an initial update so we get the ayon id for the folder
+    kitsu_id = "shot-id-1"
+    update = {
+        "id": kitsu_id,  # required
+        "type": "Shot",  # required
+        "name": "Some Name",  # required
+    }
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=PROJECT_NAME,
+        entities=[update],
+    )
+
+    # lets get the ayon folder
+    ayon_id = res.data["folders"][kitsu_id]
+
+    # update the folder so the data has no kitsuType
+    res = api.patch(
+        f"/projects/{PROJECT_NAME}/folders/{ayon_id}",
+        data={"kitsuId": kitsu_id, "kitsuType": None},
+    )
+    folder = api.get_folder_by_id(PROJECT_NAME, ayon_id)
+    assert folder["data"] == {"kitsuId": kitsu_id}
+
+    ## now push it and the type should be added
+    kitsu_id = "shot-id-1"
+    update = {
+        "id": kitsu_id,  # required
+        "type": "Shot",  # required
+        "name": "Some Name",  # no update
+    }
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=PROJECT_NAME,
+        entities=[update],
+    )
+    folder = api.get_folder_by_id(PROJECT_NAME, ayon_id)
+
+    # folder is updated with the kitsuType
+    assert folder["data"] == {"kitsuId": kitsu_id, "kitsuType": "Shot"}
+
+
 def test_update_task_status(api, kitsu_url):
     # do a partial update
     kitsu_id = "task-id-1"

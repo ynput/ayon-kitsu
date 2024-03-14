@@ -1,4 +1,4 @@
-""" utils shared between fullsync.py and update_from_kitsu.py """
+"""utils shared between fullsync.py and update_from_kitsu.py"""
 
 import ayon_api
 import gazu
@@ -63,14 +63,15 @@ def preprocess_task(
     if "name" in task and "task_type_name" in task and task["name"] == "main":
         task["name"] = task["task_type_name"].lower()
 
-    # Match the assigned ayon user with the assigned kitsu email
-    ayon_users = {
-        user["attrib"]["email"]: user["name"] for user in ayon_api.get_users()
-    }
-    task_emails = {user["email"] for user in task["persons"]}
-    task["assignees"] = []
-    task["assignees"].extend(
-        ayon_users[email] for email in task_emails if email in ayon_users
-    )
+    if "persons" in task:
+        # Match the assigned ayon user with the assigned kitsu email
+        ayon_users = {
+            user["attrib"]["email"]: user["name"] for user in ayon_api.get_users()
+        }
+        task_emails = {user["email"] for user in task["persons"]}
+        task["assignees"] = []
+        task["assignees"].extend(
+            ayon_users[email] for email in task_emails if email in ayon_users
+        )
 
     return task

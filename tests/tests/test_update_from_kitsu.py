@@ -49,7 +49,7 @@ def test_new_asset(init_data, api, gazu, processor, monkeypatch):
 
     assert folder["label"] == "My New Asset Name"
     assert folder["path"] == "/assets/character/my_new_asset_name"
-    assert folder["data"] == {"kitsuId": "new-asset-id-1"}
+    assert folder["data"] == {"kitsuId": "new-asset-id-1", "kitsuType": "Asset"}
     assert folder["folderType"] == "Asset"
 
 
@@ -80,7 +80,7 @@ def test_update_asset(api, gazu, processor, monkeypatch):
 
     assert folder["label"] == "My Updated Asset Name"
     assert folder["path"] == "/assets/character/my_updated_asset_name"
-    assert folder["data"] == {"kitsuId": "asset-id-1"}
+    assert folder["data"] == {"kitsuId": "asset-id-1", "kitsuType": "Asset"}
     assert folder["folderType"] == "Asset"
 
 
