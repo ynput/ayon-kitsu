@@ -169,12 +169,15 @@ class KitsuSettings(BaseSettingsModel):
     server: str = Field(
         "",
         title="Kitsu Server",
+        description="The URL of your Kitsu host. This can be the DNS name or ip address. Examples: https://kitsu.mystudio.com, http://198.1.50.50",
+        examples=["https://kitsu.mystudio.com", "http://198.1.50.50"],
         scope=["studio"],
     )
     login_email: str = Field(
         "kitsu_email",
         enum_resolver=secrets_enum,
         title="Kitsu user email",
+        description="A user with permissions to access all projects to be synced and add Kitsu listeners. A user with Studio Manager role.",
         scope=["studio"],
     )
     login_password: str | None = Field(

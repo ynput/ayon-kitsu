@@ -39,11 +39,15 @@ def test_get_asset_types(gazu, monkeypatch):
 def test_get_task_types(gazu, monkeypatch):
     monkeypatch.setattr(
         gazu.task,
-        "all_task_types_for_project",
-        lambda x: mock_data.all_task_types_for_project,
+        "all_task_types",
+        lambda: mock_data.all_task_types,
     )
-    res = fullsync.get_task_types(PROJECT_ID)
-    assert res == {"task-type-id-1": "Animation", "task-type-id-2": "Compositing"}
+    res = fullsync.get_task_types()
+    assert res == {
+        "task-type-id-1": "Animation",
+        "task-type-id-2": "Compositing",
+        "task-type-id-3": "Concept",
+    }
 
 
 def test_get_statuses(gazu, monkeypatch):
@@ -112,8 +116,8 @@ def test_full_sync(gazu, processor, monkeypatch, mocker):
     # mock all kitsu data coming from gazu
     monkeypatch.setattr(
         gazu.task,
-        "all_task_types_for_project",
-        lambda x: mock_data.all_task_types_for_project,
+        "all_task_types",
+        lambda: mock_data.all_task_types,
     )
     monkeypatch.setattr(
         gazu.asset,

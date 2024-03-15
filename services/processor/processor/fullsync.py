@@ -46,7 +46,7 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
 
     asset_types = get_asset_types(kitsu_project_id)
     task_statuses = get_statuses()
-    task_types = get_task_types(kitsu_project_id)
+    task_types = get_task_types()
     persons = gazu.person.all_persons()
 
     assets = get_assets(kitsu_project_id, asset_types)

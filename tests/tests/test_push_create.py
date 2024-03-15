@@ -1,7 +1,7 @@
-""" tests for endpoint 'api/addons/kitsu/{version}/push' 
-    where all entities are being created for the first time
+"""tests for endpoint 'api/addons/kitsu/{version}/push'
+where all entities are being created for the first time
 
-    $ poetry run pytest tests/test_push_create.py
+$ poetry run pytest tests/test_push_create.py
 """
 
 from pprint import pprint
@@ -78,12 +78,13 @@ def test_push_assets(api, kitsu_url, monkeypatch):
     assert not character_2_asset["children"]
 
     # get the full folder data
-    res = api.get(f"/projects/{PROJECT_NAME}/folders/{character_2_asset['id']}")
-    assert res.status_code == 200
-    folder = res.data
+    folder = api.get_folder_by_id(PROJECT_NAME, character_2_asset["id"])
 
     # check the kitsu id is saved to data
-    assert folder["data"] == {"kitsuId": "asset-id-2"}
+    assert folder["data"]["kitsuId"] == "asset-id-2"
+
+    # support for saving kitsu entity types on ayon folders - used for launcher_show_in_kitsu
+    assert folder["data"]["kitsuType"] == "Asset"
 
 
 def test_push_episodes(api, kitsu_url):
@@ -129,6 +130,11 @@ def test_push_episodes(api, kitsu_url):
     assert ep_2["parents"] == ["episodes"]
     assert not ep_2["children"]
 
+    # get the full folder data
+    folder = api.get_folder_by_id(PROJECT_NAME, ep_2["id"])
+    assert folder["data"]["kitsuId"] == "episode-id-2"
+    assert folder["data"]["kitsuType"] == "Episode"
+
 
 def test_push_sequences(api, kitsu_url):
     # mock episodes
@@ -169,6 +175,11 @@ def test_push_sequences(api, kitsu_url):
     assert seq_2["hasTasks"] is False
     assert seq_2["parents"] == ["episodes", "episode_02"]
     assert not seq_2["children"]
+
+    # get the full folder data
+    folder = api.get_folder_by_id(PROJECT_NAME, seq_2["id"])
+    assert folder["data"]["kitsuId"] == "sequence-id-2"
+    assert folder["data"]["kitsuType"] == "Sequence"
 
 
 def test_push_shots(api, kitsu_url):
@@ -248,6 +259,9 @@ def test_push_shots(api, kitsu_url):
     assert shot_folder_3["attrib"]["frameEnd"] == 50
     assert shot_folder_3["path"] == "/episodes/episode_02/seq02/sh003"
 
+    assert shot_folder_3["data"]["kitsuId"] == "shot-id-3"
+    assert shot_folder_3["data"]["kitsuType"] == "Shot"
+
 
 def test_push_tasks(api, kitsu_url, monkeypatch):
     entities = mock_data.all_tasks_for_project_preprocessed
@@ -277,9 +291,11 @@ def test_push_tasks(api, kitsu_url, monkeypatch):
     assert task_1["taskType"] == "Animation"
     assert task_1["name"] == "animation"
     assert task_1["active"] is True
-    assert task_1["assignees"] == []
+    assert task_1["assignees"] == ["testkitsu.user1", "testkitsu.user3"]
     assert task_1["label"] == "animation"
-    assert task_1["data"] == {"kitsuId": "task-id-1"}
+    assert task_1["data"]["kitsuId"] == "task-id-1"
+    # We dont need a kitsuType in task as type 'Task' is implicit
+    assert "kitsuType" not in task_1["data"]
     assert task_1["status"] == "Todo"
     assert task_1["attrib"] == {
         "resolutionHeight": 1080,

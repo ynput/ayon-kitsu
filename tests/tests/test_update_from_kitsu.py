@@ -49,7 +49,7 @@ def test_new_asset(init_data, api, gazu, processor, monkeypatch):
 
     assert folder["label"] == "My New Asset Name"
     assert folder["path"] == "/assets/character/my_new_asset_name"
-    assert folder["data"] == {"kitsuId": "new-asset-id-1"}
+    assert folder["data"] == {"kitsuId": "new-asset-id-1", "kitsuType": "Asset"}
     assert folder["folderType"] == "Asset"
 
 
@@ -80,7 +80,7 @@ def test_update_asset(api, gazu, processor, monkeypatch):
 
     assert folder["label"] == "My Updated Asset Name"
     assert folder["path"] == "/assets/character/my_updated_asset_name"
-    assert folder["data"] == {"kitsuId": "asset-id-1"}
+    assert folder["data"] == {"kitsuId": "asset-id-1", "kitsuType": "Asset"}
     assert folder["folderType"] == "Asset"
 
 
@@ -109,8 +109,8 @@ def test_new_task(api, gazu, processor, monkeypatch):
     monkeypatch.setattr(gazu.task, "get_task", lambda x: new_task)
     monkeypatch.setattr(
         gazu.task,
-        "all_task_types_for_project",
-        lambda x: mock_data.all_task_types_for_project,
+        "all_task_types",
+        lambda: mock_data.all_task_types,
     )
     monkeypatch.setattr(
         gazu.task, "all_task_statuses", lambda: mock_data.all_task_statuses
@@ -155,8 +155,8 @@ def test_update_task(api, gazu, processor, monkeypatch):
     monkeypatch.setattr(gazu.task, "get_task", lambda x: updated_task)
     monkeypatch.setattr(
         gazu.task,
-        "all_task_types_for_project",
-        lambda x: mock_data.all_task_types_for_project,
+        "all_task_types",
+        lambda: mock_data.all_task_types,
     )
     monkeypatch.setattr(
         gazu.task, "all_task_statuses", lambda: mock_data.all_task_statuses
