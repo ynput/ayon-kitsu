@@ -18,8 +18,8 @@ DEFAULT_VALUES = {
 
 |  |  |
 |--|--|
-| version| `{version}` |
-| product type | `{product[type]}` |
+| version | `{version}` |
+| family | `{family}` |
 | name | `{name}` |""",
             },
         }
