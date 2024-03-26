@@ -16,15 +16,15 @@ def calculate_end_frame(
     entity_dict: dict[str, int], folder: FolderEntity
 ) -> int | None:
     # Calculate the end-frame
-    if entity_dict.get("nb_frames") and not entity_dict["data"].get("frame_out"):
-        frame_start = entity_dict["data"].get("frame_in")
+    if entity_dict.get("nb_frames") and entity_dict["data"].get("frame_out", "") != "":
+        frame_start = entity_dict["data"].get("frame_in", "")
         # If kitsu doesn't have a frame in, get it from the folder in Ayon
-        if frame_start is None:
+        if frame_start == "":
             for key, value in folder.attrib:
                 if key == "frameStart":
                     frame_start = value
                     break
-        if frame_start is not None:
+        if frame_start != "":
             return frame_start + entity_dict["nb_frames"]
 
 
