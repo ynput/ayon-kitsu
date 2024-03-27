@@ -4,8 +4,8 @@ import os
 from typing import Tuple
 import gazu
 
-from openpype.lib.local_settings import OpenPypeSecureRegistry
-from openpype.lib import emit_event
+from ayon_core.lib.local_settings import AYONSecureRegistry
+from ayon_core.lib import emit_event
 
 
 def validate_credentials(
@@ -67,7 +67,7 @@ def clear_credentials():
         return
 
     # Get user registry
-    user_registry = OpenPypeSecureRegistry("kitsu_user")
+    user_registry = AYONSecureRegistry("kitsu_user")
 
     # Set local settings
     if login is not None:
@@ -84,7 +84,7 @@ def save_credentials(login: str, password: str):
         password (str): Kitsu user password
     """
     # Get user registry
-    user_registry = OpenPypeSecureRegistry("kitsu_user")
+    user_registry = AYONSecureRegistry("kitsu_user")
 
     # Set local settings
     user_registry.set_item("login", login)
@@ -98,7 +98,7 @@ def load_credentials() -> Tuple[str, str]:
         Tuple[str, str]: (Login, Password)
     """
     # Get user registry
-    user_registry = OpenPypeSecureRegistry("kitsu_user")
+    user_registry = AYONSecureRegistry("kitsu_user")
 
     return (
         user_registry.get_item("login", None),

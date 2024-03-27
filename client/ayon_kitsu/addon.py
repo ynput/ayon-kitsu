@@ -2,7 +2,7 @@
 
 import os
 
-from openpype.modules import (
+from ayon_core.modules import (
     AYONAddon,
     IPluginPaths,
     ITrayAction,

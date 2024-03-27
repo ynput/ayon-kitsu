@@ -3,7 +3,7 @@ import gazu
 import pyblish.api
 import ayon_api
 
-from openpype.pipeline import KnownPublishError
+from ayon_core.pipeline import KnownPublishError
 
 
 class CollectKitsuEntities(pyblish.api.ContextPlugin):

@@ -1,8 +1,8 @@
 import webbrowser
 import ayon_api
 
-from openpype.pipeline import LauncherAction
-from openpype.modules import ModulesManager
+from ayon_core.pipeline import LauncherAction
+from ayon_core.modules import ModulesManager
 
 
 class ShowInKitsu(LauncherAction):
