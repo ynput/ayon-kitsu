@@ -25,10 +25,10 @@ class CollectKitsuEntities(pyblish.api.ContextPlugin):
         filtered_instances = []
         folder_ids = set()
         for instance in context:
-            asset_doc = instance.data.get("assetEntity")
+            asset_doc = instance.data.get("folderEntity")
             if asset_doc:
                 filtered_instances.append(instance)
-                folder_ids.add(asset_doc["_id"])
+                folder_ids.add(asset_doc["id"])
 
         if not folder_ids:
             return
@@ -42,8 +42,8 @@ class CollectKitsuEntities(pyblish.api.ContextPlugin):
             )
         }
         for instance in filtered_instances:
-            asset_doc = instance.data["assetEntity"]
-            folder = folders_by_id[asset_doc["_id"]]
+            asset_doc = instance.data["folderEntity"]
+            folder = folders_by_id[asset_doc["id"]]
             asset_path = folder["path"]
             kitsu_id = folder["data"].get("kitsuId")
             if not kitsu_id:
