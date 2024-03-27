@@ -69,9 +69,7 @@ class IntegrateKitsuNote(pyblish.api.ContextPlugin):
 
             # Check if any status condition is not met
             allow_status_change = True
-            for status_cond in self.status_change_conditions[
-                "status_conditions"
-            ]:
+            for status_cond in self.status_change_conditions["status_conditions"]:
                 condition = status_cond["condition"] == "equal"
                 match = status_cond["short_name"].upper() == shortname
                 if match and not condition or condition and not match:

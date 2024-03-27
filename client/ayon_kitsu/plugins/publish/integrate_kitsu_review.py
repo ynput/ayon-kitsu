@@ -15,9 +15,7 @@ class IntegrateKitsuReview(pyblish.api.InstancePlugin):
         # Check comment has been created
         comment_id = instance.data.get("kitsuComment", {}).get("id")
         if not comment_id:
-            self.log.debug(
-                "Comment not created, review not pushed to preview."
-            )
+            self.log.debug("Comment not created, review not pushed to preview.")
             return
 
         kitsu_task = instance.data.get("kitsuTask")

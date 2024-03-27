@@ -61,9 +61,7 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
 
     def get_global_environments(self):
         """Kitsu's global environments."""
-        return {
-            "KITSU_SERVER": self.server_url
-        }
+        return {"KITSU_SERVER": self.server_url}
 
     def _get_dialog(self):
         if self._dialog is None:

@@ -9,7 +9,9 @@ from ayon_core.lib import emit_event
 
 
 def validate_credentials(
-    login: str, password: str, kitsu_url: str = None
+    login: str,
+    password: str,
+    kitsu_url: str | None = None,
 ) -> bool:
     """Validate credentials by trying to connect to Kitsu host URL.
 

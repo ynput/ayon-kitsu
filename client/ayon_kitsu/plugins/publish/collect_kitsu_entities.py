@@ -36,9 +36,9 @@ class CollectKitsuEntities(pyblish.api.ContextPlugin):
         folders_by_id = {
             folder["id"]: folder
             for folder in ayon_api.get_folders(
-            project_name,
+                project_name,
                 folder_ids=folder_ids,
-                fields={"id", "data", "path"}
+                fields={"id", "data", "path"},
             )
         }
         for instance in filtered_instances:
@@ -69,16 +69,16 @@ class CollectKitsuEntities(pyblish.api.ContextPlugin):
                 project_name,
                 folder["id"],
                 task_name,
-                fields={"data"}
+                fields={"data"},
             )
             kitsu_task_id = task["data"].get("kitsuId")
 
             self.log.debug(f"Collect kitsu: {kitsu_entity}")
 
             if kitsu_task_id:
-                kitsu_task = kitsu_entities_by_id.get(kitsu_task_id)
-                if not kitsu_task:
-                    kitsu_task = gazu.task.get_task(kitsu_task_id)
+                kitsu_task = kitsu_entities_by_id.get(
+                    kitsu_task_id
+                ) or gazu.task.get_task(kitsu_task_id)
             else:
                 kitsu_task_type = gazu.task.get_task_type_by_name(task_name)
                 if not kitsu_task_type:
@@ -86,9 +86,7 @@ class CollectKitsuEntities(pyblish.api.ContextPlugin):
                         f"Task type {task_name} not found in Kitsu!"
                     )
 
-                kitsu_task = gazu.task.get_task_by_name(
-                    kitsu_entity, kitsu_task_type
-                )
+                kitsu_task = gazu.task.get_task_by_name(kitsu_entity, kitsu_task_type)
 
             if not kitsu_task:
                 raise KnownPublishError(f"Task {task_name} not found in kitsu!")
