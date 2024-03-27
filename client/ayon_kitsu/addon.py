@@ -53,6 +53,10 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
 
         login, password = load_credentials()
 
+        if login is None or password is None:
+            # TODO raise correct type
+            raise
+
         # Check credentials, ask them if needed
         if validate_credentials(login, password):
             set_credentials_envs(login, password)

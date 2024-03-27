@@ -25,7 +25,11 @@ def validate_credentials(
     """
 
     if kitsu_url is None:
-        kitsu_url = os.environ.get("KITSU_SERVER")
+        if os.environ.get("KITSU_SERVER") is None:
+            # TODO raise correct type
+            raise
+        else:
+            kitsu_url = str(os.environ.get("KITSU_SERVER"))
 
     # Connect to server
     validate_host(kitsu_url)
@@ -93,7 +97,7 @@ def save_credentials(login: str, password: str):
     user_registry.set_item("password", password)
 
 
-def load_credentials() -> Tuple[str, str]:
+def load_credentials() -> Tuple[object | None, object | None]:
     """Load registered credentials.
 
     Returns:
@@ -104,7 +108,7 @@ def load_credentials() -> Tuple[str, str]:
 
     return (
         user_registry.get_item("login", None),
-        user_registry.get_item("password", None)
+        user_registry.get_item("password", None),
     )
 
 
