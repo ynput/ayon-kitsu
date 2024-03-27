@@ -4,12 +4,14 @@ import os
 from typing import Tuple
 import gazu
 
-from openpype.lib.local_settings import OpenPypeSecureRegistry
-from openpype.lib import emit_event
+from ayon_core.lib.local_settings import AYONSecureRegistry
+from ayon_core.lib import emit_event
 
 
 def validate_credentials(
-    login: str, password: str, kitsu_url: str = None
+    login: str,
+    password: str,
+    kitsu_url: str | None = None,
 ) -> bool:
     """Validate credentials by trying to connect to Kitsu host URL.
 
@@ -23,7 +25,11 @@ def validate_credentials(
     """
 
     if kitsu_url is None:
-        kitsu_url = os.environ.get("KITSU_SERVER")
+        if os.environ.get("KITSU_SERVER") is None:
+            # TODO raise correct type
+            raise
+        else:
+            kitsu_url = str(os.environ.get("KITSU_SERVER"))
 
     # Connect to server
     validate_host(kitsu_url)
@@ -57,8 +63,7 @@ def validate_host(kitsu_url: str) -> bool:
     if gazu.client.host_is_valid():
         return True
     else:
-        raise gazu.exception.HostException(
-            "Host '{}' is invalid.".format(kitsu_url))
+        raise gazu.exception.HostException(f"Host '{kitsu_url}' is invalid.")
 
 
 def clear_credentials():
@@ -68,7 +73,7 @@ def clear_credentials():
         return
 
     # Get user registry
-    user_registry = OpenPypeSecureRegistry("kitsu_user")
+    user_registry = AYONSecureRegistry("kitsu_user")
 
     # Set local settings
     if login is not None:
@@ -85,25 +90,25 @@ def save_credentials(login: str, password: str):
         password (str): Kitsu user password
     """
     # Get user registry
-    user_registry = OpenPypeSecureRegistry("kitsu_user")
+    user_registry = AYONSecureRegistry("kitsu_user")
 
     # Set local settings
     user_registry.set_item("login", login)
     user_registry.set_item("password", password)
 
 
-def load_credentials() -> Tuple[str, str]:
+def load_credentials() -> Tuple[object | None, object | None]:
     """Load registered credentials.
 
     Returns:
         Tuple[str, str]: (Login, Password)
     """
     # Get user registry
-    user_registry = OpenPypeSecureRegistry("kitsu_user")
+    user_registry = AYONSecureRegistry("kitsu_user")
 
     return (
         user_registry.get_item("login", None),
-        user_registry.get_item("password", None)
+        user_registry.get_item("password", None),
     )
 
 

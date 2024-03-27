@@ -2,7 +2,7 @@
 
 import os
 
-from openpype.modules import (
+from ayon_core.modules import (
     AYONAddon,
     IPluginPaths,
     ITrayAction,
@@ -26,13 +26,11 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
         if kitsu_url:
             # Ensure web url
             if not kitsu_url.startswith("http"):
-                kitsu_url = "https://" + kitsu_url
+                kitsu_url = f"https://{kitsu_url}"
 
             # Check for "/api" url validity
             if not kitsu_url.endswith("api"):
-                kitsu_url = "{}{}api".format(
-                    kitsu_url, "" if kitsu_url.endswith("/") else "/"
-                )
+                kitsu_url = f'{kitsu_url}{"" if kitsu_url.endswith("/") else "/"}api'
 
         self.enabled = True
         self.server_url = kitsu_url
@@ -55,6 +53,10 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
 
         login, password = load_credentials()
 
+        if login is None or password is None:
+            # TODO raise correct type
+            raise
+
         # Check credentials, ask them if needed
         if validate_credentials(login, password):
             set_credentials_envs(login, password)
@@ -63,9 +65,7 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
 
     def get_global_environments(self):
         """Kitsu's global environments."""
-        return {
-            "KITSU_SERVER": self.server_url
-        }
+        return {"KITSU_SERVER": self.server_url}
 
     def _get_dialog(self):
         if self._dialog is None:
