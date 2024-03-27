@@ -57,8 +57,7 @@ def validate_host(kitsu_url: str) -> bool:
     if gazu.client.host_is_valid():
         return True
     else:
-        raise gazu.exception.HostException(
-            "Host '{}' is invalid.".format(kitsu_url))
+        raise gazu.exception.HostException(f"Host '{kitsu_url}' is invalid.")
 
 
 def clear_credentials():

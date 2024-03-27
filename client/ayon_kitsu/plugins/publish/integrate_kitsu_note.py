@@ -108,11 +108,10 @@ class IntegrateKitsuNote(pyblish.api.ContextPlugin):
                 )
                 if kitsu_status:
                     note_status = kitsu_status
-                    self.log.info("Note Kitsu status: {}".format(note_status))
+                    self.log.info(f"Note Kitsu status: {note_status}")
                 else:
                     self.log.info(
-                        "Cannot find {} status. The status will not be "
-                        "changed!".format(self.note_status_shortname)
+                        f"Cannot find {self.note_status_shortname} status. The status will not be changed!"
                     )
 
             # Get comment text body
@@ -123,12 +122,10 @@ class IntegrateKitsuNote(pyblish.api.ContextPlugin):
             if not publish_comment:
                 self.log.debug("Comment is not set.")
             else:
-                self.log.debug("Comment is `{}`".format(publish_comment))
+                self.log.debug(f"Comment is `{publish_comment}`")
 
             # Add comment to kitsu task
-            self.log.debug(
-                "Add new note in tasks id {}".format(kitsu_task["id"])
-            )
+            self.log.debug(f'Add new note in tasks id {kitsu_task["id"]}')
             kitsu_comment = gazu.task.add_comment(
                 kitsu_task, note_status, comment=publish_comment
             )

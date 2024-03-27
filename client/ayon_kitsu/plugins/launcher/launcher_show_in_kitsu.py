@@ -29,13 +29,11 @@ class ShowInKitsu(LauncherAction):
 
         project = ayon_api.get_project(project_name)
         if not project:
-            raise RuntimeError("Project {} not found.".format(project_name))
+            raise RuntimeError(f"Project {project_name} not found.")
 
         project_zou_id = project["data"].get("zou_id")
         if not project_zou_id:
-            raise RuntimeError(
-                "Project {} has no connected kitsu id.".format(project_name)
-            )
+            raise RuntimeError(f"Project {project_name} has no connected kitsu id.")
 
         asset_zou_name = None
         asset_zou_id = None
@@ -46,11 +44,9 @@ class ShowInKitsu(LauncherAction):
             asset_zou_name = asset_name
             asset_fields = ["data.zou.id", "data.zou.type"]
             if task_name:
-                asset_fields.append("data.tasks.{}.zou.id".format(task_name))
+                asset_fields.append(f"data.tasks.{task_name}.zou.id")
 
-            asset = get_asset_by_name(
-                project_name, asset_name=asset_name, fields=asset_fields
-            )
+            asset = ayon_api.get_folder_by_name(project_name, asset_name, asset_fields)
 
             asset_zou_data = asset["data"].get("zou")
 
@@ -65,9 +61,7 @@ class ShowInKitsu(LauncherAction):
                 task_data = asset["data"]["tasks"][task_name]
                 task_zou_data = task_data.get("zou", {})
                 if not task_zou_data:
-                    self.log.debug(
-                        "No zou task data for task: {}".format(task_name)
-                    )
+                    self.log.debug(f"No zou task data for task: {task_name}")
                 task_zou_id = task_zou_data["id"]
 
         # Define URL
@@ -80,7 +74,7 @@ class ShowInKitsu(LauncherAction):
         )
 
         # Open URL in webbrowser
-        self.log.info("Opening URL: {}".format(url))
+        self.log.info(f"Opening URL: {url}")
         webbrowser.open(
             url,
             # Try in new tab
