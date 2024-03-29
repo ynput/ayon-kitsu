@@ -1,7 +1,7 @@
 """Kitsu credentials functions."""
 
 import os
-from typing import Tuple
+from typing import Tuple, Optional
 import gazu
 
 from ayon_core.lib.local_settings import AYONSecureRegistry
@@ -11,7 +11,7 @@ from ayon_core.lib import emit_event
 def validate_credentials(
     login: str,
     password: str,
-    kitsu_url: str | None = None,
+    kitsu_url: Optional[str] = None,
 ) -> bool:
     """Validate credentials by trying to connect to Kitsu host URL.
 
