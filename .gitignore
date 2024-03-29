@@ -1,6 +1,7 @@
 __pycache__
 .venv
 .env
+.vscode
 poetry.lock
 package/
 
@@ -11,3 +12,5 @@ server/frontend/yarn-error.log
 server/frontend/.yarn
 server/frontend/.pnp.cjs
 server/frontend/.pnp.loader.mjs
+
+dist/
