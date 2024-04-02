@@ -1,7 +1,7 @@
 """Kitsu credentials functions."""
 
 import os
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 import gazu
 
 from ayon_core.lib.local_settings import AYONSecureRegistry
@@ -97,7 +97,7 @@ def save_credentials(login: str, password: str):
     user_registry.set_item("password", password)
 
 
-def load_credentials() -> Tuple[object | None, object | None]:
+def load_credentials() -> Tuple[Union[object, None], Union[object, None]]:
     """Load registered credentials.
 
     Returns:
