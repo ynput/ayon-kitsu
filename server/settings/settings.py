@@ -54,7 +54,7 @@ class CustomCommentTemplateModel(BaseSettingsModel):
     """
 
     enabled: bool = Field(True)
-    comment_template: str = Field("", title="Custom comment")
+    comment_template: str = Field("", widget="textarea", title="Custom comment")
 
 
 class IntegrateKitsuNotes(BaseSettingsModel):
