@@ -112,6 +112,55 @@ class KitsuMock:
         },
     ]
 
+    # used by test_push_project to update the task types
+    updated_api_data_task_types = [
+        {
+            "name": "Animation",
+            "short_name": "ANIM",
+            "color": "#DDD",
+            "priority": 5,
+            "for_entity": "Shot",
+            "allow_timelog": True,
+            "archived": False,
+            "shotgun_id": None,
+            "department_id": "dept-id-1",
+            "id": "task-type-id-1",
+            "created_at": "2024-01-01T00:00:00",
+            "updated_at": "2024-01-01T00:00:00",
+            "type": "TaskType",
+        },
+        {
+            "name": "Compositing",
+            "short_name": "COMP",
+            "color": "#666",
+            "priority": 5,
+            "for_entity": "Shot",
+            "allow_timelog": True,
+            "archived": False,
+            "shotgun_id": None,
+            "department_id": "dept-id-1",
+            "id": "task-type-id-2",
+            "created_at": "2024-01-01T00:00:00",
+            "updated_at": "2024-01-01T00:00:00",
+            "type": "TaskType",
+        },
+        {
+            "name": "Grading",
+            "short_name": "Grad",
+            "color": "#666",
+            "priority": 5,
+            "for_entity": "Shot",
+            "allow_timelog": True,
+            "archived": False,
+            "shotgun_id": None,
+            "department_id": "dept-id-1",
+            "id": "task-type-id-3",
+            "created_at": "2024-01-01T00:00:00",
+            "updated_at": "2024-01-01T00:00:00",
+            "type": "TaskType",
+        },
+    ]
+
     api_data_task_status = [
         {
             "name": "Todo",
@@ -176,6 +225,12 @@ class KitsuMock:
             and endpoint == "data/projects/kitsu-project-id-2/task-types"
         ):
             return KitsuResponse(self.api_data_task_types)
+
+        if (
+            method == "get"
+            and endpoint == "data/projects/kitsu-project-id-1/task-types"
+        ):
+            return KitsuResponse(self.updated_api_data_task_types)
 
         if method == "get" and endpoint == "data/task-status":
             return KitsuResponse(self.api_data_task_status)

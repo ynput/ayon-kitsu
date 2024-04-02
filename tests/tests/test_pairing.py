@@ -14,6 +14,21 @@ from tests.fixtures import (
     $ poetry run pytest tests/test_pairing.py
 """
 
+expected = [
+    {
+        "kitsuProjectId": "kitsu-project-id-1",
+        "kitsuProjectName": "Kitsu Test Project",
+        "kitsuProjectCode": "KTP",
+        "ayonProjectName": PROJECT_NAME,
+    },
+    {
+        "kitsuProjectId": "kitsu-project-id-2",
+        "kitsuProjectName": "Another Project",
+        "kitsuProjectCode": "AP",
+        "ayonProjectName": None,
+    },
+]
+
 
 def test_get_pairing(api, kitsu_url):
     # ensure the kitsu project does not exist
@@ -21,29 +36,16 @@ def test_get_pairing(api, kitsu_url):
 
     res = api.get(f"{kitsu_url}/pairing", mock=True)
     assert res.status_code == 200
-    assert res.data == [
-        {
-            "kitsuProjectId": "kitsu-project-id-1",
-            "kitsuProjectName": "Kitsu Test Project",
-            "kitsuProjectCode": "KTP",
-            "ayonProjectName": PROJECT_NAME,
-        },
-        {
-            "kitsuProjectId": "kitsu-project-id-2",
-            "kitsuProjectName": "Another Project",
-            "kitsuProjectCode": "AP",
-            "ayonProjectName": None,
-        },
-    ]
+    assert res.data == expected
 
 
-def _test_post_pairing_success(api, kitsu_url):
+def test_post_pairing_success(api, kitsu_url):
     res = api.post(
         f"{kitsu_url}/pairing",
         kitsuProjectId="kitsu-project-id-2",
         ayonProjectName=PAIR_PROJECT_NAME,
         ayonProjectCode=PAIR_PROJECT_CODE,
-        mock=True,
+        # mock=True,
     )
     assert res.status_code == 201  # created
 
@@ -74,7 +76,7 @@ def _test_post_pairing_success(api, kitsu_url):
         "color": "#f5f5f5",
         "state": "in_progress",
         "shortName": "TODO",
-        "icon": "",
+        "icon": "task_alt",
     }
 
     assert project["statuses"][1] == {
@@ -82,7 +84,7 @@ def _test_post_pairing_success(api, kitsu_url):
         "color": "#22D160",
         "state": "in_progress",
         "shortName": "App",
-        "icon": "",
+        "icon": "task_alt",
     }
 
     assert project["tags"] == []  # could be useful for kitsu info
@@ -104,11 +106,11 @@ def _test_post_pairing_success(api, kitsu_url):
 
     assert project["folderTypes"] == [
         {"icon": "folder", "name": "Folder", "shortName": ""},
-        {"icon": "category", "name": "Library", "shortName": "lib"},
-        {"icon": "smart_toy", "name": "Asset", "shortName": ""},
+        {"icon": "library_books", "name": "Library", "shortName": "lib"},
+        {"icon": "web_asset", "name": "Asset", "shortName": ""},
         {"icon": "live_tv", "name": "Episode", "shortName": "ep"},
         {"icon": "theaters", "name": "Sequence", "shortName": "sq"},
-        {"icon": "movie", "name": "Shot", "shortName": "sh"},
+        {"icon": "screenshot_keyboard", "name": "Shot", "shortName": "sh"},
     ]
 
     assert project["ownAttrib"] == [

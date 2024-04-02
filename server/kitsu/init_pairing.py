@@ -26,6 +26,7 @@ class InitPairingRequest(OPModel):
         title="Ayon project code",
         regex=PROJECT_CODE_REGEX,
     )
+    mock: bool | None = None
     # anatomy_preset: str | None = Field(None, title="Anatomy preset")
 
 

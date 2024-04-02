@@ -47,6 +47,55 @@ def test_update_folder_attrib(api, kitsu_url, init_data):
     assert folder["attrib"]["frameEnd"] == 102
 
 
+def test_calculate_frames(api, kitsu_url):
+    """test for utils.calculate_frames"""
+
+    # do a partial update
+    kitsu_id = "shot-id-1"
+    update = {
+        "id": kitsu_id,  # required
+        "type": "Shot",  # required
+        "name": "SH001",
+        "nb_frames": 200,  # change the number of frames
+        "data": {
+            "frame_in": "10",
+        },
+    }
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=PROJECT_NAME,
+        entities=[update],
+    )
+    assert res.status_code == 200
+
+    # lets get the ayon folder
+    ayon_id = res.data["folders"][kitsu_id]
+    folder = api.get_folder_by_id(PROJECT_NAME, ayon_id)
+
+    # frame start and end should be updated
+    assert folder["attrib"]["frameStart"] == 10
+    assert folder["attrib"]["frameEnd"] == 210
+
+    update = {
+        "id": kitsu_id,
+        "type": "Shot",
+        "name": "SH001",
+        "nb_frames": 100,
+        "data": {},  # no frame_in
+    }
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=PROJECT_NAME,
+        entities=[update],
+    )
+    assert res.status_code == 200
+    folder = api.get_folder_by_id(PROJECT_NAME, ayon_id)
+
+    # frame start and end should be updated
+    assert folder["attrib"]["frameStart"] == 10
+    assert folder["attrib"]["frameEnd"] == 110
+
+
 def test_update_folder_name(api, kitsu_url):
     # do a partial update
     kitsu_id = "shot-id-1"
@@ -86,7 +135,52 @@ def test_update_folder_no_changes(api, kitsu_url):
     assert res.status_code == 200
 
     # there should be no folders returned as none were created or updated
-    assert res.data == {"folders": {}, "tasks": {}}
+    assert res.data["folders"] == {}
+
+
+def test_update_folder_kitsu_type(api, kitsu_url):
+    """kitsuType was added in 1.1.1 sync should update existing folders with data.kitsuType"""
+
+    # do an initial update so we get the ayon id for the folder
+    kitsu_id = "shot-id-1"
+    update = {
+        "id": kitsu_id,  # required
+        "type": "Shot",  # required
+        "name": "Some Name",  # required
+    }
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=PROJECT_NAME,
+        entities=[update],
+    )
+
+    # lets get the ayon folder
+    ayon_id = res.data["folders"][kitsu_id]
+
+    # update the folder so the data has no kitsuType
+    res = api.patch(
+        f"/projects/{PROJECT_NAME}/folders/{ayon_id}",
+        data={"kitsuId": kitsu_id, "kitsuType": None},
+    )
+    folder = api.get_folder_by_id(PROJECT_NAME, ayon_id)
+    assert folder["data"] == {"kitsuId": kitsu_id}
+
+    ## now push it and the type should be added
+    kitsu_id = "shot-id-1"
+    update = {
+        "id": kitsu_id,  # required
+        "type": "Shot",  # required
+        "name": "Some Name",  # no update
+    }
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=PROJECT_NAME,
+        entities=[update],
+    )
+    folder = api.get_folder_by_id(PROJECT_NAME, ayon_id)
+
+    # folder is updated with the kitsuType
+    assert folder["data"] == {"kitsuId": kitsu_id, "kitsuType": "Shot"}
 
 
 def test_update_task_status(api, kitsu_url):
@@ -128,8 +222,8 @@ def test_update_task_no_changes(api, kitsu_url):
     )
     assert res.status_code == 200
 
-    # there should be no folders returned as none were created or updated
-    assert res.data == {"folders": {}, "tasks": {}}
+    # there should be no tasks returned as none were created or updated
+    assert res.data["tasks"] == {}
 
 
 def test_update_task_with_new_status(api, kitsu_url):

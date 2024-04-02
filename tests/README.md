@@ -3,7 +3,9 @@
 ## Setup
 
 You can ether use an already existing Ayon instance by duplicating the `example_env`, rename it to `.env` and fill out the needed variables inside.
-Or you can run ayon locally. You will need `ayon-docker`. You will need to mount your backend and addon code as volumes on the `server` service in `docker-compose.yml` for testing something like:
+
+
+Or you can run ayon locally. You will need `ayon-docker`. You will need to mount your backend and addon code as volumes on the `server` service in `docker-compose.yml` for testing.  Note: Change `<version>` to match the version in file `version.py`
 
 ```docker
 volumes:
@@ -13,9 +15,9 @@ volumes:
       # mount ayon-backend
       - "../ayon-backend:/backend"
 
-      # mount ayon-kitsu
-      - "../ayon-kitsu/server:/addons/kitsu/1.0.2-dev1"
-      - "../ayon-kitsu/version.py:/addons/kitsu/1.0.2-dev1/version.py"
+      # mount ayon-kitsu - change version to match file version.py
+      - "../ayon-kitsu/server:/addons/kitsu/<version>"
+
 
 ```
 

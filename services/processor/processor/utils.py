@@ -1,4 +1,4 @@
-""" utils shared between fullsync.py and update_from_kitsu.py """
+"""utils shared between fullsync.py and update_from_kitsu.py"""
 
 import ayon_api
 import gazu
@@ -12,8 +12,9 @@ def get_asset_types(kitsu_project_id: str) -> dict[str, str]:
     return kitsu_asset_types
 
 
-def get_task_types(kitsu_project_id: str) -> dict[str, str]:
-    raw_task_types = gazu.task.all_task_types_for_project(kitsu_project_id)
+def get_task_types() -> dict[str, str]:
+    # we need all task types as concept has its own task type outside of the project
+    raw_task_types = gazu.task.all_task_types()
     kitsu_task_types = {}
     for task_type in raw_task_types:
         kitsu_task_types[task_type["id"]] = task_type["name"]
@@ -48,7 +49,7 @@ def preprocess_task(
     statuses: dict[str, str] = {},
 ) -> dict[str, str | list[str]]:
     if not task_types:
-        task_types = get_task_types(kitsu_project_id)
+        task_types = get_task_types()
 
     if not statuses:
         statuses = get_statuses()
@@ -62,14 +63,15 @@ def preprocess_task(
     if "name" in task and "task_type_name" in task and task["name"] == "main":
         task["name"] = task["task_type_name"].lower()
 
-    # Match the assigned ayon user with the assigned kitsu email
-    ayon_users = {
-        user["attrib"]["email"]: user["name"] for user in ayon_api.get_users()
-    }
-    task_emails = {user["email"] for user in task["persons"]}
-    task["assignees"] = []
-    task["assignees"].extend(
-        ayon_users[email] for email in task_emails if email in ayon_users
-    )
+    if "persons" in task:
+        # Match the assigned ayon user with the assigned kitsu email
+        ayon_users = {
+            user["attrib"]["email"]: user["name"] for user in ayon_api.get_users()
+        }
+        task_emails = {user["email"] for user in task["persons"]}
+        task["assignees"] = []
+        task["assignees"].extend(
+            ayon_users[email] for email in task_emails if email in ayon_users
+        )
 
     return task
