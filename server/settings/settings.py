@@ -31,19 +31,19 @@ class StatusChangeCondition(BaseSettingsModel):
     short_name: str = Field("", title="Short name")
 
 
-class StatusChangeProductTypeRequirementModel(BaseSettingsModel):
+class StatusChangeFamilyRequirementModel(BaseSettingsModel):
     condition: str = Field(
         "equal", enum_resolver=_status_change_cond_enum, title="Condition"
     )
-    product_type: str = Field("", title="Product type")
+    product_type: str = Field("", title="Family")
 
 
 class StatusChangeConditionsModel(BaseSettingsModel):
     status_conditions: list[StatusChangeCondition] = Field(
         default_factory=list, title="Status conditions"
     )
-    product_type_requirements: list[StatusChangeProductTypeRequirementModel] = Field(
-        default_factory=list, title="Product type requirements"
+    family_requirements: list[StatusChangeFamilyRequirementModel] = Field(
+        default_factory=list, title="Family requirements"
     )
 
 
@@ -54,7 +54,7 @@ class CustomCommentTemplateModel(BaseSettingsModel):
     """
 
     enabled: bool = Field(True)
-    comment_template: str = Field("", title="Custom comment")
+    comment_template: str = Field("", widget="textarea", title="Custom comment")
 
 
 class IntegrateKitsuNotes(BaseSettingsModel):

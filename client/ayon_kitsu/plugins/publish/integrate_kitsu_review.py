@@ -33,6 +33,10 @@ class IntegrateKitsuReview(pyblish.api.InstancePlugin):
             self.log.debug(f"Found review at: {review_path}")
 
             gazu.task.add_preview(
-                task_id, comment_id, review_path, normalize_movie=True
+                task=task_id,
+                comment=comment_id,
+                preview_file_path=review_path,
+                normalize_movie=True,
+                revision=instance.data["version"],
             )
             self.log.info("Review upload on comment")
