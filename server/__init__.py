@@ -19,13 +19,6 @@ from .kitsu.push import (
 )
 from .settings import DEFAULT_VALUES, KitsuSettings
 
-try:
-    from .version import __version__
-except ModuleNotFoundError:
-    # temporary solution for local development
-    # version is pushed from package.py in ayon >= 1.0.3
-    __version__ = "0.0.0"
-
 #
 # Events:
 #
@@ -36,15 +29,9 @@ except ModuleNotFoundError:
 
 
 class KitsuAddon(BaseServerAddon):
-    name = "kitsu"
-    title = "Kitsu"
-    version = __version__
     settings_model: Type[KitsuSettings] = KitsuSettings
     frontend_scopes = {
         "settings": {},
-    }
-    services = {
-        "processor": {"image": f"ynput/ayon-kitsu-processor:{__version__}"},
     }
 
     kitsu: Kitsu | None = None
