@@ -28,9 +28,11 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
             if not kitsu_url.startswith("http"):
                 kitsu_url = f"https://{kitsu_url}"
 
+            kitsu_url = kitsu_url.rstrip("/")
+
             # Check for "/api" url validity
             if not kitsu_url.endswith("api"):
-                kitsu_url = f'{kitsu_url}{"" if kitsu_url.endswith("/") else "/"}api'
+                kitsu_url = f"{kitsu_url}/api"
 
         self.server_url = kitsu_url
 
