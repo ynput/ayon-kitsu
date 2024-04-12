@@ -32,7 +32,6 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
             if not kitsu_url.endswith("api"):
                 kitsu_url = f'{kitsu_url}{"" if kitsu_url.endswith("/") else "/"}api'
 
-        self.enabled = True
         self.server_url = kitsu_url
 
         # UI which must not be created at this time
