@@ -11,7 +11,7 @@ if ($ARGS.Length -gt 1) {
 $script_dir_rel = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
 $script_dir = (Get-Item $script_dir_rel).FullName
 
-$AYON_ADDON_VERSION = Invoke-Expression -Command "python -c ""import os;import sys;content={};f=open(r'$($script_dir)/../version.py');exec(f.read(),content);f.close();print(content['__version__'])"""
+$AYON_ADDON_VERSION = Invoke-Expression -Command "python -c ""import os;import sys;content={};f=open(r'$($script_dir)/../package.py');exec(f.read(),content);f.close();print(content['version'])"""
 $AYON_ADDON_NAME = "kitsu"
 $BASE_NAME = "ayon-$AYON_ADDON_NAME-$SERVICE"
 $IMAGE = "ynput/$($BASE_NAME):$($AYON_ADDON_VERSION)"

@@ -1,6 +1,6 @@
 include .env
 
-AYON_ADDON_VERSION=$(shell python -c "import os;import sys;content={};f=open('$(CURDIR)/../version.py');exec(f.read(),content);f.close();print(content['__version__'])")
+AYON_ADDON_VERSION=$(shell python -c "import os;import sys;content={};f=open('$(CURDIR)/../package.py');exec(f.read(),content);f.close();print(content['version'])")
 AYON_ADDON_NAME=kitsu
 BASE_NAME := ayon-$(AYON_ADDON_NAME)-$(SERVICE)
 IMAGE := ynput/$(BASE_NAME):$(AYON_ADDON_VERSION)
