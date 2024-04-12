@@ -4,8 +4,7 @@ import os
 from typing import Tuple, Optional, Union
 import gazu
 
-from ayon_core.lib.local_settings import AYONSecureRegistry
-from ayon_core.lib import emit_event
+from ayon_core.lib import AYONSecureRegistry, emit_event
 
 
 def validate_credentials(

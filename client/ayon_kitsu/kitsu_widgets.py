@@ -4,11 +4,7 @@ import ayon_api
 
 from ayon_core import style
 from ayon_core.resources import get_resource
-
-try:
-    from ayon_core.widgets.password_dialog import PressHoverButton
-except ImportError:
-    from ayon_core.tools.utils import PressHoverButton
+from ayon_core.tools.utils import PressHoverButton
 
 from ayon_kitsu.credentials import (
     clear_credentials,

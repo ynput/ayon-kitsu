@@ -1,8 +1,8 @@
-"""Kitsu module."""
+"""Kitsu addon."""
 
 import os
 
-from ayon_core.modules import (
+from ayon_core.addon import (
     AYONAddon,
     IPluginPaths,
     ITrayAction,
@@ -12,13 +12,13 @@ KITSU_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
 class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
-    """Kitsu module class."""
+    """Kitsu addon class."""
 
     label = "Kitsu Connect"
     name = "kitsu"
 
     def initialize(self, settings):
-        """Initialization of module."""
+        """Initialization of addon."""
 
         kitsu_settings = settings["kitsu"]
         # Add API URL schema
