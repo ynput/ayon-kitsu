@@ -47,7 +47,7 @@ function run {
 }
 
 function build {
-  & docker build -t "$IMAGE" -f $(SERVICE)/Dockerfile .
+  & docker build -t "$IMAGE" -f "$($script_dir)/$($SERVICE)/Dockerfile" .
 }
 
 function clean {
