@@ -1,8 +1,8 @@
 import webbrowser
 import ayon_api
 
-from openpype.pipeline import LauncherAction
-from openpype.modules import ModulesManager
+from ayon_core.pipeline import LauncherAction
+from ayon_core.addon import AddonsManager
 
 
 class ShowInKitsu(LauncherAction):
@@ -13,74 +13,47 @@ class ShowInKitsu(LauncherAction):
     order = 10
 
     @staticmethod
-    def get_kitsu_module():
-        return ModulesManager().modules_by_name.get("kitsu")
+    def get_kitsu_addon():
+        return AddonsManager().get("kitsu")
 
-    def is_compatible(self, session):
-        if not session.get("AVALON_PROJECT"):
-            return False
-        return True
+    def is_compatible(self, selection):
+        return selection.is_project_selected
 
-    def process(self, session, **kwargs):
+    def process(self, selection, **kwargs):
         # Context inputs
-        project_name = session["AVALON_PROJECT"]
-        asset_name = session.get("AVALON_ASSET", None)
-        task_name = session.get("AVALON_TASK", None)
-
+        project_name = selection.project_name
         project = ayon_api.get_project(project_name)
         if not project:
-            raise RuntimeError("Project {} not found.".format(project_name))
+            raise RuntimeError(f"Project {project_name} not found.")
 
         project_zou_id = project["data"].get("zou_id")
         if not project_zou_id:
             raise RuntimeError(
-                "Project {} has no connected kitsu id.".format(project_name)
+                f"Project {project_name} has no connected kitsu id."
             )
 
-        asset_zou_name = None
-        asset_zou_id = None
-        asset_zou_type = "Assets"
-        task_zou_id = None
-        zou_sub_type = ["AssetType", "Sequence"]
-        if asset_name:
-            asset_zou_name = asset_name
-            asset_fields = ["data.zou.id", "data.zou.type"]
-            if task_name:
-                asset_fields.append("data.tasks.{}.zou.id".format(task_name))
+        folder_kitsu_id = None
+        folder_type = None
+        task_kitsu_id = None
+        if selection.is_folder_selected:
+            folder_entity = selection.folder_entity
+            folder_kitsu_id = folder_entity["data"].get("kitsuId")
+            folder_type = folder_entity["folderType"]
 
-            asset = get_asset_by_name(
-                project_name, asset_name=asset_name, fields=asset_fields
-            )
-
-            asset_zou_data = asset["data"].get("zou")
-
-            if asset_zou_data:
-                asset_zou_type = asset_zou_data["type"]
-                if asset_zou_type not in zou_sub_type:
-                    asset_zou_id = asset_zou_data["id"]
-            else:
-                asset_zou_type = asset_name
-
-            if task_name:
-                task_data = asset["data"]["tasks"][task_name]
-                task_zou_data = task_data.get("zou", {})
-                if not task_zou_data:
-                    self.log.debug(
-                        "No zou task data for task: {}".format(task_name)
-                    )
-                task_zou_id = task_zou_data["id"]
+            if selection.is_task_selected:
+                task_entity = selection.task_entity
+                task_kitsu_id = task_entity["data"].get("kitsuId")
 
         # Define URL
         url = self.get_url(
-            project_id=project_zou_id,
-            asset_name=asset_zou_name,
-            asset_id=asset_zou_id,
-            asset_type=asset_zou_type,
-            task_id=task_zou_id,
+            project_zou_id,
+            folder_kitsu_id,
+            folder_type,
+            task_kitsu_id,
         )
 
         # Open URL in webbrowser
-        self.log.info("Opening URL: {}".format(url))
+        self.log.info(f"Opening URL: {url}")
         webbrowser.open(
             url,
             # Try in new tab
@@ -89,42 +62,29 @@ class ShowInKitsu(LauncherAction):
 
     def get_url(
         self,
-        project_id,
-        asset_name=None,
-        asset_id=None,
-        asset_type=None,
+        project_kitsu_id,
+        folder_kitsu_id=None,
+        folder_type=None,
         task_id=None,
     ):
         shots_url = {"Shots", "Sequence", "Shot"}
-        sub_type = {"AssetType", "Sequence"}
-        kitsu_module = self.get_kitsu_module()
+        kitsu_addon = self.get_kitsu_addon()
 
         # Get kitsu url with /api stripped
-        kitsu_url = kitsu_module.server_url
-        if kitsu_url.endswith("/api"):
-            kitsu_url = kitsu_url[: -len("/api")]
+        kitsu_url = kitsu_addon.server_url.rstrip("/api")
 
-        sub_url = f"/productions/{project_id}"
-        asset_type_url = "shots" if asset_type in shots_url else "assets"
+        sub_url = f"/productions/{project_kitsu_id}"
+        kitsu_type = "shots" if folder_type in shots_url else "assets"
 
         if task_id:
             # Go to task page
             # /productions/{project-id}/{asset_type}/tasks/{task_id}
-            sub_url += f"/{asset_type_url}/tasks/{task_id}"
+            sub_url += f"/{kitsu_type}/tasks/{task_id}"
 
-        elif asset_id:
+        elif folder_kitsu_id:
             # Go to asset or shot page
             # /productions/{project-id}/assets/{entity_id}
             # /productions/{project-id}/shots/{entity_id}
-            sub_url += f"/{asset_type_url}/{asset_id}"
-
-        else:
-            # Go to project page
-            # Project page must end with a view
-            # /productions/{project-id}/assets/
-            # Add search method if is a sub_type
-            sub_url += f"/{asset_type_url}"
-            if asset_type in sub_type:
-                sub_url += f"?search={asset_name}"
+            sub_url += f"/{kitsu_type}/{folder_kitsu_id}"
 
         return f"{kitsu_url}{sub_url}"

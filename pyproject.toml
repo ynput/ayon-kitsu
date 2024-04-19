@@ -1,0 +1,22 @@
+# WARNING: This file is used only for development done on this addon.
+# Be aware that dependencies used here might not match the ones used by
+# the specific addon bundle set up on the AYON server. This file should
+# be used only for local development and CI/CD purposes.
+
+[tool.poetry]
+name = "ayon-kitsu"
+version = "1.1.0"
+description = ""
+authors = ["Ynput Team <team@ynput.io>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.dev-dependencies]
+gazu = "^0.9.3"
+ayon-python-api = "^1.0.1"
+pyblish = "^1.7.0"
+qtpy = "^2.4.1"
+pydantic = "^2.6.4"
+nxtools = "^1.6"
+python-dotenv = "^1.0.1"

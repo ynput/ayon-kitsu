@@ -15,9 +15,7 @@ class IntegrateKitsuReview(pyblish.api.InstancePlugin):
         # Check comment has been created
         comment_id = instance.data.get("kitsuComment", {}).get("id")
         if not comment_id:
-            self.log.debug(
-                "Comment not created, review not pushed to preview.",
-            )
+            self.log.debug("Comment not created, review not pushed to preview.")
             return
 
         kitsu_task = instance.data.get("kitsuTask")
@@ -32,7 +30,7 @@ class IntegrateKitsuReview(pyblish.api.InstancePlugin):
             if "kitsureview" not in representation.get("tags", []):
                 continue
             review_path = representation.get("published_path")
-            self.log.debug("Found review at: {}".format(review_path))
+            self.log.debug(f"Found review at: {review_path}")
 
             gazu.task.add_preview(
                 task=task_id,
