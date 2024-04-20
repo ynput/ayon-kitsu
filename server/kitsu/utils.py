@@ -33,7 +33,8 @@ def calculate_end_frame(
                 break
 
     if frame_start:
-        return frame_start + entity_dict["nb_frames"]
+        # Remove one frame as the frame_start frame is the one frame
+        return frame_start + nb_frames - 1
 
 
 def remove_accents(input_str: str) -> str:
