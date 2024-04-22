@@ -2,8 +2,10 @@
 import gazu
 import pyblish.api
 
+from ayon_kitsu.pipeline import KitsuPublishInstancePlugin
 
-class IntegrateKitsuReview(pyblish.api.InstancePlugin):
+
+class IntegrateKitsuReview(KitsuPublishInstancePlugin):
     """Integrate Kitsu Review"""
 
     order = pyblish.api.IntegratorOrder + 0.01

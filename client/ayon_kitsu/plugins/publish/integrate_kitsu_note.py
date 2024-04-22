@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
-import gazu
-import pyblish.api
 import re
 
+import gazu
+import pyblish.api
 
-class IntegrateKitsuNote(pyblish.api.ContextPlugin):
+from ayon_kitsu.pipeline import KitsuPublishContextPlugin
+
+
+class IntegrateKitsuNote(KitsuPublishContextPlugin):
     """Integrate Kitsu Note"""
 
     order = pyblish.api.IntegratorOrder
@@ -12,7 +15,6 @@ class IntegrateKitsuNote(pyblish.api.ContextPlugin):
     families = ["render", "image", "online", "plate", "kitsu"]
 
     # status settings
-    settings_category = "kitsu"
     set_status_note = False
     note_status_shortname = "wfa"
     status_change_conditions = {

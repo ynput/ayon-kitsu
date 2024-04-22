@@ -3,9 +3,10 @@ import gazu
 import pyblish.api
 
 from ayon_core.pipeline import KnownPublishError
+from ayon_kitsu.pipeline import KitsuPublishContextPlugin
 
 
-class CollectKitsuEntities(pyblish.api.ContextPlugin):
+class CollectKitsuEntities(KitsuPublishContextPlugin):
     """Collect Kitsu entities according to the current context"""
 
     order = pyblish.api.CollectorOrder + 0.499
