@@ -176,6 +176,7 @@ class KitsuSettings(BaseSettingsModel):
     #
     ## Root fields
     #
+    enabled: bool = SettingsField(True, title="Enabled")
     server: str = SettingsField(
         "",
         title="Kitsu Server",
