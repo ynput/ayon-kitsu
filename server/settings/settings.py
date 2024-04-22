@@ -1,6 +1,4 @@
-from pydantic import Field
-
-from ayon_server.settings import BaseSettingsModel
+from ayon_server.settings import BaseSettingsModel, SettingsField
 from ayon_server.settings.enum import secrets_enum
 from ayon_server.types import NAME_REGEX
 
@@ -9,9 +7,9 @@ from ayon_server.types import NAME_REGEX
 ## Entities naming pattern
 #
 class EntityPattern(BaseSettingsModel):
-    episode: str = Field(title="Episode")
-    sequence: str = Field(title="Sequence")
-    shot: str = Field(title="Shot")
+    episode: str = SettingsField(title="Episode")
+    sequence: str = SettingsField(title="Sequence")
+    shot: str = SettingsField(title="Shot")
 
 
 #
@@ -25,24 +23,24 @@ def _status_change_cond_enum():
 
 
 class StatusChangeCondition(BaseSettingsModel):
-    condition: str = Field(
+    condition: str = SettingsField(
         "equal", enum_resolver=_status_change_cond_enum, title="Condition"
     )
-    short_name: str = Field("", title="Short name")
+    short_name: str = SettingsField("", title="Short name")
 
 
 class StatusChangeFamilyRequirementModel(BaseSettingsModel):
-    condition: str = Field(
+    condition: str = SettingsField(
         "equal", enum_resolver=_status_change_cond_enum, title="Condition"
     )
-    product_type: str = Field("", title="Family")
+    product_type: str = SettingsField("", title="Family")
 
 
 class StatusChangeConditionsModel(BaseSettingsModel):
-    status_conditions: list[StatusChangeCondition] = Field(
+    status_conditions: list[StatusChangeCondition] = SettingsField(
         default_factory=list, title="Status conditions"
     )
-    family_requirements: list[StatusChangeFamilyRequirementModel] = Field(
+    family_requirements: list[StatusChangeFamilyRequirementModel] = SettingsField(
         default_factory=list, title="Family requirements"
     )
 
@@ -53,24 +51,24 @@ class CustomCommentTemplateModel(BaseSettingsModel):
     You can use data from your publishing instance's data.
     """
 
-    enabled: bool = Field(True)
-    comment_template: str = Field("", widget="textarea", title="Custom comment")
+    enabled: bool = SettingsField(True)
+    comment_template: str = SettingsField("", widget="textarea", title="Custom comment")
 
 
 class IntegrateKitsuNotes(BaseSettingsModel):
-    set_status_note: bool = Field(title="Set status on note")
-    note_status_shortname: str = Field(title="Note shortname")
-    status_change_conditions: StatusChangeConditionsModel = Field(
+    set_status_note: bool = SettingsField(title="Set status on note")
+    note_status_shortname: str = SettingsField(title="Note shortname")
+    status_change_conditions: StatusChangeConditionsModel = SettingsField(
         default_factory=StatusChangeConditionsModel, title="Status change conditions"
     )
-    custom_comment_template: CustomCommentTemplateModel = Field(
+    custom_comment_template: CustomCommentTemplateModel = SettingsField(
         default_factory=CustomCommentTemplateModel,
         title="Custom Comment Template",
     )
 
 
 class PublishPlugins(BaseSettingsModel):
-    IntegrateKitsuNote: IntegrateKitsuNotes = Field(
+    IntegrateKitsuNote: IntegrateKitsuNotes = SettingsField(
         default_factory=IntegrateKitsuNotes, title="Integrate Kitsu Note"
     )
 
@@ -89,14 +87,24 @@ def _roles_enum():
 class RolesCondition(BaseSettingsModel):
     """Set what Ayon role users should get based in their Kitsu role"""
 
-    admin: str = Field("admin", enum_resolver=_roles_enum, title="Studio manager")
-    vendor: str = Field("user", enum_resolver=_roles_enum, title="Vendor")
-    client: str = Field("user", enum_resolver=_roles_enum, title="Client")
-    manager: str = Field(
+    admin: str = SettingsField(
+        "admin", enum_resolver=_roles_enum, title="Studio manager"
+    )
+    vendor: str = SettingsField(
+        "user", enum_resolver=_roles_enum, title="Vendor"
+    )
+    client: str = SettingsField(
+        "user", enum_resolver=_roles_enum, title="Client"
+    )
+    manager: str = SettingsField(
         "manager", enum_resolver=_roles_enum, title="Production manager"
     )
-    supervisor: str = Field("manager", enum_resolver=_roles_enum, title="Supervisor")
-    user: str = Field("user", enum_resolver=_roles_enum, title="Artist")
+    supervisor: str = SettingsField(
+        "manager", enum_resolver=_roles_enum, title="Supervisor"
+    )
+    user: str = SettingsField(
+        "user", enum_resolver=_roles_enum, title="Artist"
+    )
 
 
 class SyncUsers(BaseSettingsModel):
@@ -104,10 +112,10 @@ class SyncUsers(BaseSettingsModel):
     Please ask the user to change the password inside Ayon.
     """
 
-    enabled: bool = Field(True)
-    default_password: str = Field(title="Default Password")
-    access_group: str = Field(title="Access Group", regex=NAME_REGEX)
-    roles: RolesCondition = Field(default_factory=RolesCondition, title="Roles")
+    enabled: bool = SettingsField(True)
+    default_password: str = SettingsField(title="Default Password")
+    access_group: str = SettingsField(title="Access Group", regex=NAME_REGEX)
+    roles: RolesCondition = SettingsField(default_factory=RolesCondition, title="Roles")
 
 
 #
@@ -124,23 +132,25 @@ def _states_enum():
 
 class TaskCondition(BaseSettingsModel):
     _layout: str = "compact"
-    name: str = Field("", title="Name")
-    short_name: str = Field("", title="Short name")
-    icon: str = Field("task_alt", title="Icon", widget="icon")
+    name: str = SettingsField("", title="Name")
+    short_name: str = SettingsField("", title="Short name")
+    icon: str = SettingsField("task_alt", title="Icon", widget="icon")
 
 
 class StatusCondition(BaseSettingsModel):
     _layout: str = "compact"
-    short_name: str = Field("", title="Short name")
-    state: str = Field("in_progress", enum_resolver=_states_enum, title="State")
-    icon: str = Field("task_alt", title="Icon", widget="icon")
+    short_name: str = SettingsField("", title="Short name")
+    state: str = SettingsField("in_progress", enum_resolver=_states_enum, title="State")
+    icon: str = SettingsField("task_alt", title="Icon", widget="icon")
 
 
 class DefaultSyncInfo(BaseSettingsModel):
     """As statuses already have names and short names we only need the short name to match Kitsu with Ayon"""
 
-    default_task_info: list[TaskCondition] = Field(default_factory=list, title="Tasks")
-    default_status_info: list[StatusCondition] = Field(
+    default_task_info: list[TaskCondition] = SettingsField(
+        default_factory=list, title="Tasks"
+    )
+    default_status_info: list[StatusCondition] = SettingsField(
         default_factory=list, title="Statuses"
     )
 
@@ -151,12 +161,12 @@ class DefaultSyncInfo(BaseSettingsModel):
 class SyncSettings(BaseSettingsModel):
     """Enabling 'Delete projects' will remove projects on Ayon when they get deleted on Kitsu"""
 
-    delete_projects: bool = Field(title="Delete projects")
-    sync_users: SyncUsers = Field(
+    delete_projects: bool = SettingsField(title="Delete projects")
+    sync_users: SyncUsers = SettingsField(
         default_factory=SyncUsers,
         title="Sync users",
     )
-    default_sync_info: DefaultSyncInfo = Field(
+    default_sync_info: DefaultSyncInfo = SettingsField(
         default_factory=DefaultSyncInfo,
         title="Default sync info",
     )
@@ -166,18 +176,18 @@ class KitsuSettings(BaseSettingsModel):
     #
     ## Root fields
     #
-    server: str = Field(
+    server: str = SettingsField(
         "",
         title="Kitsu Server",
         scope=["studio"],
     )
-    login_email: str = Field(
+    login_email: str = SettingsField(
         "kitsu_email",
         enum_resolver=secrets_enum,
         title="Kitsu user email",
         scope=["studio"],
     )
-    login_password: str | None = Field(
+    login_password: str | None = SettingsField(
         "kitsu_password",
         enum_resolver=secrets_enum,
         title="Kitsu user password",
@@ -187,15 +197,15 @@ class KitsuSettings(BaseSettingsModel):
     #
     ## Sub entities
     #
-    entities_naming_pattern: EntityPattern = Field(
+    entities_naming_pattern: EntityPattern = SettingsField(
         default_factory=EntityPattern,
         title="Entities naming pattern",
     )
-    publish: PublishPlugins = Field(
+    publish: PublishPlugins = SettingsField(
         default_factory=PublishPlugins,
         title="Publish plugins",
     )
-    sync_settings: SyncSettings = Field(
+    sync_settings: SyncSettings = SettingsField(
         default_factory=SyncSettings,
         title="Sync settings",
     )
