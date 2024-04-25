@@ -192,7 +192,7 @@ def _get_yarn_executable():
     if platform.system().lower() == "windows":
         cmd = "where"
 
-    for line in subprocess.check_output([cmd, "yarn"], encoding="utf-8").split():
+    for line in subprocess.check_output([cmd, "yarn"], encoding="utf-8").splitlines():
         if not line or not os.path.exists(line):
             continue
         try:
