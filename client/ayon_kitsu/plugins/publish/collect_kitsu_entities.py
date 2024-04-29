@@ -12,9 +12,11 @@ class CollectKitsuEntities(pyblish.api.ContextPlugin):
     label = "Kitsu entities"
 
     def process(self, context):
-        kitsu_project = gazu.project.get_project(
-            context.data["projectEntity"]["data"]["kitsuProjectId"]
-        )
+        project_entity = context.data["projectEntity"]
+        project_id = project_entity["data"].get("kitsuProjectId")
+        kitsu_project = None
+        if project_id:
+            kitsu_project = gazu.project.get_project(project_id)
         if not kitsu_project:
             project_name = context.data["projectName"]
             raise KnownPublishError(
