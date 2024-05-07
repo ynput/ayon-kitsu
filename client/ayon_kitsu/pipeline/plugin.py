@@ -21,7 +21,7 @@ class KitsuPublishContextPlugin(pyblish.api.ContextPlugin):
     @classmethod
     def apply_settings(cls, project_settings):
         if cls._original_enabled is None:
-            cls._original_enabled = cls.enabled
+            cls._original_enabled = getattr(cls, "enabled", True)
 
         if not cls.is_kitsu_enabled(project_settings):
             cls.enabled = False
@@ -48,7 +48,7 @@ class KitsuPublishInstancePlugin(pyblish.api.InstancePlugin):
     @classmethod
     def apply_settings(cls, project_settings):
         if cls._original_enabled is None:
-            cls._original_enabled = cls.enabled
+            cls._original_enabled = getattr(cls, "enabled", True)
 
         if not cls.is_kitsu_enabled(project_settings):
             cls.enabled = False
