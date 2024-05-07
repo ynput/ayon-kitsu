@@ -10,6 +10,7 @@ SETTINGS_CATEGORY = "kitsu"
 
 class KitsuPublishContextPlugin(pyblish.api.ContextPlugin):
     settings_category = SETTINGS_CATEGORY
+    _original_enabled = None
 
     @classmethod
     def is_kitsu_enabled(cls, project_settings):
@@ -19,9 +20,14 @@ class KitsuPublishContextPlugin(pyblish.api.ContextPlugin):
 
     @classmethod
     def apply_settings(cls, project_settings):
+        if cls._original_enabled is None:
+            cls._original_enabled = cls.enabled
+
         if not cls.is_kitsu_enabled(project_settings):
             cls.enabled = False
             return
+
+        cls.enabled = cls._original_enabled
 
         plugin_settins = get_plugin_settings(
             cls, project_settings, cls.log, None
@@ -31,6 +37,7 @@ class KitsuPublishContextPlugin(pyblish.api.ContextPlugin):
 
 class KitsuPublishInstancePlugin(pyblish.api.InstancePlugin):
     settings_category = SETTINGS_CATEGORY
+    _original_enabled = None
 
     @classmethod
     def is_kitsu_enabled(cls, project_settings):
@@ -40,9 +47,14 @@ class KitsuPublishInstancePlugin(pyblish.api.InstancePlugin):
 
     @classmethod
     def apply_settings(cls, project_settings):
+        if cls._original_enabled is None:
+            cls._original_enabled = cls.enabled
+
         if not cls.is_kitsu_enabled(project_settings):
             cls.enabled = False
             return
+
+        cls.enabled = cls._original_enabled
 
         plugin_settins = get_plugin_settings(
             cls, project_settings, cls.log, None
