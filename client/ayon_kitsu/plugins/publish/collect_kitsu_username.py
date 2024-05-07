@@ -3,9 +3,10 @@ import os
 import re
 
 import pyblish.api
+from ayon_kitsu.pipeline import KitsuPublishContextPlugin
 
 
-class CollectKitsuUsername(pyblish.api.ContextPlugin):
+class CollectKitsuUsername(KitsuPublishContextPlugin):
     """Collect Kitsu username from the kitsu login"""
 
     order = pyblish.api.CollectorOrder + 0.499

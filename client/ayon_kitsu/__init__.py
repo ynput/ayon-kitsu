@@ -5,10 +5,11 @@ be found by OpenPype discovery.
 """
 
 from .version import __version__
-from .addon import KitsuAddon
+from .addon import KitsuAddon, is_kitsu_enabled_in_settings
 
 
 __all__ = (
     "__version__",
     "KitsuAddon",
+    "is_kitsu_enabled_in_settings",
 )

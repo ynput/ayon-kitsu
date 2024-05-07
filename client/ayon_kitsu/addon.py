@@ -100,3 +100,29 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
 
     def get_publish_plugin_paths(self, host_name=None):
         return [os.path.join(KITSU_ROOT, "plugins", "publish")]
+
+
+def is_kitsu_enabled_in_settings(project_settings):
+    """Check if kitsu is enabled in kitsu project settings.
+
+    This function expect settings for a specific project. It is not checking
+    if kitsu is enabled in general.
+
+    Project settings gives option to disable kitsu integration per project.
+    That should disable most of kitsu integration functionality, especially
+    pipeline integration > publish plugins, and some automations like event
+    server handlers.
+
+    Args:
+        project_settings (dict[str, Any]): Project settings.
+
+    Returns:
+        bool: True if kitsu is enabled in project settings.
+    """
+
+    kitsu_enabled = project_settings.get("enabled")
+    # If 'kitsu_enabled' is not set, we assume it is enabled.
+    # - this is for backwards compatibility - remove in future
+    if kitsu_enabled is None:
+        return True
+    return kitsu_enabled

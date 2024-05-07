@@ -2,11 +2,11 @@
 import gazu
 import pyblish.api
 
+from ayon_kitsu.pipeline import KitsuPublishContextPlugin
 
-class KitsuLogOut(pyblish.api.ContextPlugin):
-    """
-    Log out from Kitsu API
-    """
+
+class KitsuLogOut(KitsuPublishContextPlugin):
+    """Log out from Kitsu API."""
 
     order = pyblish.api.IntegratorOrder + 10
     label = "Kitsu Log Out"
