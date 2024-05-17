@@ -34,26 +34,26 @@ function DefaultFunc {
   Write-Host "  bash     Run bash in docker image (for development purposes)"
 }
 
-function run {
+function RunService {
     load-env
     & poetry run python -m processor
 }
 
-function build {
+function BuildImage {
   & docker build -t "$IMAGE" -f "$($script_dir)/Dockerfile" .
 }
 
-function clean {
+function RemoveImage {
   & docker rmi $IMAGE
 }
 
-function clean-build {
-  clean
-  build
+function RemoveAndBuild {
+  RemoveImage
+  BuildImage
 }
 
-function dist {
-  build
+function DistributeImage {
+  BuildImage
   # Publish the docker image to the registry
   docker push "$IMAGE"
 }
@@ -70,7 +70,7 @@ function load-env {
   }
 }
 
-function dev {
+function RunDocker {
   load-env
   & docker run --rm -u ayonuser -ti `
     -v "$($script_dir):/service" `
@@ -82,27 +82,28 @@ function dev {
   	"$IMAGE" python -m processor
 }
 
-function bash {
+function RunDockerBash {
   & docker run --name "$($BASH_CONTAINER_NAME)" --rm -it --entrypoint /bin/bash "$($IMAGE)"
 }
 
 function main {
   if ($FunctionName -eq "build") {
     build
+    BuildImage
   } elseif ($FunctionName -eq "clean") {
-    clean
+    RemoveImage
   } elseif ($FunctionName -eq "clean-build") {
-    clean-build
+    RemoveAndBuild
   } elseif ($FunctionName -eq "run") {
-    run
+    RunService
   } elseif ($FunctionName -eq "dev") {
-    dev
+    RunDocker
   } elseif ($FunctionName -eq "dist") {
-    dist
+    DistributeImage
   } elseif ($FunctionName -eq "bash") {
-    bash
-  } elseif ($FunctionName -eq $null) {
-    defaultfunc
+    RunDockerBash
+  } elseif ($null -eq $FunctionName) {
+    DefaultFunc
   } else {
     Write-Host "Unknown function ""$FunctionName"""
     DefaultFunc
