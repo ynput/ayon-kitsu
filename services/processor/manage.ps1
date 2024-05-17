@@ -19,7 +19,7 @@ $BASH_CONTAINER_NAME = "$BASE_NAME-bash-$AYON_ADDON_VERSION"
 function DefaultFunc {
   Write-Host ""
   Write-Host "*************************"
-  Write-Host "AYON Kitsu $AYON_ADDON_VERSION Service Builder"
+  Write-Host "AYON Kitsu $AYON_ADDON_VERSION Service $SERVICE_NAME Builder"
   Write-Host "   Docker image name: $IMAGE"
   Write-Host "*************************"
   Write-Host ""

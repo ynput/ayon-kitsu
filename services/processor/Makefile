@@ -2,11 +2,12 @@ include .env
 
 AYON_ADDON_VERSION=$(shell python -c "import os;import sys;content={};f=open('$(CURDIR)/../../package.py');exec(f.read(),content);f.close();print(content['version'])")
 AYON_ADDON_NAME=kitsu
-BASE_NAME := ayon-$(AYON_ADDON_NAME)-processor
+SERVICE_NAME=processor
+BASE_NAME := ayon-$(AYON_ADDON_NAME)-$(SERVICE_NAME)
 IMAGE := ynput/$(BASE_NAME):$(AYON_ADDON_VERSION)
 default:
 	@echo * *************************
-	@echo * Ayon Kitsu $(AYON_ADDON_VERSION) Service Builder
+	@echo * AYON Kitsu $(AYON_ADDON_VERSION) $(SERVICE_NAME) Service Builder
 	@echo * Docker image name: $(IMAGE)
 	@echo * *************************
 	@echo * 
