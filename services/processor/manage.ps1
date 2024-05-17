@@ -1,7 +1,4 @@
 # Receive first positional argument
-param (
-    [string]$SERVICE
-)
 $FunctionName=$ARGS[0]
 $arguments=@()
 if ($ARGS.Length -gt 1) {
@@ -11,26 +8,22 @@ if ($ARGS.Length -gt 1) {
 $script_dir_rel = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
 $script_dir = (Get-Item $script_dir_rel).FullName
 
-$AYON_ADDON_VERSION = Invoke-Expression -Command "python -c ""import os;import sys;content={};f=open(r'$($script_dir)/../package.py');exec(f.read(),content);f.close();print(content['version'])"""
+$AYON_ADDON_VERSION = Invoke-Expression -Command "python -c ""import os;import sys;content={};f=open(r'$($script_dir)/../../package.py');exec(f.read(),content);f.close();print(content['version'])"""
 $AYON_ADDON_NAME = "kitsu"
-$BASE_NAME = "ayon-$AYON_ADDON_NAME-$SERVICE"
+$SERVICE_NAME = "processor"
+$BASE_NAME = "ayon-$AYON_ADDON_NAME-$SERVICE_NAME"
 $IMAGE = "ynput/$($BASE_NAME):$($AYON_ADDON_VERSION)"
 
 $BASH_CONTAINER_NAME = "$BASE_NAME-bash-$AYON_ADDON_VERSION"
 
-function defaultfunc {
+function DefaultFunc {
   Write-Host ""
   Write-Host "*************************"
   Write-Host "AYON Kitsu $AYON_ADDON_VERSION Service Builder"
   Write-Host "   Docker image name: $IMAGE"
   Write-Host "*************************"
   Write-Host ""
-	Write-Host "Usage: .\manage.ps1 -SERVICE [service-name] [target]"
-	Write-Host ""
-	Write-Host "Passing SERVICE is required for any of the targets to work, possible services:"
-	Write-Host ""
-	Write-Host "  processor - Syncs a kitsu project to Ayon"
-	Write-Host "  sync-service - Listen for events on Kitsu and sync it to Ayon"
+  Write-Host "Usage: .\manage.ps1 [target]"
   Write-Host ""
   Write-Host "Runtime targets:"
   Write-Host "  run      Run service out of docker (for development purposes)"
@@ -43,11 +36,11 @@ function defaultfunc {
 
 function run {
     load-env
-    & poetry run python -m $SERVICE.$SERVICE
+    & poetry run python -m processor
 }
 
 function build {
-  & docker build -t "$IMAGE" -f "$($script_dir)/$($SERVICE)/Dockerfile" .
+  & docker build -t "$IMAGE" -f "$($script_dir)/Dockerfile" .
 }
 
 function clean {
@@ -86,7 +79,7 @@ function dev {
   	--env AYON_SERVER_URL=$env:AYON_SERVER_URL `
   	--env AYON_ADDON_NAME=$AYON_ADDON_NAME `
   	--env AYON_ADDON_VERSION=$AYON_ADDON_VERSION `
-  	"$IMAGE" python -m $SERVICE
+  	"$IMAGE" python -m processor
 }
 
 function bash {
@@ -94,9 +87,7 @@ function bash {
 }
 
 function main {
-  if ($SERVICE -eq $null -or $SERVICE -eq "") {
-    Write-Host "Please specify the service to build with 'SERVICE', for example: '.\manage.ps1 build SERVICE=processor'"
-  } elseif ($FunctionName -eq "build") {
+  if ($FunctionName -eq "build") {
     build
   } elseif ($FunctionName -eq "clean") {
     clean
@@ -114,6 +105,7 @@ function main {
     defaultfunc
   } else {
     Write-Host "Unknown function ""$FunctionName"""
+    DefaultFunc
   }
 }
 
