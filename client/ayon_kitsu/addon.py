@@ -7,6 +7,7 @@ from ayon_core.addon import (
     IPluginPaths,
     ITrayAction,
 )
+from .version import __version__
 
 KITSU_ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -16,6 +17,7 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
 
     label = "Kitsu Connect"
     name = "kitsu"
+    version = __version__
 
     def initialize(self, settings):
         """Initialization of addon."""
