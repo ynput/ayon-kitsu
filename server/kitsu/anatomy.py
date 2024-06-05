@@ -7,7 +7,7 @@ from ayon_server.settings.anatomy import Anatomy
 from ayon_server.settings.anatomy.statuses import Status
 from ayon_server.settings.anatomy.task_types import TaskType
 
-from .utils import create_short_name, remove_accents
+from .addon_helpers import create_short_name, remove_accents
 
 if TYPE_CHECKING:
     from .. import KitsuAddon
