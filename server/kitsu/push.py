@@ -225,6 +225,14 @@ async def sync_person(
 ):
     logging.info("sync_person")
 
+    # == check should Person entity be synced ==
+    # do not sync Kitsu API bots
+    if entity_dict.get("is_bot"):
+        logging.info(
+            f"skipping sync_person for Kitsu Bot: {entity_dict.get('first_name')} {entity_dict.get('last_name')}"
+        )
+        return
+
     username = remove_accents(
         f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower().strip()
     )
