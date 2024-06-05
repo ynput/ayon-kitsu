@@ -27,7 +27,7 @@ from .utils import (
     update_task,
 )
 
-from .addon_helpers import remove_accents
+from .addon_helpers import to_username
 
 
 if TYPE_CHECKING:
@@ -227,9 +227,7 @@ async def sync_person(
 ):
     logging.info("sync_person")
 
-    username = remove_accents(
-        f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower().strip()
-    )
+    username = to_username(entity_dict["first_name"], entity_dict["last_name"])
 
     payload = {
         "name": username,
@@ -267,8 +265,8 @@ async def sync_person(
                 )
             # Rename the user
             payload = {
-                "newName": remove_accents(
-                    f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower().strip()
+                "newName": to_username(
+                    entity_dict["first_name"], entity_dict["last_name"]
                 )
             }
             async with httpx.AsyncClient() as client:

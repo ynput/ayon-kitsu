@@ -8,12 +8,11 @@ minimal dependencies, pytest unit tests
 """
 
 
-def remove_accents(input_str: str) -> str:
-    nfkd_form = unicodedata.normalize("NFKD", input_str)
-    return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
+## ========== KITSU -> AYON NAME CONVERSIONS =====================
 
 
 def create_short_name(name: str) -> str:
+    """create a shortname from the full name when a shortname is not present"""
     code = name.lower()
 
     if "_" in code:
@@ -30,3 +29,67 @@ def create_short_name(name: str) -> str:
         code += last_char
 
     return code
+
+
+def to_username(first_name: str, last_name: str | None = None) -> str:
+    """converts usernames from kitsu - converts accents"""
+
+    name = (
+        f"{first_name.strip()}.{last_name.strip()}" if last_name else first_name.strip()
+    )
+
+    name = name.lower()
+    name = remove_accents(name)
+    return to_entity_name(name)
+
+
+def remove_accents(input_str: str) -> str:
+    """swap accented characters for a-z equivilants ž => z"""
+
+    nfkd_form = unicodedata.normalize("NFKD", input_str)
+    result = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
+
+    # manually replace exceptions
+    # @see https://stackoverflow.com/questions/3194516/replace-special-characters-with-ascii-equivalent
+    replacement_map = {
+        "Æ": "AE",
+        "Ð": "D",
+        "Ø": "O",
+        "Þ": "TH",
+        "ß": "ss",
+        "æ": "ae",
+        "ð": "d",
+        "ø": "o",
+        "þ": "th",
+        "Œ": "OE",
+        "œ": "oe",
+        "ƒ": "f",
+    }
+    for k, v in replacement_map.items():
+        if k in result:
+            result = result.replace(k, v)
+
+    # remove any unsupported characters
+    result = re.sub(r"[^a-zA-Z0-9_\.\-]", "", result)
+
+    return result
+
+
+def to_entity_name(name) -> str:
+    """convert names so they will pass Ayon Entity name validation
+    @see ayon_server.types.NAME_REGEX = r"^[a-zA-Z0-9_]([a-zA-Z0-9_\.\-]*[a-zA-Z0-9_])?$"
+    """
+
+    assert name, "Entity name cannot be empty"
+
+    name = name.strip()
+
+    # replace whitespace
+    name = re.sub(r"\s+", "_", name)
+    # remove any invalid characters
+    name = re.sub(r"[^a-zA-Z0-9_\.\-]", "", name)
+
+    # first and last characters cannot be . or -
+    name = re.sub(r"^[^a-zA-Z0-9_]+", "", name)
+    name = re.sub(r"[^a-zA-Z0-9_]+$", "", name)
+    return name
