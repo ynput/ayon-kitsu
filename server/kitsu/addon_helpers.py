@@ -76,7 +76,7 @@ def remove_accents(input_str: str) -> str:
 
 
 def to_entity_name(name) -> str:
-    """convert names so they will pass Ayon Entity name validation
+    """convert names so they will pass AYON Entity name validation
     @see ayon_server.types.NAME_REGEX = r"^[a-zA-Z0-9_]([a-zA-Z0-9_\.\-]*[a-zA-Z0-9_])?$"
     """
 
