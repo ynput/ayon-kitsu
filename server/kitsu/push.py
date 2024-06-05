@@ -223,9 +223,12 @@ async def generate_user_settings(
 async def sync_person(
     addon: "KitsuAddon",
     user: "UserEntity",
+    existing_users: dict[str, Any],
     entity_dict: "EntityDict",
 ):
-    logging.info("sync_person")
+    logging.info(
+        f"sync_person: {entity_dict.get('first_name')} {entity_dict.get('last_name')}"
+    )
 
     username = to_username(entity_dict["first_name"], entity_dict["last_name"])
 
@@ -282,6 +285,9 @@ async def sync_person(
         settings = await addon.get_studio_settings()
         user.set_password(settings.sync_settings.sync_users.default_password)
         await user.save()
+
+    # update the id map
+    existing_users[entity_dict["id"]] = username
 
 
 async def update_project(
@@ -549,6 +555,7 @@ async def push_entities(
 
     folders = {}
     tasks = {}
+    users = {}
 
     settings = await addon.get_studio_settings()
     for entity_dict in payload.entities:
@@ -577,6 +584,7 @@ async def push_entities(
                 await sync_person(
                     addon,
                     user,
+                    users,
                     entity_dict,
                 )
         elif entity_dict["type"] != "Task":
@@ -602,7 +610,7 @@ async def push_entities(
     )
 
     # pass back the map of kitsu to ayon ids
-    return {"folders": folders, "tasks": tasks}
+    return {"folders": folders, "tasks": tasks, "users": users}
 
 
 async def remove_entities(
