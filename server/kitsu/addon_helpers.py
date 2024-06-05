@@ -80,7 +80,8 @@ def to_entity_name(name) -> str:
     @see ayon_server.types.NAME_REGEX = r"^[a-zA-Z0-9_]([a-zA-Z0-9_\.\-]*[a-zA-Z0-9_])?$"
     """
 
-    assert name, "Entity name cannot be empty"
+    if not name:
+        raise ValueError("Entity name cannot be empty")
 
     name = name.strip()
 
