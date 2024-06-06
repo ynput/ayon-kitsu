@@ -305,7 +305,9 @@ async def update_project(
         project.name,
         project,
         kwargs,
-        attr_whitelist=["statuses"],
+        # currently only 'task_types' and 'statuses' are set by anatomy.py and are updatable
+        # not updated are "folder_types",  "link_types", "tags", "config"
+        attr_whitelist=["task_types", "statuses"],
     )
 
 

@@ -134,3 +134,48 @@ def test_update_project_statuses(api, kitsu_url, ensure_kitsu_server_setting):
         },
     ]
     api.delete(f"/projects/{project_name}")
+
+
+def test_update_project_tasktypes(api, kitsu_url, ensure_kitsu_server_setting):
+    """update project anatomy based on kitsu data
+
+    we create a project with just 1 task_type.
+    Then when new task types are added in Kitsu the project.update event is fired.
+    Ayon project is updated with the new task types.
+    """
+
+    entity = mock_data.projects[0]
+    project_name = entity["name"]
+
+    api.delete(f"/projects/{project_name}")
+    assert not api.get_project(project_name)
+
+    project_meta = {
+        "code": entity["code"],
+        "data": {"kitsuProjectId": entity["id"]},  # linked to kitsu entity
+        "folderTypes": [{"name": "Folder"}],
+        "taskTypes": [{"name": "Animation"}],
+        "statuses": [{"name": "Todo"}],
+    }
+
+    # create the test project
+    res = api.put(f"/projects/{project_name}", **project_meta)
+
+    project = api.get_project(project_name)
+    assert project["taskTypes"] == [{"name": "Animation"}]
+
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=entity["name"],
+        entities=[entity],
+        mock=True,
+    )
+    assert res.status_code == 200
+    project = api.get_project(project_name)
+
+    assert project["taskTypes"] == [
+        {"icon": "directions_run", "name": "Animation", "shortName": "anim"},
+        {"icon": "layers", "name": "Compositing", "shortName": "comp"},
+        {"icon": "task_alt", "name": "Grading", "shortName": "Grad"},
+    ]
+    api.delete(f"/projects/{project_name}")
