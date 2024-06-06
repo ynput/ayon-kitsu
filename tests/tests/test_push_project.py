@@ -78,3 +78,59 @@ def test_update_project_attrib(
     ), "fps should have been updated from kitsu"
 
     api.delete(f"/projects/{project_name}")
+
+
+def test_update_project_statuses(api, kitsu_url, ensure_kitsu_server_setting):
+    """update project anatomy based on kitsu data
+
+    we create a project with just 1 status.
+    Then when new statuses are added in Kitsu the project.update event is fired.
+    Status changes are saved to the project.
+    """
+
+    entity = mock_data.projects[0]
+    project_name = entity["name"]
+
+    api.delete(f"/projects/{project_name}")
+    assert not api.get_project(project_name)
+
+    project_meta = {
+        "code": entity["code"],
+        "data": {"kitsuProjectId": entity["id"]},  # linked to kitsu entity
+        "folderTypes": [{"name": "Folder"}],
+        "taskTypes": [{"name": "Animation"}],
+        "statuses": [{"name": "Todo"}],
+    }
+
+    # create the test project
+    res = api.put(f"/projects/{project_name}", **project_meta)
+
+    project = api.get_project(project_name)
+    assert project["statuses"] == [{"name": "Todo"}]
+
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=entity["name"],
+        entities=[entity],
+        mock=True,
+    )
+    assert res.status_code == 200
+    project = api.get_project(project_name)
+
+    assert project["statuses"] == [
+        {
+            "color": "#f5f5f5",
+            "icon": "task_alt",
+            "name": "Todo",
+            "shortName": "TODO",
+            "state": "in_progress",
+        },
+        {
+            "color": "#22D160",
+            "icon": "task_alt",
+            "name": "Approved",
+            "shortName": "App",
+            "state": "in_progress",
+        },
+    ]
+    api.delete(f"/projects/{project_name}")

@@ -305,6 +305,7 @@ async def update_project(
         project.name,
         project,
         kwargs,
+        attr_whitelist=["statuses"],
     )
 
 
