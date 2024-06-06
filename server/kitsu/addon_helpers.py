@@ -8,6 +8,18 @@ minimal dependencies, pytest unit tests
 """
 
 
+def required_values(entity: dict, keys: list[str], allow_empty_value=False):
+    """check the entity dict has the required keys and a value for each"""
+    values = []
+    for key in keys:
+        if key not in entity:
+            raise ValueError(f"Key '{key}' not set for entity: {entity}")
+        if not allow_empty_value and not entity.get(key):
+            raise ValueError(f"Value for  '{key}' cannot be empty for entity: {entity}")
+        values.append(entity.get(key))
+    return values
+
+
 ## ========== KITSU -> AYON NAME CONVERSIONS =====================
 
 
@@ -76,7 +88,7 @@ def remove_accents(input_str: str) -> str:
 
 
 def to_entity_name(name) -> str:
-    """convert names so they will pass AYON Entity name validation
+    r"""convert names so they will pass AYON Entity name validation
     @see ayon_server.types.NAME_REGEX = r"^[a-zA-Z0-9_]([a-zA-Z0-9_\.\-]*[a-zA-Z0-9_])?$"
     """
 

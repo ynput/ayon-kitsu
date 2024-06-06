@@ -27,7 +27,7 @@ from .utils import (
     update_task,
 )
 
-from .addon_helpers import to_username
+from .addon_helpers import to_username, required_values
 
 
 if TYPE_CHECKING:
@@ -226,30 +226,32 @@ async def sync_person(
     existing_users: dict[str, Any],
     entity_dict: "EntityDict",
 ):
-    logging.info(
-        f"sync_person: {entity_dict.get('first_name')} {entity_dict.get('last_name')}"
+    first_name, last_name, entity_id = required_values(
+        entity_dict, ["first_name", "last_name", "id"]
     )
 
-    username = to_username(entity_dict["first_name"], entity_dict["last_name"])
+    logging.info(f"sync_person: {first_name} {last_name}")
+
+    username = to_username(first_name, last_name)
 
     payload = {
         "name": username,
         "attrib": {
-            "fullName": entity_dict["full_name"],
-            "email": entity_dict["email"],
+            "fullName": entity_dict.get("full_name", ""),
+            "email": entity_dict.get("email", ""),
         },
     } | await generate_user_settings(
         addon,
         entity_dict,
     )
-    payload["data"]["kitsuId"] = entity_dict["id"]
+    payload["data"]["kitsuId"] = entity_id
 
     ayon_user = None
     try:
         ayon_user = await UserEntity.load(username)
     except Exception:
         pass
-    target_user = await get_user_by_kitsu_id(entity_dict["id"])
+    target_user = await get_user_by_kitsu_id(entity_id)
 
     # User exists but doesn't have a kitsuId assigned it it
     if ayon_user and not target_user:
@@ -267,11 +269,7 @@ async def sync_person(
                     headers=headers,
                 )
             # Rename the user
-            payload = {
-                "newName": to_username(
-                    entity_dict["first_name"], entity_dict["last_name"]
-                )
-            }
+            payload = {"newName": username}
             async with httpx.AsyncClient() as client:
                 await client.patch(
                     f"{entity_dict['ayon_server_url']}/api/users/{target_user.name}/rename",
@@ -287,7 +285,7 @@ async def sync_person(
         await user.save()
 
     # update the id map
-    existing_users[entity_dict["id"]] = username
+    existing_users[entity_id] = username
 
 
 async def update_project(
