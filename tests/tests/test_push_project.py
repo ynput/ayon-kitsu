@@ -179,3 +179,40 @@ def test_update_project_tasktypes(api, kitsu_url, ensure_kitsu_server_setting):
         {"icon": "task_alt", "name": "Grading", "shortName": "Grad"},
     ]
     api.delete(f"/projects/{project_name}")
+
+
+def test_push_unsynced_project(api, kitsu_url):
+    """no update to project that is not synced with kitsu (no matching kitsuProjectId)"""
+    entity = mock_data.projects[1]
+
+    project_meta = {
+        "code": "ATK",
+        "folderTypes": [
+            {"name": "Folder"},
+            {"name": "Library"},
+            {"name": "Asset"},
+            {"name": "Episode"},
+            {"name": "Sequence"},
+            {"name": "Shot"},
+        ],
+        "taskTypes": [{"name": "Animation"}],
+        "statuses": [{"name": "Todo"}],
+    }
+
+    # create the 2nd test project
+    api.put(f"/projects/{entity['name']}", **project_meta)
+
+    project = api.get_project(entity["name"])
+    assert project
+
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=entity["name"],
+        entities=[entity],
+        mock=True,
+    )
+    assert res.status_code == 200
+
+    # no project changes as project is not synced
+    target_project = api.get_project(entity["name"])
+    assert project == target_project
