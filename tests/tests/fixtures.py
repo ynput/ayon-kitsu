@@ -126,3 +126,27 @@ def processor(kitsu_url):
             return PROJECT_NAME
 
     return MockProcessor()
+
+
+@pytest.fixture()
+def ensure_kitsu_server_setting(api, kitsu_url):
+    """update kitsu addon settings.kitsu_server if not set"""
+    # lets get the settings for the addon
+    res = api.get(f"{kitsu_url}/settings")
+    assert res.status_code == 200
+    settings = res.data
+
+    # get original values
+    value = settings["server"]
+
+    # set settings for tests
+    if not value:
+        settings["server"] = "http://kitsu.com"
+        res = api.post(f"{kitsu_url}/settings", **settings)
+
+    yield
+
+    # set settings back to orginal values
+    if not value:
+        settings["server"] = ""
+        res = api.post(f"{kitsu_url}/settings", **settings)

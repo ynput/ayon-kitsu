@@ -1,8 +1,18 @@
-""" mock kitsu api data for patching gazu """
+"""mock kitsu api data for patching gazu"""
 
 projects = [
-    {"name": "Test Project 1", "code": "TP1", "id": "project-id-1"},
-    {"name": "Test Project 2", "code": "TP2", "id": "project-id-2"},
+    {
+        "name": "TestProject1",
+        "code": "TP1",
+        "id": "kitsu-project-id-1",
+        "type": "Project",
+    },
+    {
+        "name": "TestProject2",
+        "code": "TP2",
+        "id": "kitsu-project-id-2",
+        "type": "Project",
+    },
 ]
 
 # /api/data/task-status
