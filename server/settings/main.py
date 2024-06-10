@@ -2,75 +2,16 @@ from ayon_server.settings import BaseSettingsModel, SettingsField
 from ayon_server.settings.enum import secrets_enum
 from ayon_server.types import NAME_REGEX
 
+from .sync_settings import SyncSettings, SYNC_DEFAULT_VALUES
+from .publish_plugins import PublishPlugins, PUBLISH_DEFAULT_VALUES
 
-#
+
 ## Entities naming pattern
 #
 class EntityPattern(BaseSettingsModel):
     episode: str = SettingsField(title="Episode")
     sequence: str = SettingsField(title="Sequence")
     shot: str = SettingsField(title="Shot")
-
-
-#
-## Publish plugins
-#
-def _status_change_cond_enum():
-    return [
-        {"value": "equal", "label": "Equal"},
-        {"value": "not_equal", "label": "Not equal"},
-    ]
-
-
-class StatusChangeCondition(BaseSettingsModel):
-    condition: str = SettingsField(
-        "equal", enum_resolver=_status_change_cond_enum, title="Condition"
-    )
-    short_name: str = SettingsField("", title="Short name")
-
-
-class StatusChangeFamilyRequirementModel(BaseSettingsModel):
-    condition: str = SettingsField(
-        "equal", enum_resolver=_status_change_cond_enum, title="Condition"
-    )
-    product_type: str = SettingsField("", title="Family")
-
-
-class StatusChangeConditionsModel(BaseSettingsModel):
-    status_conditions: list[StatusChangeCondition] = SettingsField(
-        default_factory=list, title="Status conditions"
-    )
-    family_requirements: list[StatusChangeFamilyRequirementModel] = SettingsField(
-        default_factory=list, title="Family requirements"
-    )
-
-
-class CustomCommentTemplateModel(BaseSettingsModel):
-    """Kitsu supports markdown and here you can create a custom comment template.
-
-    You can use data from your publishing instance's data.
-    """
-
-    enabled: bool = SettingsField(True)
-    comment_template: str = SettingsField("", widget="textarea", title="Custom comment")
-
-
-class IntegrateKitsuNotes(BaseSettingsModel):
-    set_status_note: bool = SettingsField(title="Set status on note")
-    note_status_shortname: str = SettingsField(title="Note shortname")
-    status_change_conditions: StatusChangeConditionsModel = SettingsField(
-        default_factory=StatusChangeConditionsModel, title="Status change conditions"
-    )
-    custom_comment_template: CustomCommentTemplateModel = SettingsField(
-        default_factory=CustomCommentTemplateModel,
-        title="Custom Comment Template",
-    )
-
-
-class PublishPlugins(BaseSettingsModel):
-    IntegrateKitsuNote: IntegrateKitsuNotes = SettingsField(
-        default_factory=IntegrateKitsuNotes, title="Integrate Kitsu Note"
-    )
 
 
 #
@@ -155,23 +96,6 @@ class DefaultSyncInfo(BaseSettingsModel):
     )
 
 
-#
-## Sync settings
-#
-class SyncSettings(BaseSettingsModel):
-    """Enabling 'Delete projects' will remove projects on Ayon when they get deleted on Kitsu"""
-
-    delete_projects: bool = SettingsField(title="Delete projects")
-    sync_users: SyncUsers = SettingsField(
-        default_factory=SyncUsers,
-        title="Sync users",
-    )
-    default_sync_info: DefaultSyncInfo = SettingsField(
-        default_factory=DefaultSyncInfo,
-        title="Default sync info",
-    )
-
-
 class KitsuSettings(BaseSettingsModel):
     #
     ## Root fields
@@ -210,3 +134,14 @@ class KitsuSettings(BaseSettingsModel):
         default_factory=SyncSettings,
         title="Sync settings",
     )
+
+
+DEFAULT_VALUES = {
+    "entities_naming_pattern": {
+        "episode": "E##",
+        "sequence": "SQ##",
+        "shot": "SH##",
+    },
+    "publish": PUBLISH_DEFAULT_VALUES,
+    "sync_settings": SYNC_DEFAULT_VALUES,
+}

@@ -1,4 +1,7 @@
-__all__ = ['DEFAULT_VALUES', 'KitsuSettings']
+from .main import KitsuSettings, DEFAULT_VALUES
 
-from .defaults import DEFAULT_VALUES
-from .settings import KitsuSettings
+
+__all__ = (
+    "DEFAULT_VALUES",
+    "KitsuSettings",
+)
