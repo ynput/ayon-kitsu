@@ -1,6 +1,5 @@
 from ayon_server.settings import BaseSettingsModel, SettingsField
 from ayon_server.settings.enum import secrets_enum
-from ayon_server.types import NAME_REGEX
 
 from .sync_settings import SyncSettings, SYNC_DEFAULT_VALUES
 from .publish_plugins import PublishPlugins, PUBLISH_DEFAULT_VALUES
@@ -12,88 +11,6 @@ class EntityPattern(BaseSettingsModel):
     episode: str = SettingsField(title="Episode")
     sequence: str = SettingsField(title="Sequence")
     shot: str = SettingsField(title="Shot")
-
-
-#
-## Sync users
-#
-def _roles_enum():
-    return [
-        {"value": "user", "label": "User"},
-        {"value": "manager", "label": "Manager"},
-        {"value": "admin", "label": "Admin"},
-    ]
-
-
-class RolesCondition(BaseSettingsModel):
-    """Set what Ayon role users should get based in their Kitsu role"""
-
-    admin: str = SettingsField(
-        "admin", enum_resolver=_roles_enum, title="Studio manager"
-    )
-    vendor: str = SettingsField(
-        "user", enum_resolver=_roles_enum, title="Vendor"
-    )
-    client: str = SettingsField(
-        "user", enum_resolver=_roles_enum, title="Client"
-    )
-    manager: str = SettingsField(
-        "manager", enum_resolver=_roles_enum, title="Production manager"
-    )
-    supervisor: str = SettingsField(
-        "manager", enum_resolver=_roles_enum, title="Supervisor"
-    )
-    user: str = SettingsField(
-        "user", enum_resolver=_roles_enum, title="Artist"
-    )
-
-
-class SyncUsers(BaseSettingsModel):
-    """When a Kitsu user is synced, the default password will be set for the newly created user.
-    Please ask the user to change the password inside Ayon.
-    """
-
-    enabled: bool = SettingsField(True)
-    default_password: str = SettingsField(title="Default Password")
-    access_group: str = SettingsField(title="Access Group", regex=NAME_REGEX)
-    roles: RolesCondition = SettingsField(default_factory=RolesCondition, title="Roles")
-
-
-#
-## Default task info
-#
-def _states_enum():
-    return [
-        {"value": "not_started", "label": "Not started"},
-        {"value": "in_progress", "label": "In progress"},
-        {"value": "done", "label": "Done"},
-        {"value": "blocked", "label": "Blocked"},
-    ]
-
-
-class TaskCondition(BaseSettingsModel):
-    _layout: str = "compact"
-    name: str = SettingsField("", title="Name")
-    short_name: str = SettingsField("", title="Short name")
-    icon: str = SettingsField("task_alt", title="Icon", widget="icon")
-
-
-class StatusCondition(BaseSettingsModel):
-    _layout: str = "compact"
-    short_name: str = SettingsField("", title="Short name")
-    state: str = SettingsField("in_progress", enum_resolver=_states_enum, title="State")
-    icon: str = SettingsField("task_alt", title="Icon", widget="icon")
-
-
-class DefaultSyncInfo(BaseSettingsModel):
-    """As statuses already have names and short names we only need the short name to match Kitsu with Ayon"""
-
-    default_task_info: list[TaskCondition] = SettingsField(
-        default_factory=list, title="Tasks"
-    )
-    default_status_info: list[StatusCondition] = SettingsField(
-        default_factory=list, title="Statuses"
-    )
 
 
 class KitsuSettings(BaseSettingsModel):
