@@ -4,6 +4,7 @@ import pyblish.api
 
 from ayon_core.pipeline import KnownPublishError
 from ayon_kitsu.pipeline import KitsuPublishContextPlugin
+from ayon_kitsu.addon import is_kitsu_enabled_in_settings
 
 
 class CollectKitsuEntities(KitsuPublishContextPlugin):
@@ -13,6 +14,13 @@ class CollectKitsuEntities(KitsuPublishContextPlugin):
     label = "Kitsu entities"
 
     def process(self, context):
+        project_settings = context.data["project_settings"]
+        if not is_kitsu_enabled_in_settings(project_settings):
+            self.log.info(
+                f"Project '{context.data['projectName']} has disabled Kitsu"
+            )
+            return
+
         project_entity = context.data["projectEntity"]
         project_id = project_entity["data"].get("kitsuProjectId")
         kitsu_project = None

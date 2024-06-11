@@ -3,6 +3,7 @@ import os
 
 import pyblish.api
 from ayon_kitsu.pipeline import KitsuPublishContextPlugin
+from ayon_kitsu.addon import is_kitsu_enabled_in_settings
 
 
 class CollectKitsuLogin(KitsuPublishContextPlugin):
@@ -13,6 +14,13 @@ class CollectKitsuLogin(KitsuPublishContextPlugin):
     # families = ["kitsu"]
 
     def process(self, context):
+        project_settings = context.data["project_settings"]
+        if not is_kitsu_enabled_in_settings(project_settings):
+            self.log.info(
+                f"Project '{context.data['projectName']} has disabled Kitsu"
+            )
+            return
+
         import gazu
 
         gazu.set_host(os.environ["KITSU_SERVER"])
