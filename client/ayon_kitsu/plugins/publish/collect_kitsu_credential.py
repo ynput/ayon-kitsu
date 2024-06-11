@@ -14,7 +14,7 @@ class CollectKitsuLogin(KitsuPublishContextPlugin):
     # families = ["kitsu"]
 
     def process(self, context):
-        project_settings = context.data["projectSettings"]
+        project_settings = context.data["project_settings"]
         if not is_kitsu_enabled_in_settings(project_settings):
             self.log.info(
                 f"Project '{context.data['projectName']} has disabled Kitsu"
