@@ -88,7 +88,6 @@ function RunDockerBash {
 
 function main {
   if ($FunctionName -eq "build") {
-    build
     BuildImage
   } elseif ($FunctionName -eq "clean") {
     RemoveImage
