@@ -24,7 +24,6 @@ from .utils import (
     get_folder_by_kitsu_id,
     get_task_by_kitsu_id,
     get_user_by_kitsu_id,
-    remove_accents,
     update_project,
 
     update_folder,
