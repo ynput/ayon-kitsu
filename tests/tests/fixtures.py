@@ -229,3 +229,4 @@ def access_group(api, kitsu_url):
     if value != "test_kitsu_group":
         settings["sync_settings"]["sync_users"]["access_group"] = value
         res = api.post(f"{kitsu_url}/settings", **settings)
+

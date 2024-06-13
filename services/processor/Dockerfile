@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED=1
 
 # Create Working directory `/service` and copy `processor`
 RUN mkdir /service
-COPY processor/pyproject.toml /service/pyproject.toml
+COPY pyproject.toml /service/pyproject.toml
 WORKDIR /service
 
 # Install dependencies with poetry
@@ -20,8 +20,7 @@ RUN addgroup -S ayonuser && adduser -SH ayonuser -G ayonuser
 RUN chown ayonuser:ayonuser -R /service
 RUN chmod 777 -R /service
 
-COPY processor/processor /service/processor
-COPY kitsu_common /service/kitsu_common
+COPY processor /service/processor
 
 # Tell docker that all future commands should run as the appuser user
 USER ayonuser

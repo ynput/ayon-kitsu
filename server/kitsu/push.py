@@ -226,12 +226,19 @@ async def sync_person(
     existing_users: dict[str, Any],
     entity_dict: "EntityDict",
 ):
+
     first_name, last_name, entity_id = required_values(
         entity_dict, ["first_name", "last_name", "id"]
-    )
+
+    # == check should Person entity be synced ==
+    # do not sync Kitsu API bots
+    if entity_dict.get("is_bot"):
+        logging.info(
+            f"skipping sync_person for Kitsu Bot: {first_name} {last_name}"
+        )
+        return
 
     logging.info(f"sync_person: {first_name} {last_name}")
-
     username = to_username(first_name, last_name)
 
     payload = {
