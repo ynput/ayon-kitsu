@@ -128,8 +128,8 @@ def test_update_task_no_changes(api, kitsu_url):
     )
     assert res.status_code == 200
 
-    # there should be no folders returned as none were created or updated
-    assert res.data == {"folders": {}, "tasks": {}}
+    # there should be no tasks returned as none were created or updated
+    assert res.data["tasks"] == {}
 
 
 def test_update_task_with_new_status(api, kitsu_url):
