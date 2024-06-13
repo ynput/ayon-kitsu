@@ -276,6 +276,9 @@ async def sync_person(
                     headers=headers,
                 )
             # Rename the user
+            # TODO: We should discourage renaming users.
+            # Maybe just change the fullName in the case there's a typo,
+            # but changing username may have weird side effects.
             payload = {"newName": username}
             async with httpx.AsyncClient() as client:
                 await client.patch(
