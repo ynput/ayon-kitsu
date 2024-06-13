@@ -30,7 +30,7 @@ class InitPairingRequest(OPModel):
 
 
 async def ensure_ayon_project_not_exists(project_name: str, project_code: str):
-    async for res in Postgres.iterate(
+    async for _ in Postgres.iterate(
         "SELECT name FROM projects WHERE name = $1 OR code = $2",
         project_name,
         project_code,

@@ -9,7 +9,6 @@ from ayon_server.entities import (
     UserEntity,
 )
 from ayon_server.events import dispatch_event
-from ayon_server.exceptions import ForbiddenException
 from ayon_server.lib.postgres import Postgres
 
 
@@ -286,8 +285,11 @@ async def update_project(
     )
 
 
-async def update_entity(project_name, entity, kwargs, attr_whitelist: list[str] = []):
+async def update_entity(project_name, entity, kwargs, attr_whitelist: list[str] | None = None):
     """updates the entity for given attribute whitelist, saves changes and dispatches an update event"""
+
+    if attr_whitelist is None:
+        attr_whitelist = []
 
     # keys that can be updated
     for key in attr_whitelist:
