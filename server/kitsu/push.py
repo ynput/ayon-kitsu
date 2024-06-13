@@ -227,8 +227,8 @@ async def sync_person(
     entity_dict: "EntityDict",
 ):
 
-    first_name, last_name, entity_id = required_values(
-        entity_dict, ["first_name", "last_name", "id"]
+    first_name, entity_id= required_values(entity_dict, ["first_name", "id"])
+    last_name = entity_dict.get("last_name", '')
 
     # == check should Person entity be synced ==
     # do not sync Kitsu API bots
