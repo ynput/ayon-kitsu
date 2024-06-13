@@ -47,6 +47,55 @@ def test_update_folder_attrib(api, kitsu_url, init_data):
     assert folder["attrib"]["frameEnd"] == 102
 
 
+def test_calculate_frames(api, kitsu_url):
+    """test for utils.calculate_frames"""
+
+    # do a partial update
+    kitsu_id = "shot-id-1"
+    update = {
+        "id": kitsu_id,  # required
+        "type": "Shot",  # required
+        "name": "SH001",
+        "nb_frames": 200,  # change the number of frames
+        "data": {
+            "frame_in": "10",
+        },
+    }
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=PROJECT_NAME,
+        entities=[update],
+    )
+    assert res.status_code == 200
+
+    # lets get the ayon folder
+    ayon_id = res.data["folders"][kitsu_id]
+    folder = api.get_folder_by_id(PROJECT_NAME, ayon_id)
+
+    # frame start and end should be updated
+    assert folder["attrib"]["frameStart"] == 10
+    assert folder["attrib"]["frameEnd"] == 210
+
+    update = {
+        "id": kitsu_id,
+        "type": "Shot",
+        "name": "SH001",
+        "nb_frames": 100,
+        "data": {},  # no frame_in
+    }
+    res = api.post(
+        f"{kitsu_url}/push",
+        project_name=PROJECT_NAME,
+        entities=[update],
+    )
+    assert res.status_code == 200
+    folder = api.get_folder_by_id(PROJECT_NAME, ayon_id)
+
+    # frame start and end should be updated
+    assert folder["attrib"]["frameStart"] == 10
+    assert folder["attrib"]["frameEnd"] == 110
+
+
 def test_update_folder_name(api, kitsu_url):
     # do a partial update
     kitsu_id = "shot-id-1"
