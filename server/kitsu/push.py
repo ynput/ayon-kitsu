@@ -26,11 +26,13 @@ from .utils import (
     get_user_by_kitsu_id,
     remove_accents,
     update_project,
+
     update_folder,
     update_task,
 )
 
-from .addon_helpers import required_values
+
+from .addon_helpers import to_username, required_values
 
 if TYPE_CHECKING:
     from .. import KitsuAddon
@@ -164,7 +166,7 @@ async def create_access_group(
         print(e)
 
 
-def match_ayon_roles_with_kitsu_role(role: str) -> dict[str, bool] | None:
+def match_ayon_roles_with_kitsu_role(role: str) -> dict[str, bool]:
     match role:
         case "admin":
             return {
@@ -182,7 +184,7 @@ def match_ayon_roles_with_kitsu_role(role: str) -> dict[str, bool] | None:
                 "isManager": False,
             }
         case _:
-            return
+            return {}
 
 
 async def generate_user_settings(
@@ -190,7 +192,7 @@ async def generate_user_settings(
     entity_dict: "EntityDict",
 ):
     settings = await addon.get_studio_settings()
-    data: dict[str, str] = {}
+    data: dict[str, Any] = {}
     match entity_dict["role"]:
         case "admin":  # Studio manager
             data = match_ayon_roles_with_kitsu_role(
@@ -226,32 +228,42 @@ async def generate_user_settings(
 async def sync_person(
     addon: "KitsuAddon",
     user: "UserEntity",
+    existing_users: dict[str, Any],
     entity_dict: "EntityDict",
 ):
-    logging.info("sync_person")
 
-    username = remove_accents(
-        f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower().strip()
-    )
+    first_name, entity_id= required_values(entity_dict, ["first_name", "id"])
+    last_name = entity_dict.get("last_name", '')
+
+    # == check should Person entity be synced ==
+    # do not sync Kitsu API bots
+    if entity_dict.get("is_bot"):
+        logging.info(
+            f"skipping sync_person for Kitsu Bot: {first_name} {last_name}"
+        )
+        return
+
+    logging.info(f"sync_person: {first_name} {last_name}")
+    username = to_username(first_name, last_name)
 
     payload = {
         "name": username,
         "attrib": {
-            "fullName": entity_dict["full_name"],
-            "email": entity_dict["email"],
+            "fullName": entity_dict.get("full_name", ""),
+            "email": entity_dict.get("email", ""),
         },
     } | await generate_user_settings(
         addon,
         entity_dict,
     )
-    payload["data"]["kitsuId"] = entity_dict["id"]
+    payload["data"]["kitsuId"] = entity_id
 
     ayon_user = None
     try:
         ayon_user = await UserEntity.load(username)
     except Exception:
         pass
-    target_user = await get_user_by_kitsu_id(entity_dict["id"])
+    target_user = await get_user_by_kitsu_id(entity_id)
 
     # User exists but doesn't have a kitsuId assigned it it
     if ayon_user and not target_user:
@@ -269,11 +281,10 @@ async def sync_person(
                     headers=headers,
                 )
             # Rename the user
-            payload = {
-                "newName": remove_accents(
-                    f"{entity_dict['first_name']}.{entity_dict['last_name']}".lower().strip()
-                )
-            }
+            # TODO: We should discourage renaming users.
+            # Maybe just change the fullName in the case there's a typo,
+            # but changing username may have weird side effects.
+            payload = {"newName": username}
             async with httpx.AsyncClient() as client:
                 await client.patch(
                     f"{entity_dict['ayon_server_url']}/api/users/{target_user.name}/rename",
@@ -287,6 +298,9 @@ async def sync_person(
         settings = await addon.get_studio_settings()
         user.set_password(settings.sync_settings.sync_users.default_password)
         await user.save()
+
+    # update the id map
+    existing_users[entity_id] = username
 
 
 async def sync_project(
@@ -559,6 +573,7 @@ async def push_entities(
 
     folders = {}
     tasks = {}
+    users = {}
 
     settings = await addon.get_studio_settings()
     for entity_dict in payload.entities:
@@ -582,6 +597,7 @@ async def push_entities(
                 await sync_person(
                     addon,
                     user,
+                    users,
                     entity_dict,
                 )
         elif entity_dict["type"] != "Task":
@@ -607,7 +623,7 @@ async def push_entities(
     )
 
     # pass back the map of kitsu to ayon ids
-    return {"folders": folders, "tasks": tasks}
+    return {"folders": folders, "tasks": tasks, "users": users}
 
 
 async def remove_entities(

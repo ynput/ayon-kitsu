@@ -10,7 +10,7 @@ class IntegrateKitsuReview(KitsuPublishInstancePlugin):
 
     order = pyblish.api.IntegratorOrder + 0.01
     label = "Kitsu Review"
-    families = ["render", "image", "online", "plate", "kitsu"]
+    families = ["kitsu"]
     optional = True
 
     def process(self, instance):

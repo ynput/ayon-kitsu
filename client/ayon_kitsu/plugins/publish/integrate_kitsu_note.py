@@ -12,7 +12,7 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
 
     order = pyblish.api.IntegratorOrder
     label = "Kitsu Note and Status"
-    families = ["render", "image", "online", "plate", "kitsu"]
+    families = ["kitsu"]
 
     # status settings
     set_status_note = False
@@ -68,7 +68,7 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
             families = set(
                 [instance.data["family"]] + instance.data.get("families", [])
             )
-            if "review" not in families:
+            if "review" not in families or "kitsu" not in families:
                 continue
 
             kitsu_task = instance.data.get("kitsuTask")
