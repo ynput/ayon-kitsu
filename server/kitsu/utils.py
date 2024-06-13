@@ -1,4 +1,3 @@
-import unicodedata
 from typing import Any
 
 from nxtools import slugify

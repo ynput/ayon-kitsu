@@ -161,7 +161,7 @@ async def create_access_group(
         print(e)
 
 
-def match_ayon_roles_with_kitsu_role(role: str) -> dict[str, bool] | None:
+def match_ayon_roles_with_kitsu_role(role: str) -> dict[str, bool]:
     match role:
         case "admin":
             return {
@@ -179,7 +179,7 @@ def match_ayon_roles_with_kitsu_role(role: str) -> dict[str, bool] | None:
                 "isManager": False,
             }
         case _:
-            return
+            return {}
 
 
 async def generate_user_settings(
@@ -187,7 +187,7 @@ async def generate_user_settings(
     entity_dict: "EntityDict",
 ):
     settings = await addon.get_studio_settings()
-    data: dict[str, str] = {}
+    data: dict[str, Any] = {}
     match entity_dict["role"]:
         case "admin":  # Studio manager
             data = match_ayon_roles_with_kitsu_role(

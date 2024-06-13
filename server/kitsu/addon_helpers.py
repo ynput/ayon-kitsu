@@ -1,14 +1,13 @@
-import unicodedata
 import re
-from nxtools import slugify
+import unicodedata
+from typing import Any
 
 """
 A collection of helper functions for Ayon Addons
 minimal dependencies, pytest unit tests
 """
 
-
-def required_values(entity: dict, keys: list[str], allow_empty_value=False):
+def required_values(entity: dict[str, Any], keys: list[str], allow_empty_value: bool = False) -> list[Any]:
     """check the entity dict has the required keys and a value for each"""
     values = []
     for key in keys:
@@ -87,7 +86,7 @@ def remove_accents(input_str: str) -> str:
     return result
 
 
-def to_entity_name(name) -> str:
+def to_entity_name(name: str) -> str:
     r"""convert names so they will pass AYON Entity name validation
     @see ayon_server.types.NAME_REGEX = r"^[a-zA-Z0-9_]([a-zA-Z0-9_\.\-]*[a-zA-Z0-9_])?$"
     """
