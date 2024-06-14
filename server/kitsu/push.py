@@ -625,7 +625,7 @@ async def remove_entities(
             continue
 
         if entity_dict["type"] == "Project":
-            if settings.delete_ayon_projects.enabled:
+            if settings.sync_settings.delete_projects:
                 await update_project(
                     addon,
                     user,
