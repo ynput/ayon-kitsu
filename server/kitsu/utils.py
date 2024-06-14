@@ -257,7 +257,7 @@ async def update_entity(
     for key in attr_whitelist:
         if key in kwargs and getattr(entity, key) != kwargs[key]:
             setattr(entity, key, kwargs[key])
-            logging.info(f"setattr {key}")
+            logging.debug(f"setattr {key} {getattr(entity, key)} => {kwargs[key]}")
             changed = True
     if "attrib" in kwargs:
         for key, value in kwargs["attrib"].items():
@@ -265,7 +265,7 @@ async def update_entity(
                 setattr(entity.attrib, key, value)
                 if key not in entity.own_attrib:
                     entity.own_attrib.append(key)
-                logging.info(
+                logging.debug(
                     f"setattr attrib.{key} {getattr(entity.attrib, key)} => {value}"
                 )
                 changed = True
@@ -286,6 +286,6 @@ async def update_entity(
             "summary": summary,
             "project": project_name,
         }
-        logging.info(f"dispatch_event: {event}")
+        logging.debug(f"dispatch_event: {event}")
         await dispatch_event(**event)
     return changed
