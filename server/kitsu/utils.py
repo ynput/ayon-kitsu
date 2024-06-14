@@ -86,7 +86,7 @@ async def get_task_by_kitsu_id(
     """Get an Ayon TaskEntity by its Kitsu ID"""
 
     if existing_tasks and (kitsu_id in existing_tasks):
-        folder_id = existing_tasks[kitsu_id]
+        task_id = existing_tasks[kitsu_id]
 
     else:
         res = await Postgres.fetch(
@@ -98,9 +98,9 @@ async def get_task_by_kitsu_id(
         )
         if not res:
             return None
-        folder_id = res[0]["id"]
+        task_id = res[0]["id"]
 
-    return await TaskEntity.load(project_name, folder_id)
+    return await TaskEntity.load(project_name, task_id)
 
 
 async def create_folder(
