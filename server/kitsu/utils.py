@@ -138,32 +138,14 @@ async def update_folder(
     **kwargs,
 ) -> bool:
     folder = await FolderEntity.load(project_name, folder_id)
-    changed = False
+    kwargs: dict[str, Any] = {**kwargs, **create_name_and_label(name)}
 
-    payload: dict[str, Any] = {**kwargs, **create_name_and_label(name)}
-
-    for key in ["name", "label"]:
-        if key in payload and getattr(folder, key) != payload[key]:
-            setattr(folder, key, payload[key])
-            changed = True
-
-    for key, value in payload["attrib"].items():
-        if getattr(folder.attrib, key) != value:
-            setattr(folder.attrib, key, value)
-            if key not in folder.own_attrib:
-                folder.own_attrib.append(key)
-            changed = True
-    if changed:
-        await folder.save()
-        event = {
-            "topic": "entity.folder.updated",
-            "description": f"Folder {folder.name} updated",
-            "summary": {"entityId": folder.id, "parentId": folder.parent_id},
-            "project": project_name,
-        }
-        await dispatch_event(**event)
-
-    return changed
+    return await update_entity(
+        project_name,
+        folder,
+        kwargs,
+        attr_whitelist=["name", "label"],
+    )
 
 
 async def delete_folder(
@@ -216,32 +198,14 @@ async def update_task(
     **kwargs,
 ) -> bool:
     task = await TaskEntity.load(project_name, task_id)
-    changed = False
+    kwargs = {**kwargs, **create_name_and_label(name)}
 
-    payload = {**kwargs, **create_name_and_label(name)}
-
-    # keys that can be updated
-    for key in ["name", "label", "status", "task_type", "assignees"]:
-        if key in payload and getattr(task, key) != payload[key]:
-            setattr(task, key, payload[key])
-            changed = True
-    if "attrib" in payload:
-        for key, value in payload["attrib"].items():
-            if getattr(task.attrib, key) != value:
-                setattr(task.attrib, key, value)
-                if key not in task.own_attrib:
-                    task.own_attrib.append(key)
-                changed = True
-    if changed:
-        await task.save()
-        event = {
-            "topic": "entity.task.updated",
-            "description": f"Task {task.name} updated",
-            "summary": {"entityId": task.id, "parentId": task.parent_id},
-            "project": project_name,
-        }
-        await dispatch_event(**event)
-    return changed
+    return await update_entity(
+        project_name,
+        task,
+        kwargs,
+        attr_whitelist=["name", "label", "status", "task_type", "assignees"],
+    )
 
 
 async def delete_task(
@@ -281,7 +245,9 @@ async def update_project(
     )
 
 
-async def update_entity(project_name, entity, kwargs, attr_whitelist: list[str] | None = None):
+async def update_entity(
+    project_name, entity, kwargs, attr_whitelist: list[str] | None = None
+):
     """updates the entity for given attribute whitelist, saves changes and dispatches an update event"""
 
     if attr_whitelist is None:
