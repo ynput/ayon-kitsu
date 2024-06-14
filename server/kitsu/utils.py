@@ -119,16 +119,7 @@ async def create_folder(
         project_name=project_name,
         payload=payload,
     )
-    await folder.save()
-    event = {
-        "topic": "entity.folder.created",
-        "description": f"Folder {folder.name} created",
-        "summary": {"entityId": folder.id, "parentId": folder.parent_id},
-        "project": project_name,
-    }
-
-    await dispatch_event(**event)
-    return folder
+    return create_entity(project_name, folder)
 
 
 async def update_folder(
@@ -168,16 +159,7 @@ async def create_task(
         project_name=project_name,
         payload=payload,
     )
-
-    await task.save()
-    event = {
-        "topic": "entity.task.created",
-        "description": f"Task {task.name} created",
-        "summary": {"entityId": task.id, "parentId": task.parent_id},
-        "project": project_name,
-    }
-    await dispatch_event(**event)
-    return task
+    return create_entity(project_name, task)
 
 
 async def update_task(
@@ -223,9 +205,34 @@ async def update_project(
     )
 
 
+## ====================================================
+
+
+async def create_entity(project_name: str, entity):
+    """create a new entity and dispatch a create event, returns the entity"""
+    await entity.save()
+
+    summary = {}
+    if hasattr(entity, "id"):
+        summary["id"] = entity.id
+    if hasattr(entity, "parent_id"):
+        summary["parent_id"] = entity.parent_id
+    if hasattr(entity, "name"):
+        summary["name"] = entity.name
+
+    event = {
+        "topic": f"entity.{entity.entity_type}.created",
+        "description": f"{entity.entity_type} {entity.name} created",
+        "summary": summary,
+        "project": project_name,
+    }
+    await dispatch_event(**event)
+    return entity
+
+
 async def update_entity(
     project_name, entity, kwargs, attr_whitelist: list[str] | None = None
-):
+) -> bool:
     """updates the entity for given attribute whitelist, saves changes and dispatches an update event"""
     changed = False
     if attr_whitelist is None:
