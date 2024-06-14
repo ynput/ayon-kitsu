@@ -330,23 +330,6 @@ async def sync_project(
     await update_project(project.name, **anatomy_data)
 
 
-async def delete_project(
-    addon: "KitsuAddon",
-    user: "UserEntity",
-    project: "ProjectEntity",
-    entity_dict: "EntityDict",
-):
-    logging.info("delete_project")
-    session = await Session.create(user)
-    headers = {"Authorization": f"Bearer {session.token}"}
-    # Check if group already exists
-    async with httpx.AsyncClient() as client:
-        await client.delete(
-            f"{entity_dict['ayon_server_url']}/api/projects/{project.name}",
-            headers=headers,
-        )
-
-
 async def sync_folder(
     addon: "KitsuAddon",
     user: "UserEntity",
