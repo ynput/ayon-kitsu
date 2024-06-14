@@ -15,26 +15,22 @@ from ayon_server.lib.postgres import Postgres
 def calculate_end_frame(
     entity_dict: dict[str, int], folder: FolderEntity
 ) -> int | None:
-    # Calculate the end-frame
-    nb_frames = entity_dict.get("nb_frames")
-
-    # NOTE: 'frame_out' and 'frame_in' values are stores as strings
-    if not nb_frames or not entity_dict["data"].get("frame_out"):
+    # for concepts data=None
+    if "data" not in entity_dict or not isinstance(entity_dict["data"], dict):
         return
 
-    frame_start = entity_dict["data"].get("frame_in", "")
-    if frame_start:
-        frame_start = int(frame_start)
-    else:
-        # If kitsu doesn't have a frame in, get it from the folder in AYON
-        for key, value in folder.attrib:
-            if key == "frameStart":
-                frame_start = value
-                break
+    # return end-frame if set
+    if entity_dict["data"].get("frame_out"):
+        return entity_dict["data"].get("frame_out")
 
-    if frame_start:
-        # Remove one frame as the frame_start frame is the one frame
-        return frame_start + nb_frames - 1
+    # Calculate the end-frame
+    if entity_dict.get("nb_frames") and not entity_dict["data"].get("frame_out"):
+        frame_start = entity_dict["data"].get("frame_in")
+        # If kitsu doesn't have a frame in, get it from the folder in Ayon
+        if frame_start is None and hasattr(folder.attrib, "frameStart"):
+            frame_start = folder.attrib.frameStart
+        if frame_start is not None:
+            return int(frame_start) + int(entity_dict["nb_frames"])
 
 
 def create_name_and_label(kitsu_name: str) -> dict[str, str]:
