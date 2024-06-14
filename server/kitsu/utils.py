@@ -249,7 +249,7 @@ async def update_entity(
     project_name, entity, kwargs, attr_whitelist: list[str] | None = None
 ):
     """updates the entity for given attribute whitelist, saves changes and dispatches an update event"""
-
+    changed = False
     if attr_whitelist is None:
         attr_whitelist = []
 
