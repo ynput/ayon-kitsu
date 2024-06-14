@@ -1,7 +1,7 @@
-""" tests for endpoint 'api/addons/kitsu/{version}/push' 
-    where all entities are being created for the first time
+"""tests for endpoint 'api/addons/kitsu/{version}/push'
+where all entities are being created for the first time
 
-    $ poetry run pytest tests/test_push_create.py
+$ poetry run pytest tests/test_push_create.py
 """
 
 from pprint import pprint
@@ -277,7 +277,7 @@ def test_push_tasks(api, kitsu_url, monkeypatch):
     assert task_1["taskType"] == "Animation"
     assert task_1["name"] == "animation"
     assert task_1["active"] is True
-    assert task_1["assignees"] == []
+    assert task_1["assignees"] == ["user-id-1", "user-id-3"]
     assert task_1["label"] == "animation"
     assert task_1["data"] == {"kitsuId": "task-id-1"}
     assert task_1["status"] == "Todo"
