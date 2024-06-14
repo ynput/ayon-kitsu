@@ -9,6 +9,7 @@ from ayon_server.entities import (
     UserEntity,
 )
 from ayon_server.events import dispatch_event
+from ayon_server.exceptions import ForbiddenException
 from ayon_server.lib.postgres import Postgres
 
 
@@ -203,6 +204,14 @@ async def update_project(
         # not updated are "folder_types",  "link_types", "tags", "config"
         attr_whitelist=["task_types", "statuses"],
     )
+
+
+async def delete_project(project_name: str, user: "UserEntity"):
+    project = await ProjectEntity.load(project_name)
+    if not user.is_manager:
+        raise ForbiddenException("You need to be a manager in order to delete projects")
+
+    return await delete_entity(project_name, project, user)
 
 
 ## ====================================================
