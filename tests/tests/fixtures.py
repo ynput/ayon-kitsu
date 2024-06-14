@@ -154,8 +154,27 @@ def processor(kitsu_url):
     return MockProcessor()
 
 
-# ======= Studio Settings Fixtures ==========
 
+# ======= Studio Settings Fixtures ==========
+@pytest.fixture()
+def ensure_kitsu_server_setting(api, kitsu_url):
+    """update kitsu addon settings.kitsu_server if not set"""
+    res = api.get(f"{kitsu_url}/settings")
+    assert res.status_code == 200
+    settings = res.data
+    
+    value = settings["server"]
+
+    # set settings for tests
+    if not value:
+        settings["server"] = "http://kitsu.com"
+        res = api.post(f"{kitsu_url}/settings", **settings)
+
+    yield
+
+    if not value:
+        settings["server"] = ""
+        res = api.post(f"{kitsu_url}/settings", **settings)
 
 @pytest.fixture()
 def users_enabled(api, kitsu_url):
@@ -184,12 +203,14 @@ def users_enabled(api, kitsu_url):
 @pytest.fixture()
 def users_disabled(api, kitsu_url):
     """update kitsu addon settings.sync_settings.sync_users.enabled"""
+
     # lets get the settings for the addon
     res = api.get(f"{kitsu_url}/settings")
     assert res.status_code == 200
     settings = res.data
 
     # get original values
+
     value = settings["sync_settings"]["sync_users"]["enabled"]
     print(f"users_disabled: {value}")
 
@@ -200,7 +221,6 @@ def users_disabled(api, kitsu_url):
 
     yield
 
-    # set settings back to orginal values
     if value:
         settings["sync_settings"]["sync_users"]["enabled"] = value
         res = api.post(f"{kitsu_url}/settings", **settings)

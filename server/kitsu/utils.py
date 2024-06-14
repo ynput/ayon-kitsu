@@ -1,8 +1,9 @@
 from typing import Any
 
-from nxtools import slugify
+from nxtools import slugify, logging
 
 from ayon_server.entities import (
+    ProjectEntity,
     FolderEntity,
     TaskEntity,
     UserEntity,
@@ -266,3 +267,63 @@ async def delete_task(
         "project": project_name,
     }
     await dispatch_event(**event)
+
+
+async def update_project(
+    name: str,
+    **kwargs,
+):
+    project = await ProjectEntity.load(name)
+
+    return await update_entity(
+        project.name,
+        project,
+        kwargs,
+        # currently only 'task_types' and 'statuses' are set by anatomy.py and are updatable
+        # not updated are "folder_types",  "link_types", "tags", "config"
+        attr_whitelist=["task_types", "statuses"],
+    )
+
+
+async def update_entity(project_name, entity, kwargs, attr_whitelist: list[str] | None = None):
+    """updates the entity for given attribute whitelist, saves changes and dispatches an update event"""
+
+    if attr_whitelist is None:
+        attr_whitelist = []
+
+    # keys that can be updated
+    for key in attr_whitelist:
+        if key in kwargs and getattr(entity, key) != kwargs[key]:
+            setattr(entity, key, kwargs[key])
+            logging.info(f"setattr {key}")
+            changed = True
+    if "attrib" in kwargs:
+        for key, value in kwargs["attrib"].items():
+            if getattr(entity.attrib, key) != value:
+                setattr(entity.attrib, key, value)
+                if key not in entity.own_attrib:
+                    entity.own_attrib.append(key)
+                logging.info(
+                    f"setattr attrib.{key} {getattr(entity.attrib, key)} => {value}"
+                )
+                changed = True
+    if changed:
+        await entity.save()
+
+        summary = {}
+        if hasattr(entity, "id"):
+            summary["id"] = entity.id
+        if hasattr(entity, "parent_id"):
+            summary["parent_id"] = entity.parent_id
+        if hasattr(entity, "name"):
+            summary["name"] = entity.name
+
+        event = {
+            "topic": f"entity.{entity.entity_type}.updated",
+            "description": f"{entity.entity_type} {entity.name} updated",
+            "summary": summary,
+            "project": project_name,
+        }
+        logging.info(f"dispatch_event: {event}")
+        await dispatch_event(**event)
+    return changed

@@ -7,6 +7,7 @@ from nxtools import logging
 
 from ayon_server.auth.session import Session
 from ayon_server.entities import FolderEntity, ProjectEntity, UserEntity
+from ayon_server.helpers.deploy_project import anatomy_to_project_data
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Field, OPModel
 
@@ -23,12 +24,14 @@ from .utils import (
     get_folder_by_kitsu_id,
     get_task_by_kitsu_id,
     get_user_by_kitsu_id,
+    update_project,
+
     update_folder,
     update_task,
 )
 
-from .addon_helpers import to_username, required_values
 
+from .addon_helpers import to_username, required_values
 
 if TYPE_CHECKING:
     from .. import KitsuAddon
@@ -52,6 +55,7 @@ KitsuEntityType = Literal[
 class PushEntitiesRequestModel(OPModel):
     project_name: str
     entities: list[EntityDict] = Field(..., title="List of entities to sync")
+    mock: bool | None = None  # optional param for tests
 
 
 class RemoveEntitiesRequestModel(OPModel):
@@ -298,27 +302,32 @@ async def sync_person(
     existing_users[entity_id] = username
 
 
-async def update_project(
+async def sync_project(
     addon: "KitsuAddon",
     user: "UserEntity",
     project: "ProjectEntity",
     entity_dict: "EntityDict",
+    mock: bool = False,
 ):
-    logging.info("update_project")
-    await addon.ensure_kitsu()
-    anatomy = await get_kitsu_project_anatomy(addon, entity_dict["id"])
-    payload = {
-        "attrib": json.loads(anatomy.attributes.json()),
-    }
-    session = await Session.create(user)
-    headers = {"Authorization": f"Bearer {session.token}"}
-    # Check if group already exists
-    async with httpx.AsyncClient() as client:
-        await client.patch(
-            f"{entity_dict['ayon_server_url']}/api/projects/{project.name}",
-            json=payload,
-            headers=headers,
+    logging.info("sync_project")
+    (entity_id,) = required_values(entity_dict, ["id"])
+
+    if not project:
+        logging.info("sync project not found")
+        return
+
+    # only sync if the project has the correct kitsu id stored on it. will succeed when paired correctly
+    if project.data.get("kitsuProjectId") != entity_id:
+        logging.info(
+            f"project.data.kitsuProjectId {project.data.get('kitsuProjectId')} not matching entity {entity_id}"
         )
+        return
+
+    await addon.ensure_kitsu(mock)
+    anatomy = await get_kitsu_project_anatomy(addon, entity_id)
+    anatomy_data = anatomy_to_project_data(anatomy)
+
+    await update_project(project.name, **anatomy_data)
 
 
 async def delete_project(
@@ -576,12 +585,7 @@ async def push_entities(
             continue
 
         if entity_dict["type"] == "Project":
-            await update_project(
-                addon,
-                user,
-                project,
-                entity_dict,
-            )
+            await sync_project(addon, user, project, entity_dict, payload.mock)
         elif entity_dict["type"] == "Person":
             if settings.sync_settings.sync_users.enabled:
                 await create_access_group(
