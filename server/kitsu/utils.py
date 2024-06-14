@@ -155,18 +155,7 @@ async def delete_folder(
     **kwargs,
 ) -> None:
     folder = await FolderEntity.load(project_name, folder_id)
-
-    # do we need this?
-    await folder.ensure_delete_access(user)
-
-    await folder.delete()
-    event = {
-        "topic": "entity.folder.deleted",
-        "description": f"Folder {folder.name} deleted",
-        "summary": {"entityId": folder.id, "parentId": folder.parent_id},
-        "project": project_name,
-    }
-    await dispatch_event(**event)
+    delete_entity(project_name, folder, user)
 
 
 async def create_task(
@@ -215,18 +204,7 @@ async def delete_task(
     **kwargs,
 ) -> None:
     task = await TaskEntity.load(project_name, task_id)
-
-    # do we need this?
-    await task.ensure_delete_access(user)
-
-    await task.delete()
-    event = {
-        "topic": "entity.task.deleted",
-        "description": f"Task {task.name} deleted",
-        "summary": {"entityId": task.id, "parentId": task.parent_id},
-        "project": project_name,
-    }
-    await dispatch_event(**event)
+    delete_entity(project_name, task, user)
 
 
 async def update_project(
@@ -289,3 +267,36 @@ async def update_entity(
         logging.debug(f"dispatch_event: {event}")
         await dispatch_event(**event)
     return changed
+
+
+async def delete_entity(
+    project_name: str,
+    entity,
+    user: "UserEntity",
+) -> None:
+    """delete the given entity after checking user permission, dispatches a delete event"""
+
+    # check user permission to delete this entity
+    if hasattr(entity, "ensure_delete_access") and callable(
+        entity.ensure_delete_access
+    ):
+        await entity.ensure_delete_access(user)
+
+    await entity.delete()
+
+    summary = {}
+    if hasattr(entity, "id"):
+        summary["id"] = entity.id
+    if hasattr(entity, "parent_id"):
+        summary["parent_id"] = entity.parent_id
+    if hasattr(entity, "name"):
+        summary["name"] = entity.name
+
+    event = {
+        "topic": f"entity.{entity.entity_type}.deleted",
+        "description": f"{entity.entity_type} {entity.name} deleted",
+        "summary": summary,
+        "project": project_name,
+    }
+    logging.debug(f"dispatch_event: {event}")
+    await dispatch_event(**event)
