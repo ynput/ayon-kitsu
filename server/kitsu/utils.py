@@ -119,7 +119,7 @@ async def create_folder(
         project_name=project_name,
         payload=payload,
     )
-    return create_entity(project_name, folder)
+    return await create_entity(project_name, folder)
 
 
 async def update_folder(
@@ -146,7 +146,7 @@ async def delete_folder(
     **kwargs,
 ) -> None:
     folder = await FolderEntity.load(project_name, folder_id)
-    delete_entity(project_name, folder, user)
+    await delete_entity(project_name, folder, user)
 
 
 async def create_task(
@@ -159,7 +159,7 @@ async def create_task(
         project_name=project_name,
         payload=payload,
     )
-    return create_entity(project_name, task)
+    return await create_entity(project_name, task)
 
 
 async def update_task(
@@ -186,7 +186,7 @@ async def delete_task(
     **kwargs,
 ) -> None:
     task = await TaskEntity.load(project_name, task_id)
-    delete_entity(project_name, task, user)
+    await delete_entity(project_name, task, user)
 
 
 async def update_project(
