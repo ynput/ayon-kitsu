@@ -21,11 +21,11 @@ from .utils import (
     create_task,
     delete_folder,
     delete_task,
+    delete_project,
     get_folder_by_kitsu_id,
     get_task_by_kitsu_id,
     get_user_by_kitsu_id,
     update_project,
-
     update_folder,
     update_task,
 )
@@ -230,16 +230,13 @@ async def sync_person(
     existing_users: dict[str, Any],
     entity_dict: "EntityDict",
 ):
-
-    first_name, entity_id= required_values(entity_dict, ["first_name", "id"])
-    last_name = entity_dict.get("last_name", '')
+    first_name, entity_id = required_values(entity_dict, ["first_name", "id"])
+    last_name = entity_dict.get("last_name", "")
 
     # == check should Person entity be synced ==
     # do not sync Kitsu API bots
     if entity_dict.get("is_bot"):
-        logging.info(
-            f"skipping sync_person for Kitsu Bot: {first_name} {last_name}"
-        )
+        logging.info(f"skipping sync_person for Kitsu Bot: {first_name} {last_name}")
         return
 
     logging.info(f"sync_person: {first_name} {last_name}")
