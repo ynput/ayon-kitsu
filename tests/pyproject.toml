@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ayon-kitsu"
-version = "1.2.2-dev.1"
+version = "1.2.2"
 description = ""
 authors = ["Martastain <martas@imm.cz>", "Scott McDonnell <scott@jammedia.com", "Jacob Danell <jacob@emberlight.se>"]
 
