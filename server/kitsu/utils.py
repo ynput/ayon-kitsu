@@ -221,13 +221,15 @@ async def create_entity(project_name: str, entity):
     """create a new entity and dispatch a create event, returns the entity"""
     await entity.save()
 
-    summary = {}
-    if hasattr(entity, "id"):
-        summary["id"] = entity.id
-    if hasattr(entity, "parent_id"):
-        summary["parent_id"] = entity.parent_id
-    if hasattr(entity, "name"):
-        summary["name"] = entity.name
+    summary = {
+        key: getattr(entity, key)
+        for key in {
+            "id",
+            "parent_id",
+            "name",
+        }
+        if hasattr(entity, key)
+    }
 
     event = {
         "topic": f"entity.{entity.entity_type}.created",
