@@ -9,6 +9,7 @@ from ayon_server.entities import (
     UserEntity,
 )
 from ayon_server.events import dispatch_event
+from ayon_server.exceptions import ForbiddenException
 from ayon_server.lib.postgres import Postgres
 
 
@@ -86,7 +87,7 @@ async def get_task_by_kitsu_id(
     """Get an Ayon TaskEntity by its Kitsu ID"""
 
     if existing_tasks and (kitsu_id in existing_tasks):
-        folder_id = existing_tasks[kitsu_id]
+        task_id = existing_tasks[kitsu_id]
 
     else:
         res = await Postgres.fetch(
@@ -98,9 +99,9 @@ async def get_task_by_kitsu_id(
         )
         if not res:
             return None
-        folder_id = res[0]["id"]
+        task_id = res[0]["id"]
 
-    return await TaskEntity.load(project_name, folder_id)
+    return await TaskEntity.load(project_name, task_id)
 
 
 async def create_folder(
@@ -119,16 +120,7 @@ async def create_folder(
         project_name=project_name,
         payload=payload,
     )
-    await folder.save()
-    event = {
-        "topic": "entity.folder.created",
-        "description": f"Folder {folder.name} created",
-        "summary": {"entityId": folder.id, "parentId": folder.parent_id},
-        "project": project_name,
-    }
-
-    await dispatch_event(**event)
-    return folder
+    return await create_entity(project_name, folder)
 
 
 async def update_folder(
@@ -138,32 +130,14 @@ async def update_folder(
     **kwargs,
 ) -> bool:
     folder = await FolderEntity.load(project_name, folder_id)
-    changed = False
+    kwargs: dict[str, Any] = {**kwargs, **create_name_and_label(name)}
 
-    payload: dict[str, Any] = {**kwargs, **create_name_and_label(name)}
-
-    for key in ["name", "label"]:
-        if key in payload and getattr(folder, key) != payload[key]:
-            setattr(folder, key, payload[key])
-            changed = True
-
-    for key, value in payload["attrib"].items():
-        if getattr(folder.attrib, key) != value:
-            setattr(folder.attrib, key, value)
-            if key not in folder.own_attrib:
-                folder.own_attrib.append(key)
-            changed = True
-    if changed:
-        await folder.save()
-        event = {
-            "topic": "entity.folder.updated",
-            "description": f"Folder {folder.name} updated",
-            "summary": {"entityId": folder.id, "parentId": folder.parent_id},
-            "project": project_name,
-        }
-        await dispatch_event(**event)
-
-    return changed
+    return await update_entity(
+        project_name,
+        folder,
+        kwargs,
+        attr_whitelist=["name", "label"],
+    )
 
 
 async def delete_folder(
@@ -173,18 +147,7 @@ async def delete_folder(
     **kwargs,
 ) -> None:
     folder = await FolderEntity.load(project_name, folder_id)
-
-    # do we need this?
-    await folder.ensure_delete_access(user)
-
-    await folder.delete()
-    event = {
-        "topic": "entity.folder.deleted",
-        "description": f"Folder {folder.name} deleted",
-        "summary": {"entityId": folder.id, "parentId": folder.parent_id},
-        "project": project_name,
-    }
-    await dispatch_event(**event)
+    await delete_entity(project_name, folder, user)
 
 
 async def create_task(
@@ -197,16 +160,7 @@ async def create_task(
         project_name=project_name,
         payload=payload,
     )
-
-    await task.save()
-    event = {
-        "topic": "entity.task.created",
-        "description": f"Task {task.name} created",
-        "summary": {"entityId": task.id, "parentId": task.parent_id},
-        "project": project_name,
-    }
-    await dispatch_event(**event)
-    return task
+    return await create_entity(project_name, task)
 
 
 async def update_task(
@@ -216,32 +170,14 @@ async def update_task(
     **kwargs,
 ) -> bool:
     task = await TaskEntity.load(project_name, task_id)
-    changed = False
+    kwargs = {**kwargs, **create_name_and_label(name)}
 
-    payload = {**kwargs, **create_name_and_label(name)}
-
-    # keys that can be updated
-    for key in ["name", "label", "status", "task_type", "assignees"]:
-        if key in payload and getattr(task, key) != payload[key]:
-            setattr(task, key, payload[key])
-            changed = True
-    if "attrib" in payload:
-        for key, value in payload["attrib"].items():
-            if getattr(task.attrib, key) != value:
-                setattr(task.attrib, key, value)
-                if key not in task.own_attrib:
-                    task.own_attrib.append(key)
-                changed = True
-    if changed:
-        await task.save()
-        event = {
-            "topic": "entity.task.updated",
-            "description": f"Task {task.name} updated",
-            "summary": {"entityId": task.id, "parentId": task.parent_id},
-            "project": project_name,
-        }
-        await dispatch_event(**event)
-    return changed
+    return await update_entity(
+        project_name,
+        task,
+        kwargs,
+        attr_whitelist=["name", "label", "status", "task_type", "assignees"],
+    )
 
 
 async def delete_task(
@@ -251,18 +187,7 @@ async def delete_task(
     **kwargs,
 ) -> None:
     task = await TaskEntity.load(project_name, task_id)
-
-    # do we need this?
-    await task.ensure_delete_access(user)
-
-    await task.delete()
-    event = {
-        "topic": "entity.task.deleted",
-        "description": f"Task {task.name} deleted",
-        "summary": {"entityId": task.id, "parentId": task.parent_id},
-        "project": project_name,
-    }
-    await dispatch_event(**event)
+    await delete_entity(project_name, task, user)
 
 
 async def update_project(
@@ -281,9 +206,46 @@ async def update_project(
     )
 
 
-async def update_entity(project_name, entity, kwargs, attr_whitelist: list[str] | None = None):
-    """updates the entity for given attribute whitelist, saves changes and dispatches an update event"""
+async def delete_project(project_name: str, user: "UserEntity"):
+    project = await ProjectEntity.load(project_name)
+    if not user.is_manager:
+        raise ForbiddenException("You need to be a manager in order to delete projects")
 
+    return await delete_entity(project_name, project, user)
+
+
+## ====================================================
+
+
+async def create_entity(project_name: str, entity):
+    """create a new entity and dispatch a create event, returns the entity"""
+    await entity.save()
+
+    summary = {
+        key: getattr(entity, key)
+        for key in {
+            "id",
+            "parent_id",
+            "name",
+        }
+        if hasattr(entity, key)
+    }
+
+    event = {
+        "topic": f"entity.{entity.entity_type}.created",
+        "description": f"{entity.entity_type} {entity.name} created",
+        "summary": summary,
+        "project": project_name,
+    }
+    await dispatch_event(**event)
+    return entity
+
+
+async def update_entity(
+    project_name, entity, kwargs, attr_whitelist: list[str] | None = None
+) -> bool:
+    """updates the entity for given attribute whitelist, saves changes and dispatches an update event"""
+    changed = False
     if attr_whitelist is None:
         attr_whitelist = []
 
@@ -291,7 +253,7 @@ async def update_entity(project_name, entity, kwargs, attr_whitelist: list[str] 
     for key in attr_whitelist:
         if key in kwargs and getattr(entity, key) != kwargs[key]:
             setattr(entity, key, kwargs[key])
-            logging.info(f"setattr {key}")
+            logging.debug(f"setattr {key} {getattr(entity, key)} => {kwargs[key]}")
             changed = True
     if "attrib" in kwargs:
         for key, value in kwargs["attrib"].items():
@@ -299,7 +261,7 @@ async def update_entity(project_name, entity, kwargs, attr_whitelist: list[str] 
                 setattr(entity.attrib, key, value)
                 if key not in entity.own_attrib:
                     entity.own_attrib.append(key)
-                logging.info(
+                logging.debug(
                     f"setattr attrib.{key} {getattr(entity.attrib, key)} => {value}"
                 )
                 changed = True
@@ -320,6 +282,39 @@ async def update_entity(project_name, entity, kwargs, attr_whitelist: list[str] 
             "summary": summary,
             "project": project_name,
         }
-        logging.info(f"dispatch_event: {event}")
+        logging.debug(f"dispatch_event: {event}")
         await dispatch_event(**event)
     return changed
+
+
+async def delete_entity(
+    project_name: str,
+    entity,
+    user: "UserEntity",
+) -> None:
+    """delete the given entity after checking user permission, dispatches a delete event"""
+
+    # check user permission to delete this entity
+    if hasattr(entity, "ensure_delete_access") and callable(
+        entity.ensure_delete_access
+    ):
+        await entity.ensure_delete_access(user)
+
+    await entity.delete()
+
+    summary = {}
+    if hasattr(entity, "id"):
+        summary["id"] = entity.id
+    if hasattr(entity, "parent_id"):
+        summary["parent_id"] = entity.parent_id
+    if hasattr(entity, "name"):
+        summary["name"] = entity.name
+
+    event = {
+        "topic": f"entity.{entity.entity_type}.deleted",
+        "description": f"{entity.entity_type} {entity.name} deleted",
+        "summary": summary,
+        "project": project_name,
+    }
+    logging.debug(f"dispatch_event: {event}")
+    await dispatch_event(**event)

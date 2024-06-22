@@ -18,6 +18,8 @@ from .fixtures import (
     api,
     kitsu_url,
     ensure_kitsu_server_setting,
+    delete_projects_enabled,
+    delete_projects_disabled,
 )
 
 from kitsu_mock import KitsuMock
@@ -216,3 +218,35 @@ def test_push_unsynced_project(api, kitsu_url):
     # no project changes as project is not synced
     target_project = api.get_project(entity["name"])
     assert project == target_project
+
+
+def test_delete_project_disabled(api, kitsu_url, delete_projects_disabled):
+    """testing attempting to remove a project
+    when delete_projects is False in the kitsu settings"""
+
+    entity = mock_data.projects[0]
+
+    # check the project exists
+    assert api.get_project(entity["name"])
+
+    res = api.post(
+        f"{kitsu_url}/remove", project_name=entity["name"], entities=[entity]
+    )
+    assert res.status_code == 200
+
+    # project should still exist
+    assert api.get_project(entity["name"])
+
+
+def test_delete_project_enabled(api, kitsu_url, delete_projects_enabled):
+    """testing attempting to remove a project
+    when delete_projects is True in the kitsu settings"""
+    entity = mock_data.projects[0]
+
+    res = api.post(
+        f"{kitsu_url}/remove", project_name=entity["name"], entities=[entity]
+    )
+    assert res.status_code == 200
+
+    # project should be deleted
+    assert not api.get_project(entity["name"])

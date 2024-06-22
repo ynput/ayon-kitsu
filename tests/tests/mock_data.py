@@ -2,13 +2,13 @@
 
 projects = [
     {
-        "name": "TestProject1",
+        "name": "test_kitsu_project",
         "code": "TP1",
         "id": "kitsu-project-id-1",
         "type": "Project",
     },
     {
-        "name": "TestProject2",
+        "name": "another_test_kitsu_project",
         "code": "TP2",
         "id": "kitsu-project-id-2",
         "type": "Project",

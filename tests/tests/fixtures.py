@@ -154,7 +154,6 @@ def processor(kitsu_url):
     return MockProcessor()
 
 
-
 # ======= Studio Settings Fixtures ==========
 @pytest.fixture()
 def ensure_kitsu_server_setting(api, kitsu_url):
@@ -162,7 +161,7 @@ def ensure_kitsu_server_setting(api, kitsu_url):
     res = api.get(f"{kitsu_url}/settings")
     assert res.status_code == 200
     settings = res.data
-    
+
     value = settings["server"]
 
     # set settings for tests
@@ -175,6 +174,7 @@ def ensure_kitsu_server_setting(api, kitsu_url):
     if not value:
         settings["server"] = ""
         res = api.post(f"{kitsu_url}/settings", **settings)
+
 
 @pytest.fixture()
 def users_enabled(api, kitsu_url):
@@ -250,3 +250,50 @@ def access_group(api, kitsu_url):
         settings["sync_settings"]["sync_users"]["access_group"] = value
         res = api.post(f"{kitsu_url}/settings", **settings)
 
+
+@pytest.fixture()
+def delete_projects_enabled(api, kitsu_url):
+    """update kitsu addon settings.sync_settings.delete_projects"""
+    # lets get the settings for the addon
+    res = api.get(f"{kitsu_url}/settings")
+    assert res.status_code == 200
+    settings = res.data
+
+    # get original values
+    value = settings["sync_settings"]["delete_projects"]
+
+    # set settings for tests
+    if not value:
+        settings["sync_settings"]["delete_projects"] = True
+        res = api.post(f"{kitsu_url}/settings", **settings)
+
+    yield
+
+    # set settings back to orginal values
+    if not value:
+        settings["sync_settings"]["delete_projects"] = False
+        res = api.post(f"{kitsu_url}/settings", **settings)
+
+
+@pytest.fixture()
+def delete_projects_disabled(api, kitsu_url):
+    """update kitsu addon settings.sync_settings.delete_projects"""
+    # lets get the settings for the addon
+    res = api.get(f"{kitsu_url}/settings")
+    assert res.status_code == 200
+    settings = res.data
+
+    # get original values
+    value = settings["sync_settings"]["delete_projects"]
+
+    # set settings for tests
+    if value:
+        settings["sync_settings"]["delete_projects"] = False
+        res = api.post(f"{kitsu_url}/settings", **settings)
+
+    yield
+
+    # set settings back to orginal values
+    if value:
+        settings["sync_settings"]["delete_projects"] = True
+        res = api.post(f"{kitsu_url}/settings", **settings)
