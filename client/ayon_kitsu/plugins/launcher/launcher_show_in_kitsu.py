@@ -2,7 +2,7 @@ import webbrowser
 import ayon_api
 
 from ayon_core.pipeline import LauncherAction
-from ayon_core.modules import ModulesManager
+from ayon_core.addon import AddonsManager
 
 
 class ShowInKitsu(LauncherAction):
@@ -13,18 +13,16 @@ class ShowInKitsu(LauncherAction):
     order = 10
 
     @staticmethod
-    def get_kitsu_module():
-        return ModulesManager().modules_by_name.get("kitsu")
+    def get_kitsu_addon():
+        return AddonsManager().get("kitsu")
 
-    def is_compatible(self, session):
-        if not session.get("AVALON_PROJECT"):
-            return False
-        return True
+    def is_compatible(self, selection):
+        return selection.is_project_selected
 
     def process(self, session, **kwargs):
         # Context inputs
         project_name = session["AYON_PROJECT_NAME"]
-        asset_path = session.get("AYON_FOLDER_PATH", None)
+        folder_path = session.get("AYON_FOLDER_PATH", None)
         task_name = session.get("AYON_TASK_NAME", None)
 
         project = ayon_api.get_project(project_name)
@@ -37,32 +35,32 @@ class ShowInKitsu(LauncherAction):
                 "Project {} has no connected kitsu id.".format(project_name)
             )
 
-        asset_name = None
-        asset_kitsu_id = None
-        asset_type = None
+        folder_name = None
+        folder_kitsu_id = None
+        folder_type = None
         task_kitsu_id = None
 
         if asset_path:
-            asset_data = ayon_api.get_folder_by_path(project_name = project_name, folder_path = asset_path)
-            asset_type = asset_data['folderType']
-            asset_name = asset_path.split("/")[-1]
-            asset_id = asset_data['id']
-            asset_kitsu_id = asset_data['data']['kitsuId']
+            folder_data = ayon_api.get_folder_by_path(project_name = project_name, folder_path = asset_path)
+            folder_type = folder_data['folderType']
+            folder_name = folder_path.split("/")[-1]
+            folder_id = folder_data['id']
+            folder_kitsu_id = folder_data['data']['kitsuId']
             if task_name:
                 project_tasks = ayon_api.get_tasks(project_name = project_name)
-                asset_tasks = [x for x in project_tasks if x['folderId'] == asset_id]
-                asset_task = None
-                for task in asset_tasks:
+                folder_tasks = [x for x in project_tasks if x['folderId'] == folder_id]
+                folder_task = None
+                for task in folder_tasks:
                     if task['name'] == task_name:
-                        asset_task = task
+                        folder_task = task
                         break
-                task_kitsu_id = asset_task['data']['kitsuId']
+                task_kitsu_id = folder_task['data']['kitsuId']
 
         url = self.get_url(
             project_id=project_kitsu_id,
-            asset_name=asset_name,
-            asset_id=asset_kitsu_id,
-            asset_type=asset_type,
+            asset_name=folder_name,
+            asset_id=folder_kitsu_id,
+            asset_type=folder_type,
             task_id=task_kitsu_id,
         )
 
@@ -82,12 +80,10 @@ class ShowInKitsu(LauncherAction):
         asset_type=None,
         task_id=None,
     ):
-        kitsu_module = self.get_kitsu_module()
+        kitsu_addon = self.get_kitsu_addon()
 
         # Get kitsu url with /api stripped
-        kitsu_url = kitsu_module.server_url
-        if kitsu_url.endswith("/api"):
-            kitsu_url = kitsu_url[: -len("/api")]
+        kitsu_url = kitsu_addon.server_url.rstrip("/api")
 
         sub_url = f"/productions/{project_id}"
         asset_type_url = "sequences" if asset_type == "Sequence" or asset_name == "Sequences" else "shots" if asset_type == "Shot" else "assets"
