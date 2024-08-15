@@ -1,40 +1,17 @@
 from ayon_applications import PreLaunchHook
-
 import os
-
-
-
-
-
-
 
 class pre_status_change(PreLaunchHook):
     order = 1
-
     launch_types = ()
     note_status_shortname="wip"
 
-
     def execute(self):
         import gazu
-
-        self.log.info(
-                f"Start app kitsu status change in action")
-        
         kitsuId= self.data["task_entity"]['data']['kitsuId']
         
         self.log.debug(f'Changing Kitsu task status to WIP. Task id {kitsuId}')
 
-
-
-        
-
-
-
-
-
-
-        
         try:
             gazu.set_host(os.environ["KITSU_SERVER"])
 
@@ -47,19 +24,8 @@ class pre_status_change(PreLaunchHook):
 
             task=gazu.task.get_task(kitsuId)
 
-            self.log.info(task)
-
             gazu.task.add_comment(task["id"], kitsu_status)    
 
             gazu.log_out() 
         except:
             self.log.info("Kitsu status change failed")
-
-        
-
-
-
-
-
-            
-    
