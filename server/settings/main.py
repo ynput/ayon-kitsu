@@ -3,6 +3,7 @@ from ayon_server.settings.enum import secrets_enum
 
 from .sync_settings import SyncSettings, SYNC_DEFAULT_VALUES
 from .publish_plugins import PublishPlugins, PUBLISH_DEFAULT_VALUES
+from .app_start import AppStartStatusChange, APPSTART_DEFAULT_VALUES
 
 
 ## Entities naming pattern
@@ -43,6 +44,10 @@ class KitsuSettings(BaseSettingsModel):
         default_factory=EntityPattern,
         title="Entities naming pattern",
     )
+    appstart: AppStartStatusChange = SettingsField(
+        default_factory=AppStartStatusChange,
+        title="App start status change",
+    )
     publish: PublishPlugins = SettingsField(
         default_factory=PublishPlugins,
         title="Publish plugins",
@@ -59,6 +64,7 @@ DEFAULT_VALUES = {
         "sequence": "SQ##",
         "shot": "SH##",
     },
+    "appstart": APPSTART_DEFAULT_VALUES,
     "publish": PUBLISH_DEFAULT_VALUES,
     "sync_settings": SYNC_DEFAULT_VALUES,
 }

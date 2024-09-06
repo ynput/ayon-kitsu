@@ -103,6 +103,8 @@ class IntegrateKitsuNotes(BaseSettingsModel):
         default_factory=CustomCommentTemplateModel,
         title="Custom Comment Template",
     )
+    set_status_note_farm: bool = SettingsField(title="Set status on note farm")
+    note_farm_status_shortname: str = SettingsField(title="Note farm shortname")
 
 
 class PublishPlugins(BaseSettingsModel):
@@ -294,5 +296,8 @@ PUBLISH_DEFAULT_VALUES = {
 | family | `{family}` |
 | name | `{name}` |""",
         },
+        "set_status_note_farm": False,
+        "note_farm_status_shortname": "farm"
+
     }
 }
