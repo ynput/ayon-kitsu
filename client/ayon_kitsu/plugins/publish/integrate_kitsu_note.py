@@ -73,26 +73,37 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
                 "family_requirements"
             ]
 
+        farm_status_change=False
+
+        families= []
+        for instance in context:
+                families += set(
+                [instance.data["family"]] + instance.data.get("families", [])
+            )
+        self.log.debug(f'Falimies in context {families}')
+
+        if "review" not in families:
+            self.log.debug("Adding farm status to task")
+            farm_status_change=True
+
+        if farm_status_change and self.set_status_note_farm:
+            kitsu_task = instance.data.get("kitsuTask")
+            farm_status=gazu.task.get_task_status_by_short_name(self.note_farm_status_shortname)
+            gazu.task.add_comment(kitsu_task, farm_status)
+            return
+
         for instance in context:
             # Check if instance is a review by checking its family
             # Allow a match to primary family or any of families
             families = set(
                 [instance.data["family"]] + instance.data.get("families", [])
             )
-            
-            kitsu_task = instance.data.get("kitsuTask")
 
             if "review" not in families or "kitsu" not in families:
-                farm_malilies= ["render.farm", "render.frames_farm",
-                 "prerender.farm", "prerender.frames_farm",]
-                if list(set(farm_malilies).intersection(families)) and self.set_status_note_farm:
-                    self.log.debug("Adding farm status to task")
-                    farm_status=gazu.task.get_task_status_by_short_name(self.note_farm_status_shortname)
-                    gazu.task.add_comment(kitsu_task, farm_status)
                 continue
-            
 
-            
+            kitsu_task = instance.data.get("kitsuTask")
+
             if not kitsu_task:
                 continue
 

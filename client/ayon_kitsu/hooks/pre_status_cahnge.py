@@ -53,7 +53,6 @@ class PreStatusChange(PreLaunchHook):
         else:
             self.log.info(f"Status change condotions are empty")
 
-
         gazu.set_host(os.environ["KITSU_SERVER"])
         gazu.log_in(os.environ["KITSU_LOGIN"], os.environ["KITSU_PWD"])
 
