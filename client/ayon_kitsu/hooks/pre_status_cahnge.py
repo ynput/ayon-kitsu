@@ -23,9 +23,6 @@ class PreStatusChange(PostLaunchHook):
         "enabled": False,
         "comment_template": "{comment}",
     }
-
-
-
     def execute(self):
         if not "KITSU_LOGIN" in os.environ:
             self.log.info(f"KITSU_LOGIN is not set. assuming rendeing in deadline. Skipping status.")
