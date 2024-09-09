@@ -88,7 +88,7 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
 
         if farm_status_change and self.set_status_note_farm:
             kitsu_task = instance.data.get("kitsuTask")
-            farm_status=gazu.task.get_task_status_by_short_name(self.note_farm_status_shortname)
+            farm_status = gazu.task.get_task_status_by_short_name(self.note_farm_status_shortname)
             gazu.task.add_comment(kitsu_task, farm_status)
             return
 
