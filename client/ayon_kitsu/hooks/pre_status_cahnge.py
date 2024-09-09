@@ -6,7 +6,6 @@ import gazu
 import re
 
 
-
 class PreStatusChange(PostLaunchHook):
     order = 1
     launch_types = ()
