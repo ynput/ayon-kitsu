@@ -70,7 +70,7 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
                 "family_requirements"
             ]
 
-        farm_status_change=False
+        farm_status_change = False
 
         families= []
         for instance in context:
