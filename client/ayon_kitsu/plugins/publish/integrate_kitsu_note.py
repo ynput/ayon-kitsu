@@ -28,7 +28,6 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
         "family_requirements": [],
     }
 
-
     # comment settings
     custom_comment_template = {
         "enabled": False,
