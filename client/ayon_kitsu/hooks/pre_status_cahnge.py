@@ -7,7 +7,7 @@ import re
 
 
 
-class PreStatusChange(PreLaunchHook):
+class PreStatusChange(PostLaunchHook):
     order = 1
     launch_types = ()
 
