@@ -28,7 +28,6 @@ class PreStatusChange(PostLaunchHook):
             self.log.info(f"KITSU_LOGIN is not set. assuming rendeing in deadline. Skipping status.")
             return
 
-
         data = self.launch_context.data
         project_settings = data["project_settings"]["kitsu"]["appstart"]
 
