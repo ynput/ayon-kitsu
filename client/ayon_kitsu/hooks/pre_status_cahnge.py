@@ -50,8 +50,8 @@ class PreStatusChange(PostLaunchHook):
         gazu.set_host(os.environ["KITSU_SERVER"])
         gazu.log_in(os.environ["KITSU_LOGIN"], os.environ["KITSU_PWD"])
 
-        if not self.data["task_entity"]["data"]["kitsuId"]:
-            self.log.info(f"This task doenst have kitsu task id. Skipping kitsu task change.")
+        if not self.data["task_entity"]["data"].get("kitsuId"):
+            self.log.info(f"This task does not have a kitsu task id. Skipping kitsu task status change.")
             return
         
         kitsuId = self.data["task_entity"]["data"]["kitsuId"]
