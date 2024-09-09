@@ -8,7 +8,7 @@ import re
 
 class PreStatusChange(PostLaunchHook):
     order = 1
-    launch_types = ()
+    launch_types = set()
 
         # status settings
     set_status_app_start_note = False
