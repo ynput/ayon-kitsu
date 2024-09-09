@@ -10,14 +10,14 @@ class PreStatusChange(PostLaunchHook):
     order = 1
     launch_types = set()
 
-        # status settings
+    # status settings
     set_status_app_start_note = False
     app_start_status_shortname = "wip"
     status_change_conditions = {
         "status_conditions": []
         }
 
-        # comment settings
+    # comment settings
     custom_comment_template = {
         "enabled": False,
         "comment_template": "{comment}",
