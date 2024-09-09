@@ -36,7 +36,6 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
     set_status_note_farm = False
     note_farm_status_shortname = "farm"
 
-
     def format_publish_comment(self, instance):
         """Format the instance's publish comment
 
