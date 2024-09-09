@@ -102,21 +102,6 @@ class PreStatusChange(PostLaunchHook):
                             gazu.task.add_comment(other_task["id"], pause_status,)
                 else:
                      self.log.info(f"Failed to recieve kitsu pause status instance. Skipping pause Status change.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-  
-
         else:
             self.log.info(f"Status not changed due to conditions: {status_conditions}")
                 
