@@ -83,7 +83,7 @@ class PreStatusChange(PostLaunchHook):
                 self.log.info(f"Pausing all other tasks with same status disabled.")
             else:
                 self.log.info(f"Pausing all other tasks with same status enabled.")
-                pause_status_shortname= project_settings["psuse_status_shortname"]
+                pause_status_shortname= project_settings["pause_status_shortname"]
                 if gazu.task.get_task_status_by_short_name(pause_status_shortname):
                     pause_status=gazu.task.get_task_status_by_short_name(pause_status_shortname)
                     user_tasks= gazu.user.all_tasks_to_do()
