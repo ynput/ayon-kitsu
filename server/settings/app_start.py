@@ -22,7 +22,7 @@ class AppStartStatusChange(BaseSettingsModel):
         default_factory=AppStartStatusChangeCondition, title="App start status change conditions"
     )
     set_pause_status_to_other_tasks: bool = SettingsField(title="Set pause status to other tasks")
-    psuse_status_shortname: str = SettingsField(title="Pause Status shortname")
+    pause_status_shortname: str = SettingsField(title="Pause Status shortname")
 
 
 APPSTART_DEFAULT_VALUES = {
@@ -30,5 +30,5 @@ APPSTART_DEFAULT_VALUES = {
     "app_start_status_shortname": "wip",
     "app_startstatus_change_conditions": [],
     "set_pause_status_to_other_tasks": False,
-    "psuse_status_shortname": "pause",
+    "pause_status_shortname": "pause",
     }
