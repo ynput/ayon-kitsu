@@ -98,6 +98,4 @@ class PreStatusChange(PostLaunchHook):
                      self.log.info(f"Failed to recieve kitsu pause status instance. Skipping pause Status change.")
         else:
             self.log.info(f"Status not changed due to conditions: {status_conditions}")
-                
-            
         gazu.log_out() 
