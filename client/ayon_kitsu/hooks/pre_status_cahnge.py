@@ -59,7 +59,6 @@ class PreStatusChange(PostLaunchHook):
         task=gazu.task.get_task(kitsuId)
         task_current_status_shortname= task["task_status"]["short_name"]
 
-
         # Check if any status condition is not met
         allow_status_change = True
         for status_cond in status_conditions:
