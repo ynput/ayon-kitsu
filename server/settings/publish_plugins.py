@@ -298,6 +298,5 @@ PUBLISH_DEFAULT_VALUES = {
         },
         "set_status_note_farm": False,
         "note_farm_status_shortname": "farm"
-
     }
 }
