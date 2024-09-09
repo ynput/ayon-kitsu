@@ -78,7 +78,6 @@ class PreStatusChange(PostLaunchHook):
             self.log.info(f"Changing Kitsu task status to {self.app_start_status_shortname}.")
 
             gazu.task.add_comment(task["id"], kitsu_wip_status)
-            self.log.info(task["id"])
 
             if not project_settings["set_pause_status_to_other_tasks"]:
                 self.log.info(f"Pausing all other tasks with same status disabled.")
