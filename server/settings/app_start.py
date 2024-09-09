@@ -15,9 +15,6 @@ class AppStartStatusChangeCondition(BaseSettingsModel):
     short_name: str = SettingsField("", title="Short name")
 
 
-
-
-    
 class AppStartStatusChange(BaseSettingsModel):
     set_status_app_start_note: bool = SettingsField(title="Set status change on app start")
     app_start_status_shortname: str = SettingsField(title="App start Status shortname")
