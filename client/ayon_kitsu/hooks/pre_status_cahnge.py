@@ -11,7 +11,6 @@ class PreStatusChange(PostLaunchHook):
     order = 1
     launch_types = ()
 
-
         # status settings
     set_status_app_start_note = False
     app_start_status_shortname = "wip"
