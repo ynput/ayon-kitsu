@@ -6,7 +6,16 @@ import gazu
 import re
 
 
-class PreStatusChange(PostLaunchHook):
+class PreKitsuStatusChange(PostLaunchHook):
+    """On launch of an application change task statuses on Kitsu.
+
+    When launching an application this launch hook may change the
+    status on Kitsu with the relevant task id. 
+
+    If "pause other tasks" is enabled this will also change the status of 
+    all other tasks to the paused task status. This can be useful for
+    X, Y, Z.
+    """
     order = 1
     launch_types = set()
 
