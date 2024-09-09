@@ -19,7 +19,6 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
                 "arnold_rop", "mantra_rop",
                 "karma_rop", "vray_rop",
                 "redshift_rop", "usdrender"]
-    
 
     # status settings
     set_status_note = False
