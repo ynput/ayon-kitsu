@@ -84,7 +84,7 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
 
         if "review" not in families:
             self.log.debug("Adding farm status to task")
-            farm_status_change=True
+            farm_status_change = True
 
         if farm_status_change and self.set_status_note_farm:
             kitsu_task = instance.data.get("kitsuTask")
