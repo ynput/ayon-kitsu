@@ -12,13 +12,7 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
 
     order = pyblish.api.IntegratorOrder
     label = "Kitsu Note and Status"
-    families = ["kitsu", "render", "render.farm", "render.frames_farm",
-                "prerender", "prerender.farm", "prerender.frames_farm",
-                "renderlayer", "imagesequence", "image",
-                "vrayscene", "maxrender",
-                "arnold_rop", "mantra_rop",
-                "karma_rop", "vray_rop",
-                "redshift_rop", "usdrender"]
+    families = ["*"]
 
     # status settings
     set_status_note = False
