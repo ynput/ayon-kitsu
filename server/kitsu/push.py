@@ -21,11 +21,11 @@ from .utils import (
     create_task,
     delete_folder,
     delete_task,
+    delete_project,
     get_folder_by_kitsu_id,
     get_task_by_kitsu_id,
     get_user_by_kitsu_id,
     update_project,
-
     update_folder,
     update_task,
 )
@@ -230,16 +230,13 @@ async def sync_person(
     existing_users: dict[str, Any],
     entity_dict: "EntityDict",
 ):
-
-    first_name, entity_id= required_values(entity_dict, ["first_name", "id"])
-    last_name = entity_dict.get("last_name", '')
+    first_name, entity_id = required_values(entity_dict, ["first_name", "id"])
+    last_name = entity_dict.get("last_name", "")
 
     # == check should Person entity be synced ==
     # do not sync Kitsu API bots
     if entity_dict.get("is_bot"):
-        logging.info(
-            f"skipping sync_person for Kitsu Bot: {first_name} {last_name}"
-        )
+        logging.info(f"skipping sync_person for Kitsu Bot: {first_name} {last_name}")
         return
 
     logging.info(f"sync_person: {first_name} {last_name}")
@@ -328,23 +325,6 @@ async def sync_project(
     anatomy_data = anatomy_to_project_data(anatomy)
 
     await update_project(project.name, **anatomy_data)
-
-
-async def delete_project(
-    addon: "KitsuAddon",
-    user: "UserEntity",
-    project: "ProjectEntity",
-    entity_dict: "EntityDict",
-):
-    logging.info("delete_project")
-    session = await Session.create(user)
-    headers = {"Authorization": f"Bearer {session.token}"}
-    # Check if group already exists
-    async with httpx.AsyncClient() as client:
-        await client.delete(
-            f"{entity_dict['ayon_server_url']}/api/projects/{project.name}",
-            headers=headers,
-        )
 
 
 async def sync_folder(
@@ -645,7 +625,7 @@ async def remove_entities(
             continue
 
         if entity_dict["type"] == "Project":
-            if settings.delete_ayon_projects.enabled:
+            if settings.sync_settings.delete_projects:
                 await update_project(
                     addon,
                     user,
