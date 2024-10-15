@@ -85,7 +85,9 @@ async def parse_task_types(
     return result
 
 
-async def parse_statuses(addon: "KitsuAddon", kitsu_project_id: str) -> list[Status]:
+async def parse_statuses(
+    addon: "KitsuAddon", kitsu_project_id: str
+) -> list[Status]:
     """Map kitsu status to ayon status
 
     Kitsu structure:
@@ -198,7 +200,9 @@ async def get_kitsu_project_anatomy(
     addon: "KitsuAddon",
     kitsu_project_id: str,
 ) -> Anatomy:
-    kitsu_project_response = await addon.kitsu.get(f"data/projects/{kitsu_project_id}")
+    kitsu_project_response = await addon.kitsu.get(
+        f"data/projects/{kitsu_project_id}"
+    )
     if kitsu_project_response.status_code != 200:
         raise AyonException("Could not get Kitsu project")
 

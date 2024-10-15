@@ -80,19 +80,28 @@ class KitsuProcessor:
         #
 
         try:
-            self.kitsu_server_url = self.settings.get("server").rstrip("/") + "/api"
+            self.kitsu_server_url = (
+                self.settings.get("server").rstrip("/") + "/api"
+            )
 
-            email_sercret = self.settings.get("login_email")
+            email_secret = self.settings.get("login_email")
             password_secret = self.settings.get("login_password")
 
-            assert email_sercret, f"Email secret `{email_sercret}` not set"
-            assert password_secret, f"Password secret `{password_secret}` not set"
+            if not email_secret:
+                raise ValueError(f"Email secret `{email_secret}` not set")
+
+            if not password_secret:
+                raise ValueError(
+                    f"Password secret `{password_secret}` not set"
+                )
 
             try:
-                self.kitsu_login_email = ayon_api.get_secret(email_sercret)["value"]
-                self.kitsu_login_password = ayon_api.get_secret(password_secret)[
-                    "value"
-                ]
+                self.kitsu_login_email = (
+                    ayon_api.get_secret(email_secret)["value"]
+                )
+                self.kitsu_login_password = (
+                    ayon_api.get_secret(password_secret)["value"]
+                )
             except KeyError as e:
                 raise KitsuSettingsError(f"Secret `{e}` not found") from e
 
@@ -119,7 +128,9 @@ class KitsuProcessor:
             raise KitsuServerError(f"Kitsu login failed: {e}") from e
 
         # init event client
-        self.kitsu_events_url = self.kitsu_server_url.replace("api", "socket.io")
+        self.kitsu_events_url = self.kitsu_server_url.replace(
+            "api", "socket.io"
+        )
         gazu.set_event_host(self.kitsu_events_url)
         self.event_client = gazu.events.init()
 
@@ -281,13 +292,18 @@ class KitsuProcessor:
             if pair["kitsuProjectId"] == kitsu_project_id:
                 return pair["ayonProjectName"]
 
-    def set_paired_ayon_project(self, kitsu_project_id: str, ayon_project_name: str):
+    def set_paired_ayon_project(
+        self, kitsu_project_id: str, ayon_project_name: str
+    ):
         """add a new pair to the list"""
         for pair in self.pairing_list:
             if "kitsuProjectId" in pair:
                 return
         self.pairing_list.append(
-            {"kitsuProjectId": kitsu_project_id, "ayonProjectName": ayon_project_name}
+            {
+                "kitsuProjectId": kitsu_project_id,
+                "ayonProjectName": ayon_project_name
+            }
         )
 
     def start_processing(self):
@@ -323,9 +339,13 @@ class KitsuProcessor:
                 full_sync(self, kitsu_project_id, ayon_project_name)
 
                 # if successful add the pair to the list
-                self.set_paired_ayon_project(kitsu_project_id, ayon_project_name)
+                self.set_paired_ayon_project(
+                    kitsu_project_id, ayon_project_name
+                )
             except Exception:
-                log_traceback(f"Unable to sync kitsu project {ayon_project_name}")
+                log_traceback(
+                    f"Unable to sync kitsu project {ayon_project_name}"
+                )
 
                 ayon_api.update_event(
                     job["id"],
