@@ -433,7 +433,7 @@ def main(
         failed = False
     finally:
         if failed and os.path.isdir(addon_output_dir):
-            log.info(f"Purging output dir after failed package creation")
+            log.info("Purging output dir after failed package creation")
             shutil.rmtree(output_dir)
 
     # Skip server zipping
