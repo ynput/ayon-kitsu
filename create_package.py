@@ -31,7 +31,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
-from typing import Any, Iterable, Optional, Pattern
+from typing import Iterable, Optional, Pattern
 
 import package
 
