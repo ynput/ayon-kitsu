@@ -407,7 +407,7 @@ def main(
         log.info("Creating client folder")
         if not output_dir:
             raise RuntimeError(
-                "Output directory must be defined" 
+                "Output directory must be defined"
                 " for client only preparation."
             )
         copy_client_code(output_dir, log)
