@@ -44,7 +44,9 @@ class SyncUsers(BaseSettingsModel):
     enabled: bool = SettingsField(True)
     default_password: str = SettingsField(title="Default Password")
     access_group: str = SettingsField(title="Access Group", regex=NAME_REGEX)
-    roles: RolesCondition = SettingsField(default_factory=RolesCondition, title="Roles")
+    roles: RolesCondition = SettingsField(
+        default_factory=RolesCondition, title="Roles"
+    )
 
 
 #
@@ -69,7 +71,9 @@ def _states_enum():
 class StatusCondition(BaseSettingsModel):
     _layout: str = "compact"
     short_name: str = SettingsField("", title="Short name")
-    state: str = SettingsField("in_progress", enum_resolver=_states_enum, title="State")
+    state: str = SettingsField(
+        "in_progress", enum_resolver=_states_enum, title="State"
+    )
     icon: str = SettingsField("task_alt", title="Icon", widget="icon")
 
 

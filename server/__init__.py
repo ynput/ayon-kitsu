@@ -58,7 +58,11 @@ class KitsuAddon(BaseServerAddon):
     # Endpoints
     #
 
-    async def sync(self, user: CurrentUser, project_name: str) -> EmptyResponse:
+    async def sync(
+        self,
+        user: CurrentUser,
+        project_name: str
+    ) -> EmptyResponse:
         await sync_request(project_name, user)
 
     async def push(
@@ -88,7 +92,9 @@ class KitsuAddon(BaseServerAddon):
             payload=payload,
         )
 
-    async def list_pairings(self, mock: bool = False) -> list[PairingItemModel]:
+    async def list_pairings(
+        self, mock: bool = False
+    ) -> list[PairingItemModel]:
         await self.ensure_kitsu(mock)
         return await get_pairing_list(self)
 

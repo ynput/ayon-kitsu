@@ -7,14 +7,20 @@ A collection of helper functions for Ayon Addons
 minimal dependencies, pytest unit tests
 """
 
-def required_values(entity: dict[str, Any], keys: list[str], allow_empty_value: bool = False) -> list[Any]:
+def required_values(
+    entity: dict[str, Any],
+    keys: list[str],
+    allow_empty_value: bool = False
+) -> list[Any]:
     """check the entity dict has the required keys and a value for each"""
     values = []
     for key in keys:
         if key not in entity:
             raise ValueError(f"Key '{key}' not set for entity: {entity}")
         if not allow_empty_value and not entity.get(key):
-            raise ValueError(f"Value for  '{key}' cannot be empty for entity: {entity}")
+            raise ValueError(
+                f"Value for '{key}' cannot be empty for entity: {entity}"
+            )
         values.append(entity.get(key))
     return values
 
@@ -46,7 +52,9 @@ def to_username(first_name: str, last_name: str | None = None) -> str:
     """converts usernames from kitsu - converts accents"""
 
     name = (
-        f"{first_name.strip()}.{last_name.strip()}" if last_name else first_name.strip()
+        f"{first_name.strip()}.{last_name.strip()}"
+        if last_name
+        else first_name.strip()
     )
 
     name = name.lower()
@@ -88,7 +96,8 @@ def remove_accents(input_str: str) -> str:
 
 def to_entity_name(name: str) -> str:
     r"""convert names so they will pass AYON Entity name validation
-    @see ayon_server.types.NAME_REGEX = r"^[a-zA-Z0-9_]([a-zA-Z0-9_\.\-]*[a-zA-Z0-9_])?$"
+    @see ayon_server.types.NAME_REGEX
+        r"^[a-zA-Z0-9_]([a-zA-Z0-9_\.\-]*[a-zA-Z0-9_])?$"
     """
 
     if not name:
