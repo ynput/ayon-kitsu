@@ -305,9 +305,7 @@ def zip_client_side(addon_package_dir: str, log: logging.Logger):
 
 
 def create_server_package(
-    output_dir: str,
-    addon_output_dir: str,
-    log: logging.Logger
+    output_dir: str, addon_output_dir: str, log: logging.Logger
 ):
     """Create server package zip file.
 
@@ -320,14 +318,10 @@ def create_server_package(
     """
 
     log.info("Creating server package")
-    output_path = os.path.join(
-        output_dir, f"{ADDON_NAME}-{ADDON_VERSION}.zip"
-    )
+    output_path = os.path.join(output_dir, f"{ADDON_NAME}-{ADDON_VERSION}.zip")
     with ZipFileLongPaths(output_path, "w", zipfile.ZIP_DEFLATED) as zipf:
         # Write a manifest to zip
-        zipf.write(
-            os.path.join(CURRENT_DIR, "package.py"), "package.py"
-        )
+        zipf.write(os.path.join(CURRENT_DIR, "package.py"), "package.py")
 
         # Move addon content to zip into 'addon' directory
         addon_output_dir_offset = len(addon_output_dir) + 1
@@ -486,7 +480,7 @@ if __name__ == "__main__":
         "--debug",
         dest="debug",
         action="store_true",
-        help="Debug log messages."
+        help="Debug log messages.",
     )
     parser.add_argument(
         "--upload",

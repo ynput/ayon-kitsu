@@ -4,13 +4,9 @@ from ayon_server.settings import BaseSettingsModel, SettingsField
 class CollectFamilyAdvancedFilterModel(BaseSettingsModel):
     _layout = "expanded"
     families: list[str] = SettingsField(
-        default_factory=list,
-        title="Additional Families"
+        default_factory=list, title="Additional Families"
     )
-    add_kitsu_family: bool = SettingsField(
-        True,
-        title="Add Kitsu Family"
-    )
+    add_kitsu_family: bool = SettingsField(True, title="Add Kitsu Family")
 
 
 class CollectFamilyProfile(BaseSettingsModel):
@@ -75,8 +71,8 @@ class StatusChangeConditionsModel(BaseSettingsModel):
     status_conditions: list[StatusChangeCondition] = SettingsField(
         default_factory=list, title="Status conditions"
     )
-    family_requirements: list[StatusChangeFamilyRequirementModel] = SettingsField(
-        default_factory=list, title="Family requirements"
+    family_requirements: list[StatusChangeFamilyRequirementModel] = (
+        SettingsField(default_factory=list, title="Family requirements")
     )
 
 
@@ -97,7 +93,7 @@ class IntegrateKitsuNotes(BaseSettingsModel):
     note_status_shortname: str = SettingsField(title="Note shortname")
     status_change_conditions: StatusChangeConditionsModel = SettingsField(
         default_factory=StatusChangeConditionsModel,
-        title="Status change conditions"
+        title="Status change conditions",
     )
     custom_comment_template: CustomCommentTemplateModel = SettingsField(
         default_factory=CustomCommentTemplateModel,
@@ -108,11 +104,10 @@ class IntegrateKitsuNotes(BaseSettingsModel):
 class PublishPlugins(BaseSettingsModel):
     CollectKitsuFamily: CollectKitsuFamilyPluginModel = SettingsField(
         default_factory=CollectKitsuFamilyPluginModel,
-        title="Collect Kitsu Family"
+        title="Collect Kitsu Family",
     )
     IntegrateKitsuNote: IntegrateKitsuNotes = SettingsField(
-        default_factory=IntegrateKitsuNotes,
-        title="Integrate Kitsu Note"
+        default_factory=IntegrateKitsuNotes, title="Integrate Kitsu Note"
     )
 
 
@@ -121,161 +116,105 @@ PUBLISH_DEFAULT_VALUES = {
         "enabled": True,
         "profiles": [
             {
-                "host_names": [
-                    "traypublisher"
-                ],
+                "host_names": ["traypublisher"],
                 "product_types": [],
                 "task_types": [],
                 "task_names": [],
                 "add_ftrack_family": True,
-                "advanced_filtering": []
+                "advanced_filtering": [],
             },
             {
-                "host_names": [
-                    "traypublisher"
-                ],
-                "product_types": [
-                    "matchmove",
-                    "shot"
-                ],
+                "host_names": ["traypublisher"],
+                "product_types": ["matchmove", "shot"],
                 "task_types": [],
                 "task_names": [],
                 "add_kitsu_family": False,
-                "advanced_filtering": []
+                "advanced_filtering": [],
             },
             {
-                "host_names": [
-                    "traypublisher"
-                ],
-                "product_types": [
-                    "plate",
-                    "review",
-                    "audio"
-                ],
+                "host_names": ["traypublisher"],
+                "product_types": ["plate", "review", "audio"],
                 "task_types": [],
                 "task_names": [],
                 "add_kitsu_family": False,
                 "advanced_filtering": [
-                    {
-                        "families": [
-                            "clip",
-                            "review"
-                        ],
-                        "add_kitsu_family": True
-                    }
-                ]
+                    {"families": ["clip", "review"], "add_kitsu_family": True}
+                ],
             },
             {
-                "host_names": [
-                    "maya"
-                ],
+                "host_names": ["maya"],
                 "product_types": [
                     "model",
                     "setdress",
                     "animation",
                     "look",
                     "rig",
-                    "camera"
+                    "camera",
                 ],
                 "task_types": [],
                 "task_names": [],
                 "add_kitsu_family": True,
-                "advanced_filtering": []
+                "advanced_filtering": [],
             },
             {
-                "host_names": [
-                    "tvpaint"
-                ],
-                "product_types": [
-                    "renderPass"
-                ],
+                "host_names": ["tvpaint"],
+                "product_types": ["renderPass"],
                 "task_types": [],
                 "task_names": [],
                 "add_kitsu_family": False,
-                "advanced_filtering": []
+                "advanced_filtering": [],
             },
             {
-                "host_names": [
-                    "tvpaint"
-                ],
+                "host_names": ["tvpaint"],
                 "product_types": [],
                 "task_types": [],
                 "task_names": [],
                 "add_kitsu_family": True,
-                "advanced_filtering": []
+                "advanced_filtering": [],
             },
             {
-                "host_names": [
-                    "nuke"
-                ],
-                "product_types": [
-                    "write",
-                    "render",
-                    "prerender"
-                ],
+                "host_names": ["nuke"],
+                "product_types": ["write", "render", "prerender"],
                 "task_types": [],
                 "task_names": [],
                 "add_kitsu_family": False,
                 "advanced_filtering": [
-                    {
-                        "families": [
-                            "review"
-                        ],
-                        "add_kitsu_family": True
-                    }
-                ]
+                    {"families": ["review"], "add_kitsu_family": True}
+                ],
             },
             {
-                "host_names": [
-                    "aftereffects"
-                ],
-                "product_types": [
-                    "render",
-                    "workfile"
-                ],
+                "host_names": ["aftereffects"],
+                "product_types": ["render", "workfile"],
                 "task_types": [],
                 "task_names": [],
                 "add_kitsu_family": True,
-                "advanced_filtering": []
+                "advanced_filtering": [],
             },
             {
-                "host_names": [
-                    "flame"
-                ],
-                "product_types": [
-                    "plate",
-                    "take"
-                ],
+                "host_names": ["flame"],
+                "product_types": ["plate", "take"],
                 "task_types": [],
                 "task_names": [],
                 "add_kitsu_family": True,
-                "advanced_filtering": []
+                "advanced_filtering": [],
             },
             {
-                "host_names": [
-                    "houdini"
-                ],
-                "product_types": [
-                    "usd"
-                ],
+                "host_names": ["houdini"],
+                "product_types": ["usd"],
                 "task_types": [],
                 "task_names": [],
                 "add_kitsu_family": True,
-                "advanced_filtering": []
+                "advanced_filtering": [],
             },
             {
-                "host_names": [
-                    "photoshop"
-                ],
-                "product_types": [
-                    "review"
-                ],
+                "host_names": ["photoshop"],
+                "product_types": ["review"],
                 "task_types": [],
                 "task_names": [],
                 "add_kitsu_family": True,
-                "advanced_filtering": []
-            }
-        ]
+                "advanced_filtering": [],
+            },
+        ],
     },
     "IntegrateKitsuNote": {
         "set_status_note": False,
@@ -294,5 +233,5 @@ PUBLISH_DEFAULT_VALUES = {
 | family | `{family}` |
 | name | `{name}` |""",
         },
-    }
+    },
 }

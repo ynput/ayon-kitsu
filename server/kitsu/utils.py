@@ -24,9 +24,8 @@ def calculate_end_frame(
         return entity_dict["data"].get("frame_out")
 
     # Calculate the end-frame
-    if (
-        entity_dict.get("nb_frames")
-        and not entity_dict["data"].get("frame_out")
+    if entity_dict.get("nb_frames") and not entity_dict["data"].get(
+        "frame_out"
     ):
         frame_start = entity_dict["data"].get("frame_in")
         # If kitsu doesn't have a frame in, get it from the folder in Ayon

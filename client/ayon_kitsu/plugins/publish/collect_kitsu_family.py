@@ -5,6 +5,7 @@ Requires:
 Provides:
     instance     -> families ([])
 """
+
 import pyblish.api
 
 from ayon_core.lib import filter_profiles
@@ -42,12 +43,10 @@ class CollectKitsuFamily(plugin.KitsuPublishInstancePlugin):
         filtering_criteria = {
             "host_names": host_name,
             "product_types": product_type,
-            "task_names": task_name
+            "task_names": task_name,
         }
         profile = filter_profiles(
-            self.profiles,
-            filtering_criteria,
-            logger=self.log
+            self.profiles, filtering_criteria, logger=self.log
         )
 
         add_kitsu_family = False
@@ -60,11 +59,11 @@ class CollectKitsuFamily(plugin.KitsuPublishInstancePlugin):
                 families_set = set(families) | {product_type}
                 self.log.info(
                     "'{}' families used for additional filtering".format(
-                        families_set))
+                        families_set
+                    )
+                )
                 add_kitsu_family = self._get_add_kitsu_f_from_addit_filters(
-                    additional_filters,
-                    families_set,
-                    add_kitsu_family
+                    additional_filters, families_set, add_kitsu_family
                 )
 
         result_str = "Not adding"
@@ -73,9 +72,11 @@ class CollectKitsuFamily(plugin.KitsuPublishInstancePlugin):
             if "kitsu" not in families:
                 families.append("kitsu")
 
-        self.log.debug("{} 'kitsu' family for instance with '{}'".format(
-            result_str, product_type
-        ))
+        self.log.debug(
+            "{} 'kitsu' family for instance with '{}'".format(
+                result_str, product_type
+            )
+        )
 
     def _get_add_kitsu_f_from_addit_filters(
         self, additional_filters, families, add_kitsu_family

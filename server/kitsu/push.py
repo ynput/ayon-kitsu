@@ -25,7 +25,6 @@ from .utils import (
     get_task_by_kitsu_id,
     get_user_by_kitsu_id,
     update_project,
-
     update_folder,
     update_task,
 )
@@ -232,11 +231,8 @@ async def sync_person(
     existing_users: dict[str, Any],
     entity_dict: "EntityDict",
 ):
-
-    first_name, entity_id= required_values(
-        entity_dict, ["first_name", "id"]
-    )
-    last_name = entity_dict.get("last_name", '')
+    first_name, entity_id = required_values(entity_dict, ["first_name", "id"])
+    last_name = entity_dict.get("last_name", "")
 
     # == check should Person entity be synced ==
     # do not sync Kitsu API bots
@@ -417,8 +413,7 @@ async def sync_folder(
             return
         # ensure folder type exists
         if entity_dict["type"] not in [
-            f["name"]
-            for f in project.folder_types
+            f["name"] for f in project.folder_types
         ]:
             logging.warning(
                 f"Folder type {entity_dict['type']} does not exist. Creating."
@@ -469,8 +464,7 @@ async def ensure_task_type(
 ) -> bool:
     """#TODO: kitsu listener for new task types would be preferable"""
     if task_type_name not in [
-        task_type["name"]
-        for task_type in project.task_types
+        task_type["name"] for task_type in project.task_types
     ]:
         logging.info(
             f"Creating task type {task_type_name} for '{project.name}'"
@@ -492,10 +486,7 @@ async def ensure_task_status(
 ) -> bool:
     """#TODO: kitsu listener for new task statuses would be preferable"""
 
-    if task_status_name not in [
-        status["name"]
-        for status in project.statuses
-    ]:
+    if task_status_name not in [status["name"] for status in project.statuses]:
         logging.info(
             f"Creating task status {task_status_name} for '{project.name}'"
         )
@@ -612,9 +603,7 @@ async def push_entities(
             continue
 
         if entity_dict["type"] == "Project":
-            await sync_project(
-                addon, user, project, entity_dict, payload.mock
-            )
+            await sync_project(addon, user, project, entity_dict, payload.mock)
         elif entity_dict["type"] == "Person":
             if settings.sync_settings.sync_users.enabled:
                 await create_access_group(

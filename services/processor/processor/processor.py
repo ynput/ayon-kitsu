@@ -96,12 +96,12 @@ class KitsuProcessor:
                 )
 
             try:
-                self.kitsu_login_email = (
-                    ayon_api.get_secret(email_secret)["value"]
-                )
-                self.kitsu_login_password = (
-                    ayon_api.get_secret(password_secret)["value"]
-                )
+                self.kitsu_login_email = ayon_api.get_secret(email_secret)[
+                    "value"
+                ]
+                self.kitsu_login_password = ayon_api.get_secret(
+                    password_secret
+                )["value"]
             except KeyError as e:
                 raise KitsuSettingsError(f"Secret `{e}` not found") from e
 
@@ -302,7 +302,7 @@ class KitsuProcessor:
         self.pairing_list.append(
             {
                 "kitsuProjectId": kitsu_project_id,
-                "ayonProjectName": ayon_project_name
+                "ayonProjectName": ayon_project_name,
             }
         )
 

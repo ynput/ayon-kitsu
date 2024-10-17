@@ -1,4 +1,4 @@
-""" utils shared between fullsync.py and update_from_kitsu.py """
+"""utils shared between fullsync.py and update_from_kitsu.py"""
 
 import ayon_api
 import gazu

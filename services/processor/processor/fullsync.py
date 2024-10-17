@@ -29,15 +29,15 @@ def get_assets(
 def get_tasks(
     kitsu_project_id: str,
     task_types: dict[str, str],
-    task_statuses: dict[str, str]
+    task_statuses: dict[str, str],
 ) -> list[dict[str, str]]:
     tasks: list[dict[str, str]] = []
     for record in gazu.task.all_tasks_for_project(kitsu_project_id):
         record["persons"]: list[dict[str, str]] = []
         for id in record["assignees"]:
-            record["persons"].append({
-                "email": gazu.person.get_person(id)["email"]
-            })
+            record["persons"].append(
+                {"email": gazu.person.get_person(id)["email"]}
+            )
         tasks.append(
             preprocess_task(
                 kitsu_project_id, record, task_types, task_statuses

@@ -216,9 +216,9 @@ async def get_kitsu_project_anatomy(
     anatomy_dict = anatomy_preset.dict()
     for key in anatomy_dict["attributes"]:
         if key in attributes:
-            anatomy_dict["attributes"][key]=attributes[key]
+            anatomy_dict["attributes"][key] = attributes[key]
 
-    #anatomy_dict["attributes"] = attributes
+    # anatomy_dict["attributes"] = attributes
     anatomy_dict["statuses"] = statuses
     anatomy_dict["task_types"] = task_types
 

@@ -7,10 +7,9 @@ A collection of helper functions for Ayon Addons
 minimal dependencies, pytest unit tests
 """
 
+
 def required_values(
-    entity: dict[str, Any],
-    keys: list[str],
-    allow_empty_value: bool = False
+    entity: dict[str, Any], keys: list[str], allow_empty_value: bool = False
 ) -> list[Any]:
     """check the entity dict has the required keys and a value for each"""
     values = []

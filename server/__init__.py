@@ -59,9 +59,7 @@ class KitsuAddon(BaseServerAddon):
     #
 
     async def sync(
-        self,
-        user: CurrentUser,
-        project_name: str
+        self, user: CurrentUser, project_name: str
     ) -> EmptyResponse:
         await sync_request(project_name, user)
 
