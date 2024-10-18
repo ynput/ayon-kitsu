@@ -292,6 +292,7 @@ def test_push_tasks(api, kitsu_url, monkeypatch):
         "clipOut": 1,
         "clipIn": 1,
         "pixelAspect": 1.0,
+        "priority": "normal",
     }
 
     res = api.get(f"/projects/{PROJECT_NAME}/tasks/{tasks['task-id-2']}")
@@ -314,6 +315,7 @@ def test_push_tasks(api, kitsu_url, monkeypatch):
         "clipOut": 1,
         "clipIn": 1,
         "pixelAspect": 1.0,
+        "priority": "normal",
     }
 
     # ---------------------------------------------
