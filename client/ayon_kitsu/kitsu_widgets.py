@@ -148,7 +148,9 @@ class KitsuPasswordDialog(QtWidgets.QDialog):
     def _on_ok_click(self):
         # Check if is connectable
         if not self._connectable:
-            self._message_label.setText("Please set server url in Studio Settings!")
+            self._message_label.setText(
+                "Please set server url in Studio Settings!"
+            )
             return
 
         # Collect values

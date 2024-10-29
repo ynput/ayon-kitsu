@@ -27,20 +27,28 @@ def get_assets(
 
 
 def get_tasks(
-    kitsu_project_id: str, task_types: dict[str, str], task_statuses: dict[str, str]
+    kitsu_project_id: str,
+    task_types: dict[str, str],
+    task_statuses: dict[str, str]
 ) -> list[dict[str, str]]:
     tasks: list[dict[str, str]] = []
     for record in gazu.task.all_tasks_for_project(kitsu_project_id):
         record["persons"]: list[dict[str, str]] = []
         for id in record["assignees"]:
-            record["persons"].append({"email": gazu.person.get_person(id)["email"]})
+            record["persons"].append({
+                "email": gazu.person.get_person(id)["email"]
+            })
         tasks.append(
-            preprocess_task(kitsu_project_id, record, task_types, task_statuses)
+            preprocess_task(
+                kitsu_project_id, record, task_types, task_statuses
+            )
         )
     return tasks
 
 
-def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str):
+def full_sync(
+    parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
+):
     start_time = time.time()
     logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
 
@@ -57,13 +65,16 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
     shots = gazu.shot.all_shots_for_project(kitsu_project_id)
     edits = gazu.edit.all_edits_for_project(kitsu_project_id)
     # Concepts were introduced at Kitsu/Zou v0.18.0.
-    # If the user runs an older version if Kitsu, gazu.concept will throw an error.
+    # If the user runs an older version if Kitsu, gazu.concept will
+    #    throw an error.
     try:
         concepts = gazu.concept.all_concepts_for_project(kitsu_project_id)
     except Exception:
         concepts = []
 
-    entities = persons + assets + episodes + seqs + shots + edits + concepts + tasks
+    entities = (
+        persons + assets + episodes + seqs + shots + edits + concepts + tasks
+    )
 
     for entity in entities:
         entity["ayon_server_url"] = ayon_api.get_base_url()
@@ -74,5 +85,6 @@ def full_sync(parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
         entities=entities,
     )
     logging.info(
-        f"Full Sync for project {project_name} completed in {time.time() - start_time}s"
+        f"Full Sync for project {project_name}"
+        f" completed in {time.time() - start_time}s"
     )
