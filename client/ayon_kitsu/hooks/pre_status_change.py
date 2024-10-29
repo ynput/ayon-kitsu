@@ -1,4 +1,4 @@
-from ayon_applications import PreLaunchHook
+from ayon_applications import PostLaunchHook
 from ayon_kitsu.addon import is_kitsu_enabled_in_settings
 
 import os
