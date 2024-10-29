@@ -6,32 +6,35 @@ import gazu
 import re
 
 
+class PreKitsuStatusChange(PostLaunchHook):
+    """On launch of an application change task statuses on Kitsu.
 
-class PreStatusChange(PreLaunchHook):
+    When launching an application this launch hook may change the
+    status on Kitsu with the relevant task id. 
+
+    If "pause other tasks" is enabled this will also change the status of 
+    all other tasks to the paused task status. This can be useful for
+    X, Y, Z.
+    """
     order = 1
-    launch_types = ()
+    launch_types = set()
 
-
-        # status settings
+    # status settings
     set_status_app_start_note = False
     app_start_status_shortname = "wip"
     status_change_conditions = {
         "status_conditions": []
         }
 
-        # comment settings
+    # comment settings
     custom_comment_template = {
         "enabled": False,
         "comment_template": "{comment}",
     }
-
-
-
     def execute(self):
         if not "KITSU_LOGIN" in os.environ:
             self.log.info(f"KITSU_LOGIN is not set. assuming rendeing in deadline. Skipping status.")
             return
-
 
         data = self.launch_context.data
         project_settings = data["project_settings"]["kitsu"]["appstart"]
@@ -56,14 +59,13 @@ class PreStatusChange(PreLaunchHook):
         gazu.set_host(os.environ["KITSU_SERVER"])
         gazu.log_in(os.environ["KITSU_LOGIN"], os.environ["KITSU_PWD"])
 
-        if not self.data["task_entity"]["data"]["kitsuId"]:
-            self.log.info(f"This task doenst have kitsu task id. Skipping kitsu task change.")
+        if not self.data["task_entity"]["data"].get("kitsuId"):
+            self.log.info(f"This task does not have a kitsu task id. Skipping kitsu task status change.")
             return
         
         kitsuId = self.data["task_entity"]["data"]["kitsuId"]
         task=gazu.task.get_task(kitsuId)
         task_current_status_shortname= task["task_status"]["short_name"]
-
 
         # Check if any status condition is not met
         allow_status_change = True
@@ -84,14 +86,13 @@ class PreStatusChange(PreLaunchHook):
             
             self.log.info(f"Changing Kitsu task status to {self.app_start_status_shortname}.")
 
-            gazu.task.add_comment(task["id"], kitsu_wip_status,)
-            self.log.info(task["id"])
+            gazu.task.add_comment(task["id"], kitsu_wip_status)
 
             if not project_settings["set_pause_status_to_other_tasks"]:
                 self.log.info(f"Pausing all other tasks with same status disabled.")
             else:
                 self.log.info(f"Pausing all other tasks with same status enabled.")
-                pause_status_shortname= project_settings["psuse_status_shortname"]
+                pause_status_shortname= project_settings["pause_status_shortname"]
                 if gazu.task.get_task_status_by_short_name(pause_status_shortname):
                     pause_status=gazu.task.get_task_status_by_short_name(pause_status_shortname)
                     user_tasks= gazu.user.all_tasks_to_do()
@@ -102,23 +103,6 @@ class PreStatusChange(PreLaunchHook):
                             gazu.task.add_comment(other_task["id"], pause_status,)
                 else:
                      self.log.info(f"Failed to recieve kitsu pause status instance. Skipping pause Status change.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-  
-
         else:
             self.log.info(f"Status not changed due to conditions: {status_conditions}")
-                
-            
         gazu.log_out() 

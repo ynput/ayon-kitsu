@@ -12,14 +12,7 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
 
     order = pyblish.api.IntegratorOrder
     label = "Kitsu Note and Status"
-    families = ["kitsu", "render", "render.farm", "render.frames_farm",
-                "prerender", "prerender.farm", "prerender.frames_farm",
-                "renderlayer", "imagesequence", "image",
-                "vrayscene", "maxrender",
-                "arnold_rop", "mantra_rop",
-                "karma_rop", "vray_rop",
-                "redshift_rop", "usdrender"]
-    
+    families = ["*"]
 
     # status settings
     set_status_note = False
@@ -29,7 +22,6 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
         "family_requirements": [],
     }
 
-
     # comment settings
     custom_comment_template = {
         "enabled": False,
@@ -37,7 +29,6 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
     }
     set_status_note_farm = False
     note_farm_status_shortname = "farm"
-
 
     def format_publish_comment(self, instance):
         """Format the instance's publish comment
@@ -73,22 +64,19 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
                 "family_requirements"
             ]
 
-        farm_status_change=False
+        farm_status_change = False
 
         families= []
-        for instance in context:
-                families += set(
-                [instance.data["family"]] + instance.data.get("families", [])
-            )
-        self.log.debug(f'Falimies in context {families}')
 
-        if "review" not in families:
-            self.log.debug("Adding farm status to task")
-            farm_status_change=True
+        for instance in context:
+                if instance.data.get("farm"):
+                    farm_status_change = True
+
+        self.log.debug(f'Instance in context has farm flag: {farm_status_change}')
 
         if farm_status_change and self.set_status_note_farm:
             kitsu_task = instance.data.get("kitsuTask")
-            farm_status=gazu.task.get_task_status_by_short_name(self.note_farm_status_shortname)
+            farm_status = gazu.task.get_task_status_by_short_name(self.note_farm_status_shortname)
             gazu.task.add_comment(kitsu_task, farm_status)
             return
 

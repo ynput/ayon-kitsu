@@ -103,7 +103,6 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
 
     def get_publish_plugin_paths(self, host_name=None):
         return [os.path.join(KITSU_ROOT, "plugins", "publish")]
-    
     def get_launch_hook_paths(self, host_name=None):
         return [os.path.join(KITSU_ROOT, "hooks")]
 
