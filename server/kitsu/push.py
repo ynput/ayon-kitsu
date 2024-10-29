@@ -330,7 +330,7 @@ async def sync_project(
         return
 
     await addon.ensure_kitsu(mock)
-    anatomy = await get_kitsu_project_anatomy(addon, entity_id)
+    anatomy = await get_kitsu_project_anatomy(addon, entity_id, project)
     anatomy_data = anatomy_to_project_data(anatomy)
 
     await update_project(project.name, **anatomy_data)
