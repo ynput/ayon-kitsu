@@ -219,7 +219,9 @@ async def generate_user_settings(
             )
     return data | {
         "data": {
-            "defaultAccessGroups": [settings.sync_settings.sync_users.access_group],
+            "defaultAccessGroups": [
+                settings.sync_settings.sync_users.access_group
+            ],
         },
     }
 
@@ -231,7 +233,9 @@ async def sync_person(
     entity_dict: "EntityDict",
 ):
 
-    first_name, entity_id= required_values(entity_dict, ["first_name", "id"])
+    first_name, entity_id= required_values(
+        entity_dict, ["first_name", "id"]
+    )
     last_name = entity_dict.get("last_name", '')
 
     # == check should Person entity be synced ==
@@ -272,10 +276,10 @@ async def sync_person(
         try:
             session = await Session.create(user)
             headers = {"Authorization": f"Bearer {session.token}"}
-
+            ayon_server_url = entity_dict["ayon_server_url"]
             async with httpx.AsyncClient() as client:
                 await client.patch(
-                    f"{entity_dict['ayon_server_url']}/api/users/{target_user.name}",
+                    f"{ayon_server_url}/api/users/{target_user.name}",
                     json=payload,
                     headers=headers,
                 )
@@ -286,7 +290,7 @@ async def sync_person(
             payload = {"newName": username}
             async with httpx.AsyncClient() as client:
                 await client.patch(
-                    f"{entity_dict['ayon_server_url']}/api/users/{target_user.name}/rename",
+                    f"{ayon_server_url}/api/users/{target_user.name}/rename",
                     json=payload,
                     headers=headers,
                 )
@@ -316,10 +320,12 @@ async def sync_project(
         logging.info("sync project not found")
         return
 
-    # only sync if the project has the correct kitsu id stored on it. will succeed when paired correctly
+    # only sync if the project has the correct kitsu id stored on it.
+    #   will succeed when paired correctly
     if project.data.get("kitsuProjectId") != entity_id:
         logging.info(
-            f"project.data.kitsuProjectId {project.data.get('kitsuProjectId')} not matching entity {entity_id}"
+            f"project.data.kitsuProjectId {project.data.get('kitsuProjectId')}"
+            f" not matching entity {entity_id}"
         )
         return
 
@@ -401,7 +407,8 @@ async def sync_folder(
                     )
                     if parent_folder is None:
                         logging.warning(
-                            f"Parent folder for {entity_dict['type']} {entity_dict['name']} not found. Skipping."  # noqa
+                            f"Parent folder for {entity_dict['type']}"
+                            f" {entity_dict['name']} not found. Skipping."  # noqa
                         )
                         return
                     parent_id = parent_folder.id
@@ -409,7 +416,10 @@ async def sync_folder(
             logging.warning("Unsupported entity type: ", entity_dict["type"])
             return
         # ensure folder type exists
-        if entity_dict["type"] not in [f["name"] for f in project.folder_types]:
+        if entity_dict["type"] not in [
+            f["name"]
+            for f in project.folder_types
+        ]:
             logging.warning(
                 f"Folder type {entity_dict['type']} does not exist. Creating."
             )
@@ -447,7 +457,9 @@ async def sync_folder(
             folder_type=entity_dict["type"],
         )
         if changed:
-            logging.info(f"Updating {entity_dict['type']} '{entity_dict['name']}'")
+            logging.info(
+                f"Updating {entity_dict['type']} '{entity_dict['name']}'"
+            )
             existing_folders[entity_dict["id"]] = target_folder.id
 
 
@@ -456,8 +468,13 @@ async def ensure_task_type(
     task_type_name: str,
 ) -> bool:
     """#TODO: kitsu listener for new task types would be preferable"""
-    if task_type_name not in [task_type["name"] for task_type in project.task_types]:
-        logging.info(f"Creating task type {task_type_name} for '{project.name}'")
+    if task_type_name not in [
+        task_type["name"]
+        for task_type in project.task_types
+    ]:
+        logging.info(
+            f"Creating task type {task_type_name} for '{project.name}'"
+        )
         project.task_types.append(
             {
                 "name": task_type_name,
@@ -475,8 +492,13 @@ async def ensure_task_status(
 ) -> bool:
     """#TODO: kitsu listener for new task statuses would be preferable"""
 
-    if task_status_name not in [status["name"] for status in project.statuses]:
-        logging.info(f"Creating task status {task_status_name} for '{project.name}'")
+    if task_status_name not in [
+        status["name"]
+        for status in project.statuses
+    ]:
+        logging.info(
+            f"Creating task status {task_status_name} for '{project.name}'"
+        )
         project.statuses.append(
             {
                 "name": task_status_name,
@@ -549,7 +571,9 @@ async def sync_task(
             task_type=entity_dict.get("task_type_name", target_task.task_type),
         )
         if changed:
-            logging.info(f"Updating {entity_dict['type']} '{entity_dict['name']}'")
+            logging.info(
+                f"Updating {entity_dict['type']} '{entity_dict['name']}'"
+            )
             existing_tasks[entity_dict["id"]] = target_task.id
 
 
@@ -564,7 +588,8 @@ async def push_entities(
         project = await ProjectEntity.load(payload.project_name)
 
     # A mapping of kitsu entity ids to folder ids
-    # they are added when a task or folder is created or updated and returned by the method - useful for testing
+    # they are added when a task or folder is created or updated and returned
+    #   by the method - useful for testing
 
     # This object only exists during the request
     # and speeds up the process of finding folders
@@ -581,11 +606,15 @@ async def push_entities(
         assert "id" in entity_dict
 
         if entity_dict["type"] not in get_args(KitsuEntityType):
-            logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")
+            logging.warning(
+                f"Unsupported kitsu entity type: {entity_dict['type']}"
+            )
             continue
 
         if entity_dict["type"] == "Project":
-            await sync_project(addon, user, project, entity_dict, payload.mock)
+            await sync_project(
+                addon, user, project, entity_dict, payload.mock
+            )
         elif entity_dict["type"] == "Person":
             if settings.sync_settings.sync_users.enabled:
                 await create_access_group(
@@ -618,7 +647,8 @@ async def push_entities(
             )
 
     logging.info(
-        f"Synced {len(payload.entities)} entities in {time.time() - start_time}s"
+        f"Synced {len(payload.entities)}"
+        f" entities in {time.time() - start_time}s"
     )
 
     # pass back the map of kitsu to ayon ids
@@ -634,14 +664,17 @@ async def remove_entities(
     project = await ProjectEntity.load(payload.project_name)
 
     # A mapping of kitsu entity ids to folder ids
-    # they are added when a task or folder are deleted and returned by the method - useful for testing
+    # they are added when a task or folder are deleted and returned
+    #   by the method - useful for testing
     folders = {}
     tasks = {}
 
     settings = await addon.get_studio_settings()
     for entity_dict in payload.entities:
         if entity_dict["type"] not in get_args(KitsuEntityType):
-            logging.warning(f"Unsupported kitsu entity type: {entity_dict['type']}")
+            logging.warning(
+                f"Unsupported kitsu entity type: {entity_dict['type']}"
+            )
             continue
 
         if entity_dict["type"] == "Project":
@@ -694,7 +727,8 @@ async def remove_entities(
             folders[entity_dict["id"]] = folder.id
 
     logging.info(
-        f"Deleted {len(payload.entities)} entities in {time.time() - start_time}s"
+        f"Deleted {len(payload.entities)} entities"
+        f" in {time.time() - start_time}s"
     )
 
     # pass back the map of kitsu to ayon ids

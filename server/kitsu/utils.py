@@ -24,7 +24,10 @@ def calculate_end_frame(
         return entity_dict["data"].get("frame_out")
 
     # Calculate the end-frame
-    if entity_dict.get("nb_frames") and not entity_dict["data"].get("frame_out"):
+    if (
+        entity_dict.get("nb_frames")
+        and not entity_dict["data"].get("frame_out")
+    ):
         frame_start = entity_dict["data"].get("frame_in")
         # If kitsu doesn't have a frame in, get it from the folder in Ayon
         if frame_start is None and hasattr(folder.attrib, "frameStart"):
@@ -275,14 +278,20 @@ async def update_project(
         project.name,
         project,
         kwargs,
-        # currently only 'task_types' and 'statuses' are set by anatomy.py and are updatable
-        # not updated are "folder_types",  "link_types", "tags", "config"
+        # currently only 'task_types' and 'statuses' are set by anatomy.py
+        #   and are updatable
+        # not updated are "folder_types", "link_types", "tags", "config"
         attr_whitelist=["task_types", "statuses"],
     )
 
 
-async def update_entity(project_name, entity, kwargs, attr_whitelist: list[str] | None = None):
-    """updates the entity for given attribute whitelist, saves changes and dispatches an update event"""
+async def update_entity(
+    project_name, entity, kwargs, attr_whitelist: list[str] | None = None
+):
+    """Updates the entity for given attribute whitelist.
+
+    Saves changes and dispatches an update event.
+    """
 
     if attr_whitelist is None:
         attr_whitelist = []
@@ -300,7 +309,8 @@ async def update_entity(project_name, entity, kwargs, attr_whitelist: list[str] 
                 if key not in entity.own_attrib:
                     entity.own_attrib.append(key)
                 logging.info(
-                    f"setattr attrib.{key} {getattr(entity.attrib, key)} => {value}"
+                    f"setattr attrib.{key}"
+                    f" {getattr(entity.attrib, key)} => {value}"
                 )
                 changed = True
     if changed:

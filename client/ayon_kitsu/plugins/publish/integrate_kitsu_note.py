@@ -102,7 +102,9 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
 
             # Check if any status condition is not met
             allow_status_change = True
-            for status_cond in self.status_change_conditions["status_conditions"]:
+            for status_cond in (
+                self.status_change_conditions["status_conditions"]
+            ):
                 condition = status_cond["condition"] == "equal"
                 match = status_cond["short_name"].upper() == shortname
                 if match and not condition or condition and not match:
@@ -141,7 +143,8 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
                     self.log.info(f"Note Kitsu status: {note_status}")
                 else:
                     self.log.info(
-                        f"Cannot find {self.note_status_shortname} status. The status will not be changed!"
+                        f"Cannot find {self.note_status_shortname} status."
+                        " The status will not be changed!"
                     )
 
             # Get comment text body

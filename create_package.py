@@ -31,7 +31,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
-from typing import Any, Iterable, Optional, Pattern
+from typing import Iterable, Optional, Pattern
 
 import package
 
@@ -106,7 +106,7 @@ class ZipFileLongPaths(zipfile.ZipFile):
             else:
                 tpath = "\\\\?\\" + tpath
 
-        return super(ZipFileLongPaths, self)._extract_member(member, tpath, pwd)
+        return super()._extract_member(member, tpath, pwd)
 
 
 def safe_copy_file(src_path: str, dst_path: str):
@@ -192,7 +192,9 @@ def _get_yarn_executable():
     if platform.system().lower() == "windows":
         cmd = "where"
 
-    for line in subprocess.check_output([cmd, "yarn"], encoding="utf-8").splitlines():
+    for line in subprocess.check_output(
+        [cmd, "yarn"], encoding="utf-8"
+    ).splitlines():
         if not line or not os.path.exists(line):
             continue
         try:
@@ -359,7 +361,9 @@ def copy_client_code(output_dir: str, log: logging.Logger):
         shutil.rmtree(full_output_dir)
 
     if os.path.exists(full_output_dir):
-        raise RuntimeError(f"Failed to remove target folder '{full_output_dir}'")
+        raise RuntimeError(
+            f"Failed to remove target folder '{full_output_dir}'"
+        )
 
     os.makedirs(output_dir, exist_ok=True)
     mapping = _get_client_zip_content(log)
@@ -403,7 +407,7 @@ def main(
         log.info("Creating client folder")
         if not output_dir:
             raise RuntimeError(
-                "Output directory must be defined" 
+                "Output directory must be defined"
                 " for client only preparation."
             )
         copy_client_code(output_dir, log)
@@ -429,7 +433,7 @@ def main(
         failed = False
     finally:
         if failed and os.path.isdir(addon_output_dir):
-            log.info(f"Purging output dir after failed package creation")
+            log.info("Purging output dir after failed package creation")
             shutil.rmtree(output_dir)
 
     # Skip server zipping

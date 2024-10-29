@@ -96,15 +96,20 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
 
         return {
             "publish": self.get_publish_plugin_paths(),
-            "hooks": self.get_launch_hook_paths(),
+            #"hooks": self.get_launch_hook_paths(),
             # The laucher action is not working since AYON conversion
             # "actions": [os.path.join(KITSU_ROOT, "plugins", "launcher")],
         }
 
     def get_publish_plugin_paths(self, host_name=None):
         return [os.path.join(KITSU_ROOT, "plugins", "publish")]
+<<<<<<< HEAD
     def get_launch_hook_paths(self, host_name=None):
         return [os.path.join(KITSU_ROOT, "hooks")]
+=======
+    #def get_launch_hook_paths(self, host_name=None):
+        #return [os.path.join(KITSU_ROOT, "hooks")]
+>>>>>>> d887d10b4d525b36a7ed45da66e15005f89c4d76
 
 def is_kitsu_enabled_in_settings(project_settings):
     """Check if kitsu is enabled in kitsu project settings.

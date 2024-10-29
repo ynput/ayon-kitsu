@@ -24,11 +24,15 @@ class Kitsu:
                     data={"email": self.email, "password": self.password},
                 )
         except httpx.HTTPError as e:
-            raise KitsuLoginException("Could not login to Kitsu (server error)") from e
+            raise KitsuLoginException(
+                "Could not login to Kitsu (server error)"
+            ) from e
 
         token = response.json().get("access_token")
         if not token:
-            raise KitsuLoginException("Could not login to Kitsu (invalid credentials)")
+            raise KitsuLoginException(
+                "Could not login to Kitsu (invalid credentials)"
+            )
         self.token = token
 
     async def logout(self):
