@@ -67,15 +67,12 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
         farm_status_change = False
 
         families= []
-        for instance in context:
-                families += set(
-                [instance.data["family"]] + instance.data.get("families", [])
-            )
-        self.log.debug(f'Falimies in context {families}')
 
-        if "review" not in families:
-            self.log.debug("Adding farm status to task")
-            farm_status_change = True
+        for instance in context:
+                if instance.data.get("farm"):
+                    farm_status_change = True
+
+        self.log.debug(f'Insances on farm in context: {farm_status_change}')
 
         if farm_status_change and self.set_status_note_farm:
             kitsu_task = instance.data.get("kitsuTask")
