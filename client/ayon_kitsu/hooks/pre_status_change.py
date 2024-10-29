@@ -3,8 +3,6 @@ from ayon_kitsu.addon import is_kitsu_enabled_in_settings
 
 import os
 import gazu
-import re
-
 
 class PreKitsuStatusChange(PostLaunchHook):
     """On launch of an application change task statuses on Kitsu.
