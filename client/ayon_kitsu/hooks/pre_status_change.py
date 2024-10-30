@@ -1,5 +1,4 @@
 from ayon_applications import PostLaunchHook
-from ayon_kitsu.addon import is_kitsu_enabled_in_settings
 
 import os
 import gazu
@@ -31,14 +30,15 @@ class PreKitsuStatusChange(PostLaunchHook):
     }
     def execute(self):
         if "KITSU_LOGIN" not in os.environ:
-            self.log.info("KITSU_LOGIN is not set. assuming rendeing in deadline. Skipping status.")
+            self.log.info(
+                "KITSU_LOGIN is not set. assuming rendeing in deadline. Skipping status."
+                )
             return
 
         data = self.launch_context.data
         project_settings = data["project_settings"]["kitsu"]["appstart"]
 
-        if project_settings["set_status_app_start_note"] and self.is_kitsu_enabled_in_settings:
-            set_status_app_start_note= True
+        if project_settings["set_status_app_start_note"]:
             self.log.info("Kitsu Status change is Enabled.")
         else:
             self.log.info("Kitsu Status change is disabled.")
@@ -47,7 +47,9 @@ class PreKitsuStatusChange(PostLaunchHook):
         if not project_settings["app_start_status_shortname"]:
             self.log.info("App starting status in not configured")
             return
-        app_start_status_shortname= project_settings["app_start_status_shortname"]
+        app_start_status_shortname= project_settings[
+            "app_start_status_shortname"
+            ]
 
         if project_settings["app_startstatus_change_conditions"]:
             status_conditions= project_settings["app_startstatus_change_conditions"]
@@ -79,7 +81,7 @@ class PreKitsuStatusChange(PostLaunchHook):
                 self.log.info("Failed to recieve kitsu status instance for shortname. Skipping Status change.")
                 return
             kitsu_wip_status = gazu.task.get_task_status_by_short_name(self.app_start_status_shortname)
-            
+
             self.log.info("Current Kitsu task status is {task_current_status_shortname}. Task id {kitsuId}")
             
             self.log.info("Changing Kitsu task status to {self.app_start_status_shortname}.")
@@ -103,4 +105,4 @@ class PreKitsuStatusChange(PostLaunchHook):
                      self.log.info("Failed to recieve kitsu pause status instance. Skipping pause Status change.")
         else:
             self.log.info("Status not changed due to conditions: {status_conditions}")
-        gazu.log_out() 
+        gazu.log_out()
