@@ -225,7 +225,7 @@ async def get_kitsu_project_anatomy(
     for key in anatomy_dict["attributes"]:
         if key in attributes:
             anatomy_dict["attributes"][key] = attributes[key]
-            logging.debug("updated", key, "to", attributes[key])
+            logging.debug("updated project", ayon_project.name, "anatomy attribute", key, "to", attributes[key])
 
 
     anatomy_dict["statuses"] = statuses
