@@ -17,7 +17,7 @@ def process_aux_table(src: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def process_link_types(src: list[LinkTypeModel]) -> list[dict[str, Any]]:
-    """Convert project linktypes sumbmodel to anatomy-style linktypes."""
+    """Convert project linktypes submodel to anatomy-style linktypes."""
     result = []
     for ltdata in src:
         row = {
