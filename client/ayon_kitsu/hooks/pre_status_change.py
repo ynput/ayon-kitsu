@@ -62,7 +62,7 @@ class PreKitsuStatusChange(PostLaunchHook):
         if not self.data["task_entity"]["data"].get("kitsuId"):
             self.log.info("This task does not have a kitsu task id. Skipping kitsu task status change.")
             return
-        
+
         kitsuId = self.data["task_entity"]["data"]["kitsuId"]
         task=gazu.task.get_task(kitsuId)
         task_current_status_shortname= task["task_status"]["short_name"]
@@ -83,7 +83,6 @@ class PreKitsuStatusChange(PostLaunchHook):
             kitsu_wip_status = gazu.task.get_task_status_by_short_name(self.app_start_status_shortname)
 
             self.log.info("Current Kitsu task status is {task_current_status_shortname}. Task id {kitsuId}")
-            
             self.log.info("Changing Kitsu task status to {self.app_start_status_shortname}.")
 
             gazu.task.add_comment(task["id"], kitsu_wip_status)
