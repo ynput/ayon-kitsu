@@ -1,20 +1,20 @@
 import contextlib
 from typing import TYPE_CHECKING, Any
 
-from nxtools import logging
-
 from ayon_server.entities import ProjectEntity
 from ayon_server.exceptions import AyonException
 from ayon_server.lib.postgres import Postgres
 from ayon_server.settings.anatomy import Anatomy
 from ayon_server.settings.anatomy.statuses import Status
 from ayon_server.settings.anatomy.task_types import TaskType
+from nxtools import logging
 
 from .addon_helpers import create_short_name, remove_accents
 from .extract_ayon_project_anatomy import extract_ayon_project_anatomy
 
 if TYPE_CHECKING:
     from .. import KitsuAddon
+
 
 async def parse_task_types(
     addon: "KitsuAddon", kitsu_project_id: str
@@ -221,12 +221,23 @@ async def get_kitsu_project_anatomy(
     else:
         anatomy = await get_primary_anatomy_preset()
 
+    if ayon_project:
+        prj_name = ayon_project.name
+    else:
+        prj_name = "new project"
+
     anatomy_dict = anatomy.dict()
     for key in anatomy_dict["attributes"]:
         if key in attributes:
             anatomy_dict["attributes"][key] = attributes[key]
-            logging.debug("updated project", ayon_project.name, "anatomy attribute", key, "to", attributes[key])
-
+            logging.debug(
+                "updated project",
+                prj_name,
+                "anatomy attribute",
+                key,
+                "to",
+                attributes[key],
+            )
 
     anatomy_dict["statuses"] = statuses
     anatomy_dict["task_types"] = task_types

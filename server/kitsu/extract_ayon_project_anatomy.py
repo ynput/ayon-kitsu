@@ -1,6 +1,6 @@
 """Extract Anatomy object from ayon ProjectEntity.
 
-This file is for the backwards compatibility with Ayon server. 
+This file is for the backwards compatibility with Ayon server.
 
 This funciton is a part of the server from version 1.5.1, so we
 can remove this file after a grace period.
