@@ -478,7 +478,8 @@ async def ensure_task_type(
         project.task_types.append(
             {
                 "name": task_type_name,
-                "short_name": task_type_name[:4],
+                "shortName": task_type_name[:4],
+                "icon": "task_alt",
             }
         )
         await project.save()
@@ -502,7 +503,8 @@ async def ensure_task_status(
         project.statuses.append(
             {
                 "name": task_status_name,
-                "short_name": task_status_name[:4],
+                "icon": "task_alt",
+                "shortName": task_status_name[:4],
             }
         )
         await project.save()
