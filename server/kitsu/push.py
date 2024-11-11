@@ -330,7 +330,7 @@ async def sync_project(
         return
 
     await addon.ensure_kitsu(mock)
-    anatomy = await get_kitsu_project_anatomy(addon, entity_id)
+    anatomy = await get_kitsu_project_anatomy(addon, entity_id, project)
     anatomy_data = anatomy_to_project_data(anatomy)
 
     await update_project(project.name, **anatomy_data)
@@ -552,6 +552,13 @@ async def sync_task(
                 return
 
         logging.info(f"Creating {entity_dict['type']} '{entity_dict['name']}'")
+
+        if "task_type_name" not in entity_dict:
+            logging.warning(
+                f"Task type not found for {entity_dict['name']}'"
+            )
+            return
+
         target_task = await create_task(
             project_name=project.name,
             folder_id=parent_id,
