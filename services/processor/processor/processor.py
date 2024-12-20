@@ -315,8 +315,14 @@ class KitsuProcessor:
             if startup:
                 logging.info("Running sync for all paired projects")
                 for pair in self.pairing_list:
-                    if pair.get("kitsuProjectId") and pair.get("ayonProjectName"):
-                        project_full_sync(self, pair["kitsuProjectId"], pair["ayonProjectName"])
+                    project_id = pair.get("kitsuProjectId")
+                    project_name = pair.get("ayonProjectName")
+                    if project_id and project_name:
+                        project_full_sync(
+                            self,
+                            project_id,
+                            project_name,
+                        )
                 startup = False
 
             # Check for a new sync job
