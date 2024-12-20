@@ -106,7 +106,19 @@ def test_update_project_statuses(api, kitsu_url, ensure_kitsu_server_setting):
     res = api.put(f"/projects/{project_name}", **project_meta)
 
     project = api.get_project(project_name)
-    assert project["statuses"] == [{"name": "Todo"}]
+    assert project["statuses"] == [
+        {
+            "name": "Todo",
+            "scope": [
+                "folder",
+                "task",
+                "product",
+                "version",
+                "representation",
+                "workfile",
+            ],
+        }
+    ]
 
     res = api.post(
         f"{kitsu_url}/push",
@@ -124,6 +136,14 @@ def test_update_project_statuses(api, kitsu_url, ensure_kitsu_server_setting):
             "name": "Todo",
             "shortName": "TODO",
             "state": "in_progress",
+            "scope": [
+                "folder",
+                "product",
+                "version",
+                "representation",
+                "task",
+                "workfile",
+            ],
         },
         {
             "color": "#22D160",
@@ -131,6 +151,14 @@ def test_update_project_statuses(api, kitsu_url, ensure_kitsu_server_setting):
             "name": "Approved",
             "shortName": "App",
             "state": "in_progress",
+            "scope": [
+                "folder",
+                "product",
+                "version",
+                "representation",
+                "task",
+                "workfile",
+            ],
         },
     ]
     api.delete(f"/projects/{project_name}")

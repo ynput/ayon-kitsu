@@ -1,13 +1,16 @@
 import contextlib
 from typing import TYPE_CHECKING, Any
 
+from ayon_server.entities import ProjectEntity
 from ayon_server.exceptions import AyonException
 from ayon_server.lib.postgres import Postgres
 from ayon_server.settings.anatomy import Anatomy
 from ayon_server.settings.anatomy.statuses import Status
 from ayon_server.settings.anatomy.task_types import TaskType
+from nxtools import logging
 
 from .addon_helpers import create_short_name, remove_accents
+from .extract_ayon_project_anatomy import extract_ayon_project_anatomy
 
 if TYPE_CHECKING:
     from .. import KitsuAddon
@@ -199,6 +202,7 @@ async def get_primary_anatomy_preset() -> Anatomy:
 async def get_kitsu_project_anatomy(
     addon: "KitsuAddon",
     kitsu_project_id: str,
+    ayon_project: ProjectEntity | None = None,
 ) -> Anatomy:
     kitsu_project_response = await addon.kitsu.get(
         f"data/projects/{kitsu_project_id}"
@@ -212,13 +216,29 @@ async def get_kitsu_project_anatomy(
     statuses = await parse_statuses(addon, kitsu_project_id)
     task_types = await parse_task_types(addon, kitsu_project_id)
 
-    anatomy_preset = await get_primary_anatomy_preset()
-    anatomy_dict = anatomy_preset.dict()
+    if ayon_project:
+        anatomy = extract_ayon_project_anatomy(ayon_project)
+    else:
+        anatomy = await get_primary_anatomy_preset()
+
+    if ayon_project:
+        prj_name = ayon_project.name
+    else:
+        prj_name = "new project"
+
+    anatomy_dict = anatomy.dict()
     for key in anatomy_dict["attributes"]:
         if key in attributes:
-            anatomy_dict["attributes"][key]=attributes[key]
+            anatomy_dict["attributes"][key] = attributes[key]
+            logging.debug(
+                "updated project",
+                prj_name,
+                "anatomy attribute",
+                key,
+                "to",
+                attributes[key],
+            )
 
-    #anatomy_dict["attributes"] = attributes
     anatomy_dict["statuses"] = statuses
     anatomy_dict["task_types"] = task_types
 
