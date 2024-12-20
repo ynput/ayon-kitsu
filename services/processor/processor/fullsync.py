@@ -46,9 +46,16 @@ def get_tasks(
     return tasks
 
 
-def full_sync(
+def project_full_sync(
     parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
 ):
+    """Sync all entities from a Kitsu project to an Ayon project.
+
+    Args:
+        parent (KitsuProcessor): The parent processor
+        kitsu_project_id (str): The Kitsu project id
+        project_name (str): The Ayon
+    """
     start_time = time.time()
     logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
 

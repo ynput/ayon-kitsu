@@ -8,7 +8,7 @@ import ayon_api
 import gazu
 from nxtools import log_traceback, logging
 
-from .fullsync import full_sync
+from .fullsync import project_full_sync
 from .update_from_kitsu import (
     create_or_update_asset,
     create_or_update_concept,
@@ -308,8 +308,18 @@ class KitsuProcessor:
 
     def start_processing(self):
         logging.info("KitsuProcessor started")
+        startup = True
 
         while True:
+            # Sync all paired projects
+            if startup:
+                logging.info("Running sync for all paired projects")
+                for pair in self.pairing_list:
+                    if pair.get("kitsuProjectId") and pair.get("ayonProjectName"):
+                        project_full_sync(self, pair["kitsuProjectId"], pair["ayonProjectName"])
+                startup = False
+
+            # Check for a new sync job
             job = ayon_api.enroll_event_job(
                 source_topic="kitsu.sync_request",
                 target_topic="kitsu.sync",
@@ -336,7 +346,7 @@ class KitsuProcessor:
             )
 
             try:
-                full_sync(self, kitsu_project_id, ayon_project_name)
+                project_full_sync(self, kitsu_project_id, ayon_project_name)
 
                 # if successful add the pair to the list
                 self.set_paired_ayon_project(
