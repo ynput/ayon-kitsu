@@ -14,3 +14,6 @@ frontend/.pnp.cjs
 frontend/.pnp.loader.mjs
 
 dist/
+
+# JetBrains
+.idea/
