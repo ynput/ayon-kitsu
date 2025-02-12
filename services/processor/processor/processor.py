@@ -283,7 +283,7 @@ class KitsuProcessor:
         res = ayon_api.get(f"{self.entrypoint}/pairing")
 
         assert res.status_code == 200, (
-            "{self.entrypoint}/pairing failed. "
+            f"{self.entrypoint}/pairing failed. "
             f" Status code '{res.status_code}': {res.detail}"
         )
 
