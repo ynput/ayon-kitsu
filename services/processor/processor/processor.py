@@ -282,8 +282,11 @@ class KitsuProcessor:
         logging.info("get_pairing_list")
         res = ayon_api.get(f"{self.entrypoint}/pairing")
 
-        assert res.status_code == 200, f"{self.entrypoint}/pairing failed"
-        # logging.info(f'get_pairing_list {res.status_code} {res.data}')
+        assert res.status_code == 200, (
+            f"{self.entrypoint}/pairing failed. "
+            f" Status code '{res.status_code}': {res.detail}"
+        )
+
         return res.data
 
     def get_paired_ayon_project(self, kitsu_project_id: str) -> str | None:
