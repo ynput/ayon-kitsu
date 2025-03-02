@@ -12,7 +12,7 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
 
     order = pyblish.api.IntegratorOrder
     label = "Kitsu Note and Status"
-    families = ["kitsu"]
+    families = ["*"]
 
     # status settings
     set_status_note = False
@@ -27,6 +27,8 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
         "enabled": False,
         "comment_template": "{comment}",
     }
+    set_status_note_farm = False
+    note_farm_status_shortname = "farm"
 
     def format_publish_comment(self, instance):
         """Format the instance's publish comment
@@ -62,16 +64,34 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
                 "family_requirements"
             ]
 
+        farm_status_change = False
+
+        families= []
+
+        for instance in context:
+                if instance.data.get("farm"):
+                    farm_status_change = True
+
+        self.log.debug(f'Instance in context has farm flag: {farm_status_change}')
+
+        if farm_status_change and self.set_status_note_farm:
+            kitsu_task = instance.data.get("kitsuTask")
+            farm_status = gazu.task.get_task_status_by_short_name(self.note_farm_status_shortname)
+            gazu.task.add_comment(kitsu_task, farm_status)
+            return
+
         for instance in context:
             # Check if instance is a review by checking its family
             # Allow a match to primary family or any of families
             families = set(
                 [instance.data["family"]] + instance.data.get("families", [])
             )
+
             if "review" not in families or "kitsu" not in families:
                 continue
 
             kitsu_task = instance.data.get("kitsuTask")
+
             if not kitsu_task:
                 continue
 
