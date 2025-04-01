@@ -1,5 +1,6 @@
 import webbrowser
 import ayon_api
+import gazu
 
 from ayon_core.pipeline import LauncherAction
 from ayon_core.addon import AddonsManager
@@ -26,19 +27,17 @@ class ShowInKitsu(LauncherAction):
         if not project:
             raise RuntimeError(f"Project {project_name} not found.")
 
-        project_zou_id = project["data"].get("zou_id")
+        project_zou_id = project["data"].get("kitsuProjectId")
         if not project_zou_id:
             raise RuntimeError(
                 f"Project {project_name} has no connected kitsu id."
             )
 
         folder_kitsu_id = None
-        folder_type = None
         task_kitsu_id = None
         if selection.is_folder_selected:
             folder_entity = selection.folder_entity
             folder_kitsu_id = folder_entity["data"].get("kitsuId")
-            folder_type = folder_entity["folderType"]
 
             if selection.is_task_selected:
                 task_entity = selection.task_entity
@@ -48,7 +47,6 @@ class ShowInKitsu(LauncherAction):
         url = self.get_url(
             project_zou_id,
             folder_kitsu_id,
-            folder_type,
             task_kitsu_id,
         )
 
@@ -64,27 +62,45 @@ class ShowInKitsu(LauncherAction):
         self,
         project_kitsu_id,
         folder_kitsu_id=None,
-        folder_type=None,
         task_id=None,
     ):
-        shots_url = {"Shots", "Sequence", "Shot"}
         kitsu_addon = self.get_kitsu_addon()
 
-        # Get kitsu url with /api stripped
-        kitsu_url = kitsu_addon.server_url.rstrip("/api")
+        # Get kitsu url without /api
+        kitsu_url = kitsu_addon.server_url
+        if kitsu_url.endswith("/api"):
+            kitsu_url = kitsu_url[:-4]
 
-        sub_url = f"/productions/{project_kitsu_id}"
-        kitsu_type = "shots" if folder_type in shots_url else "assets"
+        url = f"{kitsu_url}/productions/{project_kitsu_id}"
 
+        # Handle task first if available
         if task_id:
             # Go to task page
-            # /productions/{project-id}/{asset_type}/tasks/{task_id}
-            sub_url += f"/{kitsu_type}/tasks/{task_id}"
+            task = gazu.task.get_task(task_id)
+            if task:
+                return f"{url}/{task['type']}s/tasks/{task_id}"
 
-        elif folder_kitsu_id:
-            # Go to asset or shot page
-            # /productions/{project-id}/assets/{entity_id}
-            # /productions/{project-id}/shots/{entity_id}
-            sub_url += f"/{kitsu_type}/{folder_kitsu_id}"
+        # Handle folder entities
+        if folder_kitsu_id:
+            # Short IDs are typically for home page (assets, shots, etc.)
+            if len(folder_kitsu_id) < 30:
+                return f"{url}/{folder_kitsu_id}s"
 
-        return f"{kitsu_url}{sub_url}"
+            # Try to get the entity to determine its type
+            try:
+                entity = gazu.entity.get_entity(folder_kitsu_id)
+            except gazu.exception.RouteNotFoundException:
+                entity = None
+
+            if entity:
+                entity_type = entity.get("type", "").lower()
+                if entity_type:
+                    return f"{url}/{entity_type}s/{folder_kitsu_id}"
+            else:
+                pass
+                # If not an entity, we assume it is a asset subtype e.g Props
+                # So open the assets page
+                return f"{url}/assets"
+
+        # Default to project shots page
+        return f"{url}/shots"
