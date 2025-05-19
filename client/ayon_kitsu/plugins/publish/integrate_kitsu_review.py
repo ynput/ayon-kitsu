@@ -32,6 +32,10 @@ class IntegrateKitsuReview(KitsuPublishInstancePlugin):
         for representation in instance.data.get("representations", []):
             # Skip if not tagged as review
             if "kitsureview" not in representation.get("tags", []):
+                self.log.debug(
+                    f"Skipping representation {representation['name']} "
+                    "because it has no 'kitsureview' tag"
+                )
                 continue
             review_path = representation.get("published_path")
             self.log.debug(f"Found review at: {review_path}")
