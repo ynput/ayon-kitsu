@@ -17,3 +17,6 @@ dist/
 
 # JetBrains
 .idea/
+
+# Pyenv
+.python-version
