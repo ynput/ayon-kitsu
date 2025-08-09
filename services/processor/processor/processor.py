@@ -8,7 +8,7 @@ import ayon_api
 import gazu
 from nxtools import log_traceback, logging
 
-from .fullsync import full_sync
+from .fullsync import project_full_sync
 from .update_from_kitsu import (
     create_or_update_asset,
     create_or_update_concept,
@@ -282,8 +282,11 @@ class KitsuProcessor:
         logging.info("get_pairing_list")
         res = ayon_api.get(f"{self.entrypoint}/pairing")
 
-        assert res.status_code == 200, f"{self.entrypoint}/pairing failed"
-        # logging.info(f'get_pairing_list {res.status_code} {res.data}')
+        assert res.status_code == 200, (
+            f"{self.entrypoint}/pairing failed. "
+            f" Status code '{res.status_code}': {res.detail}"
+        )
+
         return res.data
 
     def get_paired_ayon_project(self, kitsu_project_id: str) -> str | None:
@@ -308,8 +311,24 @@ class KitsuProcessor:
 
     def start_processing(self):
         logging.info("KitsuProcessor started")
+        startup = True
 
         while True:
+            # Sync all paired projects
+            if startup:
+                logging.info("Running sync for all paired projects")
+                for pair in self.pairing_list:
+                    project_id = pair.get("kitsuProjectId")
+                    project_name = pair.get("ayonProjectName")
+                    if project_id and project_name:
+                        project_full_sync(
+                            self,
+                            project_id,
+                            project_name,
+                        )
+                startup = False
+
+            # Check for a new sync job
             job = ayon_api.enroll_event_job(
                 source_topic="kitsu.sync_request",
                 target_topic="kitsu.sync",
@@ -336,7 +355,7 @@ class KitsuProcessor:
             )
 
             try:
-                full_sync(self, kitsu_project_id, ayon_project_name)
+                project_full_sync(self, kitsu_project_id, ayon_project_name)
 
                 # if successful add the pair to the list
                 self.set_paired_ayon_project(

@@ -33,7 +33,7 @@ def calculate_end_frame(
         if frame_start is None and hasattr(folder.attrib, "frameStart"):
             frame_start = folder.attrib.frameStart
         if frame_start is not None:
-            return int(frame_start) + int(entity_dict["nb_frames"])
+            return int(frame_start) + int(entity_dict["nb_frames"]) - 1
 
 
 def create_name_and_label(kitsu_name: str) -> dict[str, str]:
