@@ -73,6 +73,9 @@ function load-env {
   if ($env:AYON_USE_GIT_SUFFIX_FOR_ADDONS) {
     $AYON_ADDON_VERSION = Invoke-Expression -Command "python -c ""print('$($AYON_ADDON_VERSION)'.split('-')[0].split('+')[0] + '+git')"""
   }
+  # Running Kitsu processor service script live requires the following environment variables to be set.
+  $env:AYON_ADDON_NAME = $AYON_ADDON_NAME
+  $env:AYON_ADDON_VERSION = $AYON_ADDON_VERSION
 }
 
 function RunDocker {
