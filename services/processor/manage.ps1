@@ -68,6 +68,11 @@ function load-env {
       }
     }
   }
+
+  # Check the usage of `+git` version.
+  if ($env:AYON_USE_GIT_SUFFIX_FOR_ADDONS) {
+    $AYON_ADDON_VERSION = Invoke-Expression -Command "python -c ""print('$($AYON_ADDON_VERSION)'.split('-')[0].split('+')[0] + '+git')"""
+  }
 }
 
 function RunDocker {

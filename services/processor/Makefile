@@ -20,6 +20,11 @@ default:
 	@echo *   dev          Run a service locally
 	@echo *   dist         Upload the image to a registry
 
+# Check the usage of `+git` version.
+ifeq ($(AYON_USE_GIT_SUFFIX_FOR_ADDONS),True)
+    AYON_ADDON_VERSION=$(shell python -c "print('$(AYON_ADDON_VERSION)'.split('-')[0].split('+')[0] + '+git')")
+endif
+
 export AYON_ADDON_VERSION
 export AYON_ADDON_NAME
 export AYON_API_KEY
