@@ -70,7 +70,7 @@ function load-env {
   }
 
   # Check the usage of `+git` version.
-  if ($env:AYON_USE_GIT_SUFFIX_FOR_ADDONS) {
+  if ($env:AYON_USE_GIT_SUFFIX_FOR_ADDONS -eq "True") {
     $AYON_ADDON_VERSION = Invoke-Expression -Command "python -c ""print('$($AYON_ADDON_VERSION)'.split('-')[0].split('+')[0] + '+git')"""
   }
   # Running Kitsu processor service script live requires the following environment variables to be set.
