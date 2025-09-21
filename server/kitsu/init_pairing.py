@@ -54,7 +54,7 @@ async def sync_request(
             "SELECT data->>'kitsuProjectId' FROM projects WHERE name = $1",
             project_name,
         ):
-            kitsu_project_id = res[0]
+            kitsu_project_id = res["kitsu_project_id"]
 
     hash = hashlib.sha256(
         f"kitsu_sync_{project_name}_{kitsu_project_id}".encode("utf-8")
