@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "*"
-    branches:
-      - "feature/116-add-mk-docs"
   workflow_dispatch:
 
 jobs:
