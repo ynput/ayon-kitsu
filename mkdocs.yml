@@ -1,5 +1,5 @@
-site_name: ayon-harmony
-repo_url: https://github.com/ynput/ayon-harmony
+site_name: ayon-kitsu
+repo_url: https://github.com/ynput/ayon-kitsu
 
 nav:
   - Home: index.md
