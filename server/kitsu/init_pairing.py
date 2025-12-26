@@ -51,10 +51,10 @@ async def sync_request(
 ):
     if kitsu_project_id is None:
         async for res in Postgres.iterate(
-            "SELECT data->>'kitsuProjectId' FROM projects WHERE name = $1",
+            "SELECT data->>'kitsuProjectId' as kitsu_project_id FROM projects WHERE name = $1",
             project_name,
         ):
-            kitsu_project_id = res[0]
+            kitsu_project_id = res["kitsu_project_id"]
 
     hash = hashlib.sha256(
         f"kitsu_sync_{project_name}_{kitsu_project_id}".encode("utf-8")
