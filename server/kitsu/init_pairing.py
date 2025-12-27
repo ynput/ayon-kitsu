@@ -51,7 +51,8 @@ async def sync_request(
 ):
     if kitsu_project_id is None:
         async for res in Postgres.iterate(
-            "SELECT data->>'kitsuProjectId' as kitsu_project_id FROM projects WHERE name = $1",
+            "SELECT data->>'kitsuProjectId' as kitsu_project_id "
+            "FROM projects WHERE name = $1",
             project_name,
         ):
             kitsu_project_id = res["kitsu_project_id"]
