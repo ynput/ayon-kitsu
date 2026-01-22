@@ -336,36 +336,55 @@ def delete_person(parent: "KitsuProcessor", data: dict[str, str]):
 
 
 def create_or_update_casting(parent: "KitsuProcessor", data: dict[str, str]):
-    logging.info(f"create_or_update_casting: {data}")
+    logging.info(f"create_or_update_casting received event: {data}")
     sync_casting_settings = (
         parent.settings.get("sync_settings", {})
         .get("sync_casting", {})
     )
     if not sync_casting_settings.get("enabled", False):
+        logging.debug("Casting sync is disabled, skipping")
         return
-    project_name = parent.get_paired_ayon_project(data["project_id"])
+    project_name = parent.get_paired_ayon_project(data.get("project_id"))
     if not project_name:
+        logging.debug(f"Project {data.get('project_id')} not paired, skipping")
         return
 
-    # Determine if this is a shot or asset casting update
-    shot_id = data.get("shot_id") or data.get("entity_id") or data.get("id")
-    asset_id = data.get("asset_id")
-    target_type = "Shot"
-    target_id = shot_id
+    # Determine the target entity (shot or asset whose casting is being updated)
+    # Kitsu sends different fields depending on the event type
+    # Priority: explicit shot_id/asset_id > entity_id (with type detection)
+    target_id = None
+    target_type = None
     
-    if asset_id and not shot_id:
-        # This is an asset casting update (asset dependencies)
+    # For shot:casting-update, Kitsu sends shot_id explicitly
+    if data.get("shot_id"):
+        target_id = data["shot_id"]
+        target_type = "Shot"
+    # For asset:casting-update, Kitsu sends asset_id explicitly
+    elif data.get("asset_id"):
+        target_id = data["asset_id"]
         target_type = "Asset"
-        target_id = asset_id
-    elif not shot_id:
-        logging.warning("Casting event missing shot_id or asset_id")
+    # Fallback: entity_id might be present (need to determine type)
+    elif data.get("entity_id"):
+        target_id = data["entity_id"]
+        # Try to determine if it's a shot or asset by attempting to fetch it
+        try:
+            gazu.shot.get_shot(target_id)
+            target_type = "Shot"
+        except Exception:
+            target_type = "Asset"
+    
+    if not target_id:
+        logging.warning(f"Casting event missing target identifier: {data}")
         return
+    
+    logging.info(f"Processing casting update for {target_type} {target_id}")
 
     entities: list[dict[str, str]] = []
     
     try:
         if target_type == "Shot":
-            casting = gazu.casting.get_shot_casting(target_id)
+            shot = gazu.shot.get_shot(target_id)
+            casting = gazu.casting.get_shot_casting(shot)
         else:
             # Asset casting
             asset = gazu.asset.get_asset(target_id)
@@ -395,7 +414,7 @@ def create_or_update_casting(parent: "KitsuProcessor", data: dict[str, str]):
         "target_id": target_id,
         "target_type": target_type,
         "asset_ids": asset_ids,
-        "project_id": data["project_id"],
+        "project_id": data.get("project_id"),
         "ayon_server_url": ayon_api.get_base_url(),
     }
     entities.append(entity)

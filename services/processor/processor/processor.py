@@ -212,6 +212,11 @@ class KitsuProcessor:
         )
         gazu.events.add_listener(
             self.event_client,
+            "asset:casting-update",
+            lambda data: create_or_update_casting(self, data),
+        )
+        gazu.events.add_listener(
+            self.event_client,
             "shot:delete",
             lambda data: delete_shot(self, data),
         )
