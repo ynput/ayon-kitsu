@@ -339,12 +339,12 @@ def create_or_update_casting(
     parent: "KitsuProcessor", data: dict[str, Any]
 ) -> None:
     """Handle casting update events from Kitsu.
-    
+
     Process real-time casting update events from Kitsu (shot:casting-update
     or asset:casting-update). Fetch the current casting state from Kitsu,
     creat a SyncCasting entity with the complete desired state, and push
     it to AYON for reconciliation.
-    
+
     Args:
         parent: KitsuProcessor instance with settings and project pairing info.
         data: Event data dictionary from Kitsu containing:
@@ -352,7 +352,7 @@ def create_or_update_casting(
             - shot_id: (optional) Shot ID for shot casting updates
             - asset_id: (optional) Asset ID for asset casting updates
             - entity_id: (optional) Generic entity ID (type will be detected)
-    
+
     Returns:
         None. The function logs warnings and returns early if:
         - Casting sync is disabled in settings
@@ -373,7 +373,7 @@ def create_or_update_casting(
         logging.debug(f"Project {data.get('project_id')} not paired, skipping")
         return
 
-    # Determine the target entity (shot or asset whose casting is being updated)
+    # Determine the target entity (shot or asset whose casting is updated)
     # Kitsu sends different fields depending on the event type
     # Priority: explicit shot_id/asset_id > entity_id (with type detection)
     target_id = None
@@ -415,7 +415,8 @@ def create_or_update_casting(
             casting = gazu.casting.get_asset_casting(asset)
     except Exception as e:
         logging.warning(
-            f"Unable to fetch casting for {target_type.lower()} {target_id}: {e}"
+            f"Unable to fetch casting for {target_type.lower()} "
+            f"{target_id}: {e}"
         )
         return
 
@@ -429,7 +430,9 @@ def create_or_update_casting(
             item_asset_id = item
             nb_occurences = 1
         if item_asset_id:
-            asset_ids[item_asset_id] = asset_ids.get(item_asset_id, 0) + nb_occurences
+            asset_ids[item_asset_id] = (
+                asset_ids.get(item_asset_id, 0) + nb_occurences
+            )
 
     # Create SyncCasting entity with complete state
     entity = {

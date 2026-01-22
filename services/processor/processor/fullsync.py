@@ -51,18 +51,19 @@ def get_casting_links(
     assets: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Get casting links for shots and assets.
-    
+
     Fetche casting data from Kitsu for all shots and assets, group them by
     target entity, and create SyncCasting entities. Each SyncCasting entity
     contains the complete desired state (asset_ids with occurence counts) for
     full reconciliation, including deletion of stale links.
-    
+
     Args:
-        shots: List of shot dictionaries from gazu API, each containing at least
+        shots: List of shot dictionaries from gazu API, each containing at
+            least
             an "id" field.
         assets: List of asset dictionaries from gazu API, each containing at
             least an "id" field.
-        
+
     Returns:
         List of SyncCasting entity dictionaries. Each entity contains:
             - id: Unique identifier (format: "sync-casting-{target_id}")
@@ -94,7 +95,9 @@ def get_casting_links(
                 asset_id = item
                 nb_occurences = 1
             if asset_id:
-                asset_ids[asset_id] = asset_ids.get(asset_id, 0) + nb_occurences
+                asset_ids[asset_id] = (
+                    asset_ids.get(asset_id, 0) + nb_occurences
+                )
 
         # Create SyncCasting entity for this shot
         casting_entities.append({
@@ -126,7 +129,9 @@ def get_casting_links(
                 linked_asset_id = item
                 nb_occurences = 1
             if linked_asset_id:
-                asset_ids[linked_asset_id] = asset_ids.get(linked_asset_id, 0) + nb_occurences
+                asset_ids[linked_asset_id] = (
+                    asset_ids.get(linked_asset_id, 0) + nb_occurences
+                )
 
         # Create SyncCasting entity for this asset
         casting_entities.append({
