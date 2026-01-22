@@ -632,7 +632,7 @@ async def sync_casting(
     target_kitsu_id = entity_dict.get("target_id")
     target_type = entity_dict.get("target_type", "Shot")
     asset_ids = entity_dict.get("asset_ids", {})
-    
+
     if not target_kitsu_id:
         logging.warning("SyncCasting missing target_id")
         return
@@ -665,7 +665,7 @@ async def sync_casting(
 
     # Build mapping of asset_kitsu_id -> list of existing links
     existing_links_by_asset: dict[str, list[dict]] = {}
-    
+
     for link in existing_links:
         # Try to get asset_kitsu_id from link data
         link_data = link.get("data")
@@ -673,7 +673,7 @@ async def sync_casting(
             asset_kitsu_id = link_data.get("kitsuAssetId")
         else:
             asset_kitsu_id = None
-        
+
         if not asset_kitsu_id:
             # Fallback: try to find asset by input_id by querying the folder
             input_id = link.get("input_id")
@@ -684,7 +684,7 @@ async def sync_casting(
                 except Exception:
                     # Folder not found or no kitsuId, skip this link
                     continue
-        
+
         if asset_kitsu_id:
             if asset_kitsu_id not in existing_links_by_asset:
                 existing_links_by_asset[asset_kitsu_id] = []
@@ -703,7 +703,7 @@ async def sync_casting(
             continue
 
         existing_count = len(existing_links_by_asset.get(asset_kitsu_id, []))
-        
+
         # Delete excess links (more in AYON than in Kitsu)
         if existing_count > desired_count:
             links_to_delete = existing_links_by_asset[asset_kitsu_id][:existing_count - desired_count]
@@ -718,7 +718,7 @@ async def sync_casting(
                     f"Deleted excess casting link {link.get('input_id')}->{target_folder.id} "
                     f"(asset {asset_kitsu_id}, had {existing_count}, need {desired_count})"
                 )
-        
+
         # Create missing links (more in Kitsu than in AYON)
         elif existing_count < desired_count:
             for occurence_num in range(existing_count + 1, desired_count + 1):
@@ -739,7 +739,7 @@ async def sync_casting(
                     f"Created casting link {asset_folder.name}->{target_folder.name} "
                     f"(asset {asset_kitsu_id}, occurence {occurence_num}/{desired_count})"
                 )
-    
+
     # Handle assets that were removed from Kitsu (exist in AYON but not in count dict)
     # Find links for assets not in the count dict
     for link in existing_links:
@@ -749,7 +749,7 @@ async def sync_casting(
             asset_kitsu_id = link_data.get("kitsuAssetId")
         else:
             asset_kitsu_id = None
-        
+
         if not asset_kitsu_id:
             # Fallback: try to find asset by input_id
             input_id = link.get("input_id")
@@ -760,7 +760,7 @@ async def sync_casting(
                 except Exception:
                     # Folder not found, skip
                     continue
-        
+
         # If this asset is not in the asset_ids dict, it was removed from Kitsu
         if asset_kitsu_id and asset_kitsu_id not in asset_ids:
             await delete_entity_link(

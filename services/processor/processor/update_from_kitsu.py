@@ -378,7 +378,7 @@ def create_or_update_casting(
     # Priority: explicit shot_id/asset_id > entity_id (with type detection)
     target_id = None
     target_type = None
-    
+
     # For shot:casting-update, Kitsu sends shot_id explicitly
     if data.get("shot_id"):
         target_id = data["shot_id"]
@@ -396,15 +396,15 @@ def create_or_update_casting(
             target_type = "Shot"
         except Exception:
             target_type = "Asset"
-    
+
     if not target_id:
         logging.warning(f"Casting event missing target identifier: {data}")
         return
-    
+
     logging.info(f"Processing casting update for {target_type} {target_id}")
 
     entities: list[dict[str, Any]] = []
-    
+
     try:
         if target_type == "Shot":
             shot = gazu.shot.get_shot(target_id)

@@ -72,7 +72,7 @@ def get_casting_links(
             - asset_ids: Dictionary mapping asset Kitsu IDs to occurence counts
     """
     casting_entities: list[dict[str, Any]] = []
-    
+
     # Get casting for shots (which assets are in each shot)
     for shot in shots:
         shot_id = shot.get("id")
@@ -83,7 +83,7 @@ def get_casting_links(
         except Exception as e:
             logging.debug(f"Unable to fetch casting for shot {shot_id}: {e}")
             continue
-        
+
         # Extract asset_ids with occurence count
         asset_ids: dict[str, int] = {}
         for item in casting or []:
@@ -95,7 +95,7 @@ def get_casting_links(
                 nb_occurences = 1
             if asset_id:
                 asset_ids[asset_id] = asset_ids.get(asset_id, 0) + nb_occurences
-        
+
         # Create SyncCasting entity for this shot
         casting_entities.append({
             "id": f"sync-casting-{shot_id}",
@@ -104,7 +104,7 @@ def get_casting_links(
             "target_type": "Shot",
             "asset_ids": asset_ids,
         })
-    
+
     # Get casting for assets (asset dependencies / nested assets)
     for asset in assets:
         asset_id = asset.get("id")
@@ -115,7 +115,7 @@ def get_casting_links(
         except Exception as e:
             logging.debug(f"Unable to fetch casting for asset {asset_id}: {e}")
             continue
-        
+
         # Extract asset_ids with occurence count
         asset_ids: dict[str, int] = {}
         for item in casting or []:
@@ -127,7 +127,7 @@ def get_casting_links(
                 nb_occurences = 1
             if linked_asset_id:
                 asset_ids[linked_asset_id] = asset_ids.get(linked_asset_id, 0) + nb_occurences
-        
+
         # Create SyncCasting entity for this asset
         casting_entities.append({
             "id": f"sync-casting-{asset_id}",
@@ -136,7 +136,7 @@ def get_casting_links(
             "target_type": "Asset",
             "asset_ids": asset_ids,
         })
-    
+
     logging.debug(f"Found {len(casting_entities)} SyncCasting entities")
     return casting_entities
 
