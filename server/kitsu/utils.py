@@ -1,5 +1,7 @@
 from typing import Any
 
+import httpx
+import re
 from nxtools import slugify, logging
 
 from ayon_server.entities import (
@@ -10,6 +12,8 @@ from ayon_server.entities import (
 )
 from ayon_server.events import dispatch_event
 from ayon_server.lib.postgres import Postgres
+from ayon_server.types import NAME_REGEX
+from ayon_server.auth.session import Session
 
 
 def calculate_end_frame(
@@ -268,6 +272,107 @@ async def delete_task(
     await dispatch_event(**event)
 
 
+def _ensure_safe_project_name(project_name: str) -> None:
+    """Validate project_name to prevent SQL injection in table names."""
+    if not re.fullmatch(NAME_REGEX, project_name):
+        raise ValueError(f"Invalid project name '{project_name}'")
+
+
+async def get_link_by_io(
+    project_name: str,
+    input_id: str,
+    output_id: str,
+    link_type: str,
+):
+    _ensure_safe_project_name(project_name)
+    res = await Postgres.fetch(
+        f"""
+        SELECT id FROM project_{project_name}.links
+        WHERE input_id = $1 AND output_id = $2 AND link_type = $3
+        """,
+        input_id,
+        output_id,
+        link_type,
+    )
+    if not res:
+        return None
+    return res[0]["id"]
+
+
+async def get_links_for_output(
+    project_name: str,
+    output_id: str,
+    link_type: str,
+):
+    _ensure_safe_project_name(project_name)
+    return await Postgres.fetch(
+        f"""
+        SELECT id, input_id, data FROM project_{project_name}.links
+        WHERE output_id = $1 AND link_type = $2
+        """,
+        output_id,
+        link_type,
+    )
+
+
+async def create_entity_link(
+    project_name: str,
+    user: "UserEntity",
+    ayon_server_url: str,
+    input_id: str,
+    output_id: str,
+    link_type: str,
+    data: dict | None = None,
+):
+    session = await Session.create(user)
+    headers = {"Authorization": f"Bearer {session.token}"}
+    payload: dict = {
+        "input": input_id,
+        "output": output_id,
+        "linkType": link_type,
+    }
+    if data:
+        payload["data"] = data
+
+    async with httpx.AsyncClient() as client:
+        res = await client.post(
+            f"{ayon_server_url}/api/projects/{project_name}/links",
+            json=payload,
+            headers=headers,
+        )
+    if res.status_code not in (200, 201):
+        logging.warning(
+            f"Failed to create link {input_id}->{output_id} "
+            f"type '{link_type}': {res.status_code} {res.text}"
+        )
+        return
+    try:
+        return res.json().get("id")
+    except Exception:
+        return None
+
+
+async def delete_entity_link(
+    project_name: str,
+    user: "UserEntity",
+    ayon_server_url: str,
+    link_id: str,
+):
+    session = await Session.create(user)
+    headers = {"Authorization": f"Bearer {session.token}"}
+
+    async with httpx.AsyncClient() as client:
+        res = await client.delete(
+            f"{ayon_server_url}/api/projects/{project_name}/links/{link_id}",
+            headers=headers,
+        )
+
+    if res.status_code not in (200, 204):
+        logging.warning(
+            f"Failed to delete link {link_id}: {res.status_code} {res.text}"
+        )
+
+
 async def update_project(
     name: str,
     **kwargs,
@@ -295,6 +400,8 @@ async def update_entity(
 
     if attr_whitelist is None:
         attr_whitelist = []
+
+    changed = False
 
     # keys that can be updated
     for key in attr_whitelist:

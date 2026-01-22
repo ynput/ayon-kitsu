@@ -18,6 +18,7 @@ from .update_from_kitsu import (
     create_or_update_sequence,
     create_or_update_shot,
     create_or_update_task,
+    create_or_update_casting,
     delete_asset,
     delete_concept,
     delete_edit,
@@ -203,6 +204,11 @@ class KitsuProcessor:
             self.event_client,
             "shot:update",
             lambda data: create_or_update_shot(self, data),
+        )
+        gazu.events.add_listener(
+            self.event_client,
+            "shot:casting-update",
+            lambda data: create_or_update_casting(self, data),
         )
         gazu.events.add_listener(
             self.event_client,
