@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import ayon_api
 import gazu
@@ -335,7 +335,31 @@ def delete_person(parent: "KitsuProcessor", data: dict[str, str]):
     )
 
 
-def create_or_update_casting(parent: "KitsuProcessor", data: dict[str, str]):
+def create_or_update_casting(
+    parent: "KitsuProcessor", data: dict[str, Any]
+) -> None:
+    """Handle casting update events from Kitsu.
+    
+    Process real-time casting update events from Kitsu (shot:casting-update
+    or asset:casting-update). Fetch the current casting state from Kitsu,
+    creat a SyncCasting entity with the complete desired state, and push
+    it to AYON for reconciliation.
+    
+    Args:
+        parent: KitsuProcessor instance with settings and project pairing info.
+        data: Event data dictionary from Kitsu containing:
+            - project_id: Kitsu project ID
+            - shot_id: (optional) Shot ID for shot casting updates
+            - asset_id: (optional) Asset ID for asset casting updates
+            - entity_id: (optional) Generic entity ID (type will be detected)
+    
+    Returns:
+        None. The function logs warnings and returns early if:
+        - Casting sync is disabled in settings
+        - Project is not paired with an AYON project
+        - Target entity cannot be determined
+        - Casting data cannot be fetched from Kitsu
+    """
     logging.info(f"create_or_update_casting received event: {data}")
     sync_casting_settings = (
         parent.settings.get("sync_settings", {})
@@ -379,7 +403,7 @@ def create_or_update_casting(parent: "KitsuProcessor", data: dict[str, str]):
     
     logging.info(f"Processing casting update for {target_type} {target_id}")
 
-    entities: list[dict[str, str]] = []
+    entities: list[dict[str, Any]] = []
     
     try:
         if target_type == "Shot":

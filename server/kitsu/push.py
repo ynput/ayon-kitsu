@@ -652,16 +652,36 @@ async def sync_casting(
     user: "UserEntity",
     project: "ProjectEntity",
     entity_dict: "EntityDict",
-    settings,
-):
-    """Sync casting links for a target (shot or asset) by reconciling
-    existing links with desired state from Kitsu.
+    settings: Any,
+) -> None:
+    """Sync casting links for a target (shot or asset) by reconciling existing
+    links with desired state from Kitsu.
     
-    This function:
-    1. Gets existing AYON links for the target
-    2. Compares with desired asset_ids from Kitsu
-    3. Deletes stale links (not in Kitsu anymore)
-    4. Creates missing links (new in Kitsu)
+    Perform full reconciliation of casting links:
+    1. Fetch existing AYON links for the target folder
+    2. Map existing links by asset Kitsu ID (from link data or folder lookup)
+    3. For each asset in Kitsu's desired state:
+       - Delete excess links if more exist in AYON than in Kitsu
+       - Create missing links if fewer exist in AYON than in Kitsu
+       - Each link includes occurence number in its data
+    4. Delete links for assets removed from Kitsu casting
+    
+    Handle multi-occurence casting by creating multiple links
+    with the same input/output/type but different occurence numbers.
+    
+    Args:
+        addon: KitsuAddon instance (unused but required by push_entities).
+        user: User entity for authentication when creating/deleting links.
+        project: AYON project entity.
+        entity_dict: SyncCasting entity dictionary containing:
+            - target_id: Kitsu ID of the shot or asset
+            - target_type: "Shot" or "Asset"
+            - asset_ids: Dictionary mapping asset Kitsu IDs to occurence counts
+            - ayon_server_url: Base URL for AYON API calls
+        settings: Addon settings containing sync_casting configuration.
+    
+    Returns:
+        None. Warnings for missing targets/assets and API failures.
     """
     if not settings.sync_settings.sync_casting.enabled:
         return

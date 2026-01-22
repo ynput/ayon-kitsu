@@ -283,7 +283,22 @@ async def get_link_by_io(
     input_id: str,
     output_id: str,
     link_type: str,
-):
+) -> str | None:
+    """Get a link ID by input/output IDs and link type.
+    
+    Query the database for an existing link matching the given input,
+    output, and link type. Return the first matching link's ID, or None
+    if no link exists.
+    
+    Args:
+        project_name: AYON project name (validated for SQL safety).
+        input_id: AYON folder ID of the link input (source).
+        output_id: AYON folder ID of the link output (target).
+        link_type: Link type identifier (e.g., "breakdown|folder|folder").
+    
+    Returns:
+        Link ID string if found, None otherwise.
+    """
     _ensure_safe_project_name(project_name)
     res = await Postgres.fetch(
         f"""
@@ -303,7 +318,23 @@ async def get_links_for_output(
     project_name: str,
     output_id: str,
     link_type: str,
-):
+) -> list[dict[str, Any]]:
+    """Get all links for a given output folder and link type.
+    
+    Query the database for all links where the specified folder is the
+    output (target). Return link metadata including ID, input_id, and data.
+    
+    Args:
+        project_name: AYON project name (validated for SQL safety).
+        output_id: AYON folder ID of the link output (target).
+        link_type: Link type identifier (e.g., "breakdown|folder|folder").
+    
+    Returns:
+        List of link dictionaries, each containing:
+            - id: Link ID
+            - input_id: AYON folder ID of the link input (source)
+            - data: Link data dictionary (may contain kitsuAssetId, etc.)
+    """
     _ensure_safe_project_name(project_name)
     return await Postgres.fetch(
         f"""
@@ -322,8 +353,29 @@ async def create_entity_link(
     input_id: str,
     output_id: str,
     link_type: str,
-    data: dict | None = None,
-):
+    data: dict[str, Any] | None = None,
+) -> str | None:
+    """Create an entity link via AYON REST API.
+    
+    Create a link between two folders (input and output) with the specified
+    link type. Multiple links with the same input/output/type are allowed
+    (e.g., for multi-occurence casting).
+    
+    Args:
+        project_name: AYON project name.
+        user: User entity for authentication.
+        ayon_server_url: Base URL of the AYON server.
+        input_id: AYON folder ID of the link input (source).
+        output_id: AYON folder ID of the link output (target).
+        link_type: Link type identifier in format "name|input_type|output_type"
+            (e.g., "breakdown|folder|folder").
+        data: Optional dictionary containing link metadata (e.g., kitsuAssetId,
+            kitsuTargetId, occurence).
+    
+    Returns:
+        Created link ID string if successful, None otherwise. Warnings
+        on failure.
+    """
     session = await Session.create(user)
     headers = {"Authorization": f"Bearer {session.token}"}
     payload: dict = {
@@ -357,7 +409,20 @@ async def delete_entity_link(
     user: "UserEntity",
     ayon_server_url: str,
     link_id: str,
-):
+) -> None:
+    """Delete an entity link via AYON REST API.
+    
+    Delete a link by its ID. Log warnings if the deletion fails.
+    
+    Args:
+        project_name: AYON project name.
+        user: User entity for authentication.
+        ayon_server_url: Base URL of the AYON server.
+        link_id: ID of the link to delete.
+    
+    Returns:
+        None. Warnings on failure.
+    """
     session = await Session.create(user)
     headers = {"Authorization": f"Bearer {session.token}"}
 

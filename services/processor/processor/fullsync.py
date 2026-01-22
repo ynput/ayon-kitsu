@@ -1,5 +1,5 @@
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import ayon_api
 import gazu
@@ -47,22 +47,31 @@ def get_tasks(
 
 
 def get_casting_links(
-    shots: list[dict],
-    assets: list[dict],
-) -> list[dict[str, str]]:
+    shots: list[dict[str, Any]],
+    assets: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Get casting links for shots and assets.
     
-    Groups casting by target and creates SyncCasting entities for full
-    reconciliation (including deletion of stale links).
+    Fetche casting data from Kitsu for all shots and assets, group them by
+    target entity, and create SyncCasting entities. Each SyncCasting entity
+    contains the complete desired state (asset_ids with occurence counts) for
+    full reconciliation, including deletion of stale links.
     
     Args:
-        shots: List of shot dicts from gazu
-        assets: List of asset dicts from gazu
+        shots: List of shot dictionaries from gazu API, each containing at least
+            an "id" field.
+        assets: List of asset dictionaries from gazu API, each containing at
+            least an "id" field.
         
     Returns:
-        List of SyncCasting entity dicts
+        List of SyncCasting entity dictionaries. Each entity contains:
+            - id: Unique identifier (format: "sync-casting-{target_id}")
+            - type: "SyncCasting"
+            - target_id: Kitsu ID of the shot or asset
+            - target_type: "Shot" or "Asset"
+            - asset_ids: Dictionary mapping asset Kitsu IDs to occurence counts
     """
-    casting_entities: list[dict[str, str]] = []
+    casting_entities: list[dict[str, Any]] = []
     
     # Get casting for shots (which assets are in each shot)
     for shot in shots:
