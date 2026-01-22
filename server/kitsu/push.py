@@ -52,7 +52,6 @@ KitsuEntityType = Literal[
     "Task",
     "Person",
     "Project",
-    "CastingLink",
     "SyncCasting",
 ]
 
@@ -591,62 +590,6 @@ async def sync_task(
             existing_tasks[entity_dict["id"]] = target_task.id
 
 
-async def sync_casting_link(
-    addon: "KitsuAddon",
-    user: "UserEntity",
-    project: "ProjectEntity",
-    entity_dict: "EntityDict",
-    settings,
-):
-    if not settings.sync_settings.sync_casting.enabled:
-        return
-
-    asset_kitsu_id = entity_dict.get("asset_id") or entity_dict.get("assetId")
-    target_kitsu_id = entity_dict.get("target_id") or entity_dict.get("targetId")
-    if not asset_kitsu_id or not target_kitsu_id:
-        logging.warning("CastingLink missing asset_id or target_id")
-        return
-
-    asset_folder = await get_folder_by_kitsu_id(
-        project.name,
-        asset_kitsu_id,
-    )
-    if not asset_folder:
-        logging.warning(
-            f"CastingLink asset not found for kitsuId {asset_kitsu_id}"
-        )
-        return
-
-    target_folder = await get_folder_by_kitsu_id(
-        project.name,
-        target_kitsu_id,
-    )
-    if not target_folder:
-        logging.warning(
-            f"CastingLink target not found for kitsuId {target_kitsu_id}"
-        )
-        return
-
-    link_type = (
-        settings.sync_settings.sync_casting.casting_link_type or "breakdown"
-    )
-    # Ensure link_type has proper format: name|input_type|output_type
-    if "|" not in link_type:
-        link_type = f"{link_type}|folder|folder"
-    await create_entity_link(
-        project_name=project.name,
-        user=user,
-        ayon_server_url=entity_dict["ayon_server_url"],
-        input_id=asset_folder.id,
-        output_id=target_folder.id,
-        link_type=link_type,
-        data={
-            "kitsuAssetId": asset_kitsu_id,
-            "kitsuTargetId": target_kitsu_id,
-        },
-    )
-
-
 async def sync_casting(
     addon: "KitsuAddon",
     user: "UserEntity",
@@ -721,9 +664,7 @@ async def sync_casting(
     )
 
     # Build mapping of asset_kitsu_id -> list of existing links
-    # Also map input_id -> asset_kitsu_id for lookup
     existing_links_by_asset: dict[str, list[dict]] = {}
-    input_id_to_asset_kitsu_id: dict[str, str] = {}
     
     for link in existing_links:
         # Try to get asset_kitsu_id from link data
@@ -748,7 +689,6 @@ async def sync_casting(
             if asset_kitsu_id not in existing_links_by_asset:
                 existing_links_by_asset[asset_kitsu_id] = []
             existing_links_by_asset[asset_kitsu_id].append(link)
-            input_id_to_asset_kitsu_id[link.get("input_id")] = asset_kitsu_id
 
     # Process each asset with its desired count
     for asset_kitsu_id, desired_count in asset_ids.items():
@@ -886,17 +826,6 @@ async def push_entities(
                     users,
                     entity_dict,
                 )
-        elif entity_dict["type"] == "CastingLink":
-            if project:
-                await sync_casting_link(
-                    addon,
-                    user,
-                    project,
-                    entity_dict,
-                    settings,
-                )
-            else:
-                logging.warning("CastingLink received without project context")
         elif entity_dict["type"] == "SyncCasting":
             if project:
                 await sync_casting(
