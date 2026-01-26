@@ -69,17 +69,16 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
     def get_global_environments(self):
         """Kitsu's global environments."""
         env = {"KITSU_SERVER": self.server_url}
-        
+
         # Load Kitsu credentials from secure registry and add to environment
-        # This ensures CLI launches (like ayon-launch-scripts) have access to credentials
         from .credentials import load_credentials
-        
+
         login, password = load_credentials()
         if login is not None:
             env["KITSU_LOGIN"] = login
         if password is not None:
             env["KITSU_PWD"] = password
-        
+
         return env
 
     def _get_dialog(self):
