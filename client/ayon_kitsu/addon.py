@@ -55,12 +55,10 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
         )
 
         login, password = load_credentials()
-
         if login is None or password is None:
-            # TODO raise correct type
-            raise
+            self.show_dialog()
+            return
 
-        # Check credentials, ask them if needed
         if validate_credentials(login, password):
             set_credentials_envs(login, password)
         else:
@@ -68,18 +66,30 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
 
     def get_global_environments(self):
         """Kitsu's global environments."""
-        env = {"KITSU_SERVER": self.server_url}
+        return {"KITSU_SERVER": self.server_url}
 
-        # Load Kitsu credentials from secure registry and add to environment
-        from .credentials import load_credentials
+    def ensure_is_process_ready(self, process_context):
+        """Block process launch if Kitsu credentials are missing or invalid."""
+        from ayon_core.addon import ProcessPreparationError
+        from .credentials import (
+            load_credentials,
+            validate_credentials,
+            set_credentials_envs,
+        )
 
         login, password = load_credentials()
-        if login is not None:
-            env["KITSU_LOGIN"] = login
-        if password is not None:
-            env["KITSU_PWD"] = password
+        if login is None or password is None:
+            raise ProcessPreparationError(
+                "Kitsu credentials are not set. "
+                "Please fill them via the Kitsu Connect tray action."
+            )
 
-        return env
+        if not validate_credentials(login, password, kitsu_url=self.server_url):
+            raise ProcessPreparationError(
+                "Kitsu credentials are invalid. "
+                "Please update them via the Kitsu Connect tray action."
+            )
+        set_credentials_envs(login, password)
 
     def _get_dialog(self):
         if self._dialog is None:
