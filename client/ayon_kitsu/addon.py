@@ -55,11 +55,7 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
         )
 
         login, password = load_credentials()
-        if login is None or password is None:
-            self.show_dialog()
-            return
-
-        if validate_credentials(login, password):
+        if login and password and validate_credentials(login, password):
             set_credentials_envs(login, password)
         else:
             self.show_dialog()
