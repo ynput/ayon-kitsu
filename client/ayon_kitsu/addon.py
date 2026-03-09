@@ -84,7 +84,9 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
                 "Please fill them via the Kitsu Connect tray action."
             )
 
-        if not validate_credentials(login, password, kitsu_url=self.server_url):
+        if not validate_credentials(
+            login, password, kitsu_url=self.server_url
+        ):
             raise ProcessPreparationError(
                 "Kitsu credentials are invalid. "
                 "Please update them via the Kitsu Connect tray action."
