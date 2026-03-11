@@ -355,7 +355,6 @@ def create_or_update_casting(
             One of the following is required:
             - shot_id: Shot ID for shot casting updates
             - asset_id: Asset ID for asset casting updates
-            - entity_id: Generic entity ID (type will be detected)
 
     Returns:
         None. The function logs warnings and returns early if:
@@ -391,15 +390,6 @@ def create_or_update_casting(
     elif data.get("asset_id"):
         target_id = data["asset_id"]
         target_type = "Asset"
-    # Fallback: entity_id might be present (need to determine type)
-    elif data.get("entity_id"):
-        target_id = data["entity_id"]
-        # Try to determine if it's a shot or asset by attempting to fetch it
-        try:
-            gazu.shot.get_shot(target_id)
-            target_type = "Shot"
-        except Exception:
-            target_type = "Asset"
 
     if not target_id:
         logging.warning(f"Casting event missing target identifier: {data}")
