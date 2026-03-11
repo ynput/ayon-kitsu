@@ -342,7 +342,7 @@ def create_or_update_casting(
 
     Process real-time casting update events from Kitsu (shot:casting-update
     or asset:casting-update). Fetch the current casting state from Kitsu,
-    creat a SyncCasting entity with the complete desired state, and push
+    create a SyncCasting entity with the complete desired state, and push
     it to AYON for reconciliation.
 
     Args:
