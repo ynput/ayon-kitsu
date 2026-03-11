@@ -345,13 +345,17 @@ def create_or_update_casting(
     create a SyncCasting entity with the complete desired state, and push
     it to AYON for reconciliation.
 
+    NB: currently only supports shot casting updates.
+    https://github.com/cgwire/zou/issues/392
+
     Args:
         parent: KitsuProcessor instance with settings and project pairing info.
         data: Event data dictionary from Kitsu containing:
             - project_id: Kitsu project ID
-            - shot_id: (optional) Shot ID for shot casting updates
-            - asset_id: (optional) Asset ID for asset casting updates
-            - entity_id: (optional) Generic entity ID (type will be detected)
+            One of the following is required:
+            - shot_id: Shot ID for shot casting updates
+            - asset_id: Asset ID for asset casting updates
+            - entity_id: Generic entity ID (type will be detected)
 
     Returns:
         None. The function logs warnings and returns early if:
@@ -422,17 +426,12 @@ def create_or_update_casting(
 
     # Extract asset_ids with occurence count
     asset_ids: dict[str, int] = {}
-    for item in casting or []:
-        if isinstance(item, dict):
-            item_asset_id = item.get("asset_id")
-            nb_occurences = item.get("nb_occurences", 1)
-        else:
-            item_asset_id = item
-            nb_occurences = 1
-        if item_asset_id:
-            asset_ids[item_asset_id] = (
-                asset_ids.get(item_asset_id, 0) + nb_occurences
-            )
+    for actor in casting:
+        actor_asset_id = actor.get("asset_id")
+        if actor_asset_id:
+            asset_ids[actor_asset_id] = asset_ids.get(
+                actor_asset_id, 0
+            ) + actor.get("nb_occurences", 1)
 
     # Create SyncCasting entity with complete state
     entity = {
