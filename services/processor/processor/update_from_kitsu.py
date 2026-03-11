@@ -376,37 +376,33 @@ def create_or_update_casting(
         logging.debug(f"Project {data.get('project_id')} not paired, skipping")
         return
 
-    # Determine the target entity (shot or asset whose casting is updated)
     # Kitsu sends different fields depending on the event type
-    # Priority: explicit shot_id/asset_id > entity_id (with type detection)
-    target_id = None
-    target_type = None
-
     # For shot:casting-update, Kitsu sends shot_id explicitly
+    target_id = None
     if data.get("shot_id"):
         target_id = data["shot_id"]
-        target_type = "Shot"
     # For asset:casting-update, Kitsu sends asset_id explicitly
     elif data.get("asset_id"):
         target_id = data["asset_id"]
-        target_type = "Asset"
 
     if not target_id:
         logging.warning(f"Casting event missing target identifier: {data}")
         return
 
-    logging.info(f"Processing casting update for {target_type} {target_id}")
-
-    entities: list[dict[str, Any]] = []
-
     try:
+        entity = gazu.entity.get_entity(target_id)
+        target_type = entity["type"]
+        logging.info(f"Processing casting update for {target_type} {target_id}")
         if target_type == "Shot":
-            shot = gazu.shot.get_shot(target_id)
-            casting = gazu.casting.get_shot_casting(shot)
+            casting = gazu.casting.get_shot_casting(entity)
+        elif target_type == "Asset":
+            casting = gazu.casting.get_asset_casting(entity)
         else:
-            # Asset casting
-            asset = gazu.asset.get_asset(target_id)
-            casting = gazu.casting.get_asset_casting(asset)
+            logging.warning(
+                f"Unable to fetch casting for {target_type.lower()} "
+                f"{target_id}: unsupported entity type {entity['type']}"
+            )
+            return
     except Exception as e:
         logging.warning(
             f"Unable to fetch casting for {target_type.lower()} "
@@ -433,11 +429,8 @@ def create_or_update_casting(
         "project_id": data.get("project_id"),
         "ayon_server_url": ayon_api.get_base_url(),
     }
-    entities.append(entity)
-
-    if entities:
-        return ayon_api.post(
-            f"{parent.entrypoint}/push",
-            project_name=project_name,
-            entities=entities,
-        )
+    return ayon_api.post(
+        f"{parent.entrypoint}/push",
+        project_name=project_name,
+        entities=[entity],
+    )
