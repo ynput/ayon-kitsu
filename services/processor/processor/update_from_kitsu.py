@@ -392,7 +392,9 @@ def create_or_update_casting(
     try:
         entity = gazu.entity.get_entity(target_id)
         target_type = entity["type"]
-        logging.info(f"Processing casting update for {target_type} {target_id}")
+        logging.info(
+            f"Processing casting update for {target_type} {target_id}"
+        )
         if target_type == "Shot":
             casting = gazu.casting.get_shot_casting(entity)
         elif target_type == "Asset":
