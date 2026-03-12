@@ -1,4 +1,4 @@
-from typing import Type
+from typing import Type, Any
 
 from nxtools import logging
 
@@ -17,7 +17,11 @@ from .kitsu.push import (
     push_entities,
     remove_entities,
 )
-from .settings import DEFAULT_VALUES, KitsuSettings
+from .settings import (
+    KitsuSettings,
+    DEFAULT_VALUES,
+    convert_settings_overrides,
+)
 
 #
 # Events:
@@ -134,3 +138,13 @@ class KitsuAddon(BaseServerAddon):
             raise InvalidSettingsException("Kitsu password secret is not set")
 
         self.kitsu = Kitsu(settings.server, actual_email, actual_password)
+
+    async def convert_settings_overrides(
+        self,
+        source_version: str,
+        overrides: dict[str, Any],
+    ) -> dict[str, Any]:
+        await convert_settings_overrides(source_version, overrides)
+        return await super().convert_settings_overrides(
+            source_version, overrides
+        )
