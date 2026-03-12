@@ -36,12 +36,14 @@ class CollectKitsuFamily(plugin.KitsuPublishInstancePlugin):
             return
 
         host_name = instance.context.data["hostName"]
-        product_type = instance.data["productType"]
+        product_base_type = instance.data.get("productBaseType")
+        if not product_base_type:
+            product_base_type = instance.data["productType"]
         task_name = instance.data.get("task")
 
         filtering_criteria = {
             "host_names": host_name,
-            "product_types": product_type,
+            "product_base_types": product_base_type,
             "task_names": task_name
         }
         profile = filter_profiles(
@@ -57,7 +59,7 @@ class CollectKitsuFamily(plugin.KitsuPublishInstancePlugin):
             add_kitsu_family = profile["add_kitsu_family"]
             additional_filters = profile.get("advanced_filtering")
             if additional_filters:
-                families_set = set(families) | {product_type}
+                families_set = set(families) | {product_base_type}
                 self.log.info(
                     "'{}' families used for additional filtering".format(
                         families_set))
@@ -74,7 +76,7 @@ class CollectKitsuFamily(plugin.KitsuPublishInstancePlugin):
                 families.append("kitsu")
 
         self.log.debug("{} 'kitsu' family for instance with '{}'".format(
-            result_str, product_type
+            result_str, product_base_type
         ))
 
     def _get_add_kitsu_f_from_addit_filters(

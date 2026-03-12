@@ -19,7 +19,7 @@ class CollectFamilyProfile(BaseSettingsModel):
         default_factory=list,
         title="Host names",
     )
-    product_types: list[str] = SettingsField(
+    product_base_types: list[str] = SettingsField(
         default_factory=list,
         title="Families",
     )
@@ -124,7 +124,7 @@ PUBLISH_DEFAULT_VALUES = {
                 "host_names": [
                     "traypublisher"
                 ],
-                "product_types": [],
+                "product_base_types": [],
                 "task_types": [],
                 "task_names": [],
                 "add_ftrack_family": True,
@@ -134,7 +134,7 @@ PUBLISH_DEFAULT_VALUES = {
                 "host_names": [
                     "traypublisher"
                 ],
-                "product_types": [
+                "product_base_types": [
                     "matchmove",
                     "shot"
                 ],
@@ -147,7 +147,7 @@ PUBLISH_DEFAULT_VALUES = {
                 "host_names": [
                     "traypublisher"
                 ],
-                "product_types": [
+                "product_base_types": [
                     "plate",
                     "review",
                     "audio"
@@ -169,7 +169,7 @@ PUBLISH_DEFAULT_VALUES = {
                 "host_names": [
                     "maya"
                 ],
-                "product_types": [
+                "product_base_types": [
                     "model",
                     "setdress",
                     "animation",
@@ -186,7 +186,7 @@ PUBLISH_DEFAULT_VALUES = {
                 "host_names": [
                     "tvpaint"
                 ],
-                "product_types": [
+                "product_base_types": [
                     "renderPass"
                 ],
                 "task_types": [],
@@ -198,7 +198,7 @@ PUBLISH_DEFAULT_VALUES = {
                 "host_names": [
                     "tvpaint"
                 ],
-                "product_types": [],
+                "product_base_types": [],
                 "task_types": [],
                 "task_names": [],
                 "add_kitsu_family": True,
@@ -208,7 +208,7 @@ PUBLISH_DEFAULT_VALUES = {
                 "host_names": [
                     "nuke"
                 ],
-                "product_types": [
+                "product_base_types": [
                     "write",
                     "render",
                     "prerender"
@@ -229,7 +229,7 @@ PUBLISH_DEFAULT_VALUES = {
                 "host_names": [
                     "aftereffects"
                 ],
-                "product_types": [
+                "product_base_types": [
                     "render",
                     "workfile"
                 ],
@@ -242,7 +242,7 @@ PUBLISH_DEFAULT_VALUES = {
                 "host_names": [
                     "flame"
                 ],
-                "product_types": [
+                "product_base_types": [
                     "plate",
                     "take"
                 ],
@@ -255,7 +255,7 @@ PUBLISH_DEFAULT_VALUES = {
                 "host_names": [
                     "houdini"
                 ],
-                "product_types": [
+                "product_base_types": [
                     "usd"
                 ],
                 "task_types": [],
@@ -267,7 +267,7 @@ PUBLISH_DEFAULT_VALUES = {
                 "host_names": [
                     "photoshop"
                 ],
-                "product_types": [
+                "product_base_types": [
                     "review"
                 ],
                 "task_types": [],
