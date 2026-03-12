@@ -17,11 +17,14 @@ from .constants import (
 )
 from .utils import (
     calculate_end_frame,
+    create_entity_link,
     create_folder,
     create_task,
+    delete_entity_link,
     delete_folder,
     delete_task,
     get_folder_by_kitsu_id,
+    get_links_for_output,
     get_task_by_kitsu_id,
     get_user_by_kitsu_id,
     update_project,
@@ -49,6 +52,7 @@ KitsuEntityType = Literal[
     "Task",
     "Person",
     "Project",
+    "SyncCasting",
 ]
 
 
@@ -586,6 +590,200 @@ async def sync_task(
             existing_tasks[entity_dict["id"]] = target_task.id
 
 
+async def sync_casting(
+    addon: "KitsuAddon",
+    user: "UserEntity",
+    project: "ProjectEntity",
+    entity_dict: "EntityDict",
+    settings: Any,
+) -> None:
+    """Sync casting links for a target (shot or asset) by reconciling
+    existing links with desired state from Kitsu.
+
+    Perform full reconciliation of casting links:
+    1. Fetch existing AYON links for the target folder
+    2. Map existing links by asset Kitsu ID (from link data or folder lookup)
+    3. For each asset in Kitsu's desired state:
+       - Delete excess links if more exist in AYON than in Kitsu
+       - Create missing links if fewer exist in AYON than in Kitsu
+       - Each link includes occurence number in its data
+    4. Delete links for assets removed from Kitsu casting
+
+    Handle multi-occurence casting by creating multiple links
+    with the same input/output/type but different occurence numbers.
+
+    Args:
+        addon: KitsuAddon instance (unused but required by push_entities).
+        user: User entity for authentication when creating/deleting links.
+        project: AYON project entity.
+        entity_dict: SyncCasting entity dictionary containing:
+            - target_id: Kitsu ID of the shot or asset
+            - target_type: "Shot" or "Asset"
+            - asset_ids: Dictionary mapping asset Kitsu IDs to occurence
+              counts
+            - ayon_server_url: Base URL for AYON API calls
+        settings: Addon settings containing sync_casting configuration.
+
+    Returns:
+        None. Warnings for missing targets/assets and API failures.
+    """
+    if not settings.sync_settings.sync_casting.enabled:
+        return
+
+    target_kitsu_id = entity_dict.get("target_id")
+    asset_ids = entity_dict.get("asset_ids", {})
+
+    if not target_kitsu_id:
+        logging.warning("SyncCasting missing target_id")
+        return
+
+    # Get target folder (shot or asset)
+    target_folder = await get_folder_by_kitsu_id(
+        project.name,
+        target_kitsu_id,
+    )
+    if not target_folder:
+        logging.warning(
+            f"SyncCasting target not found for kitsuId {target_kitsu_id}"
+        )
+        return
+
+    # Get link type from settings
+    link_type = (
+        settings.sync_settings.sync_casting.casting_link_type or "breakdown"
+    )
+    # Ensure link_type has proper format: name|input_type|output_type
+    if "|" not in link_type:
+        link_type = f"{link_type}|folder|folder"
+
+    # Get existing AYON links for this target
+    existing_links = await get_links_for_output(
+        project.name,
+        target_folder.id,
+        link_type,
+    )
+
+    # Build mapping of asset_kitsu_id -> list of existing links
+    existing_links_by_asset: dict[str, list[dict]] = {}
+
+    for link in existing_links:
+        # Try to get asset_kitsu_id from link data
+        link_data = link.get("data")
+        if link_data and isinstance(link_data, dict):
+            asset_kitsu_id = link_data.get("kitsuAssetId")
+        else:
+            asset_kitsu_id = None
+
+        if not asset_kitsu_id:
+            # Fallback: try to find asset by input_id by querying the folder
+            input_id = link.get("input_id")
+            if input_id:
+                try:
+                    folder = await FolderEntity.load(project.name, input_id)
+                    asset_kitsu_id = folder.data.get("kitsuId")
+                except Exception:
+                    # Folder not found or no kitsuId, skip this link
+                    continue
+
+        if asset_kitsu_id:
+            if asset_kitsu_id not in existing_links_by_asset:
+                existing_links_by_asset[asset_kitsu_id] = []
+            existing_links_by_asset[asset_kitsu_id].append(link)
+
+    # Process each asset with its desired count
+    for asset_kitsu_id, desired_count in asset_ids.items():
+        asset_folder = await get_folder_by_kitsu_id(
+            project.name,
+            asset_kitsu_id,
+        )
+        if not asset_folder:
+            logging.debug(
+                f"SyncCasting asset not found for kitsuId "
+                f"{asset_kitsu_id}, skipping"
+            )
+            continue
+
+        existing_count = len(existing_links_by_asset.get(asset_kitsu_id, []))
+
+        # Delete excess links (more in AYON than in Kitsu)
+        if existing_count > desired_count:
+            links_to_delete = existing_links_by_asset[asset_kitsu_id][
+                : existing_count - desired_count
+            ]
+            for link in links_to_delete:
+                await delete_entity_link(
+                    project_name=project.name,
+                    user=user,
+                    ayon_server_url=entity_dict["ayon_server_url"],
+                    link_id=link["id"],
+                )
+                logging.debug(
+                    f"Deleted excess casting link "
+                    f"{link.get('input_id')}->{target_folder.id} "
+                    f"(asset {asset_kitsu_id}, had {existing_count}, "
+                    f"need {desired_count})"
+                )
+
+        # Create missing links (more in Kitsu than in AYON)
+        elif existing_count < desired_count:
+            for occurence_num in range(existing_count + 1, desired_count + 1):
+                await create_entity_link(
+                    project_name=project.name,
+                    user=user,
+                    ayon_server_url=entity_dict["ayon_server_url"],
+                    input_id=asset_folder.id,
+                    output_id=target_folder.id,
+                    link_type=link_type,
+                    data={
+                        "kitsuAssetId": asset_kitsu_id,
+                        "kitsuTargetId": target_kitsu_id,
+                        "occurence": occurence_num,
+                    },
+                )
+                logging.debug(
+                    f"Created casting link "
+                    f"{asset_folder.name}->{target_folder.name} "
+                    f"(asset {asset_kitsu_id}, occurence "
+                    f"{occurence_num}/{desired_count})"
+                )
+
+    # Handle assets that were removed from Kitsu
+    # (exist in AYON but not in count dict)
+    # Find links for assets not in the count dict
+    for link in existing_links:
+        # Try to get asset_kitsu_id from link data
+        link_data = link.get("data")
+        if link_data and isinstance(link_data, dict):
+            asset_kitsu_id = link_data.get("kitsuAssetId")
+        else:
+            asset_kitsu_id = None
+
+        if not asset_kitsu_id:
+            # Fallback: try to find asset by input_id
+            input_id = link.get("input_id")
+            if input_id:
+                try:
+                    folder = await FolderEntity.load(project.name, input_id)
+                    asset_kitsu_id = folder.data.get("kitsuId")
+                except Exception:
+                    # Folder not found, skip
+                    continue
+
+        # If this asset is not in the asset_ids dict, it was removed from Kitsu
+        if asset_kitsu_id and asset_kitsu_id not in asset_ids:
+            await delete_entity_link(
+                project_name=project.name,
+                user=user,
+                ayon_server_url=entity_dict["ayon_server_url"],
+                link_id=link["id"],
+            )
+            logging.debug(
+                f"Deleted stale casting link "
+                f"{link.get('input_id')}->{target_folder.id} "
+                f"(asset {asset_kitsu_id} removed from Kitsu)"
+            )
+
+
 async def push_entities(
     addon: "KitsuAddon",
     user: "UserEntity",
@@ -637,6 +835,17 @@ async def push_entities(
                     users,
                     entity_dict,
                 )
+        elif entity_dict["type"] == "SyncCasting":
+            if project:
+                await sync_casting(
+                    addon,
+                    user,
+                    project,
+                    entity_dict,
+                    settings,
+                )
+            else:
+                logging.warning("SyncCasting received without project context")
         elif entity_dict["type"] != "Task":
             await sync_folder(
                 addon,

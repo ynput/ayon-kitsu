@@ -1,5 +1,5 @@
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import ayon_api
 import gazu
@@ -46,6 +46,106 @@ def get_tasks(
     return tasks
 
 
+def get_casting_links(
+    shots: list[dict[str, Any]],
+    assets: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Get casting links for shots and assets.
+
+    Fetche casting data from Kitsu for all shots and assets, group them by
+    target entity, and create SyncCasting entities. Each SyncCasting entity
+    contains the complete desired state (asset_ids with occurence counts) for
+    full reconciliation, including deletion of stale links.
+
+    Args:
+        shots: List of shot dictionaries from gazu API, each containing at
+            least
+            an "id" field.
+        assets: List of asset dictionaries from gazu API, each containing at
+            least an "id" field.
+
+    Returns:
+        List of SyncCasting entity dictionaries. Each entity contains:
+            - id: Unique identifier (format: "sync-casting-{target_id}")
+            - type: "SyncCasting"
+            - target_id: Kitsu ID of the shot or asset
+            - target_type: "Shot" or "Asset"
+            - asset_ids: Dictionary mapping asset Kitsu IDs to occurence counts
+    """
+    casting_entities: list[dict[str, Any]] = []
+
+    # Get casting for shots (which assets are in each shot)
+    for shot in shots:
+        shot_id = shot.get("id")
+        if not shot_id:
+            continue
+        try:
+            casting = gazu.casting.get_shot_casting(shot)
+        except Exception as e:
+            logging.debug(f"Unable to fetch casting for shot {shot_id}: {e}")
+            continue
+
+        # Extract asset_ids with occurence count
+        asset_ids: dict[str, int] = {}
+        for item in casting or []:
+            if isinstance(item, dict):
+                asset_id = item.get("asset_id")
+                nb_occurences = item.get("nb_occurences", 1)
+            else:
+                asset_id = item
+                nb_occurences = 1
+            if asset_id:
+                asset_ids[asset_id] = (
+                    asset_ids.get(asset_id, 0) + nb_occurences
+                )
+
+        # Create SyncCasting entity for this shot
+        casting_entities.append({
+            "id": f"sync-casting-{shot_id}",
+            "type": "SyncCasting",
+            "target_id": shot_id,
+            "target_type": "Shot",
+            "asset_ids": asset_ids,
+        })
+
+    # Get casting for assets (asset dependencies / nested assets)
+    for asset in assets:
+        asset_id = asset.get("id")
+        if not asset_id:
+            continue
+        try:
+            casting = gazu.casting.get_asset_casting(asset)
+        except Exception as e:
+            logging.debug(f"Unable to fetch casting for asset {asset_id}: {e}")
+            continue
+
+        # Extract asset_ids with occurence count
+        asset_ids: dict[str, int] = {}
+        for item in casting or []:
+            if isinstance(item, dict):
+                linked_asset_id = item.get("asset_id")
+                nb_occurences = item.get("nb_occurences", 1)
+            else:
+                linked_asset_id = item
+                nb_occurences = 1
+            if linked_asset_id:
+                asset_ids[linked_asset_id] = (
+                    asset_ids.get(linked_asset_id, 0) + nb_occurences
+                )
+
+        # Create SyncCasting entity for this asset
+        casting_entities.append({
+            "id": f"sync-casting-{asset_id}",
+            "type": "SyncCasting",
+            "target_id": asset_id,
+            "target_type": "Asset",
+            "asset_ids": asset_ids,
+        })
+
+    logging.debug(f"Found {len(casting_entities)} SyncCasting entities")
+    return casting_entities
+
+
 def project_full_sync(
     parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
 ):
@@ -58,7 +158,6 @@ def project_full_sync(
     """
     start_time = time.time()
     logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
-
     asset_types = get_asset_types(kitsu_project_id)
     task_statuses = get_statuses()
     task_types = get_task_types(kitsu_project_id)
@@ -66,6 +165,11 @@ def project_full_sync(
 
     assets = get_assets(kitsu_project_id, asset_types)
     tasks = get_tasks(kitsu_project_id, task_types, task_statuses)
+    sync_casting_settings = (
+        parent.settings.get("sync_settings", {})
+        .get("sync_casting", {})
+    )
+    casting_enabled = sync_casting_settings.get("enabled", False)
 
     episodes = gazu.shot.all_episodes_for_project(kitsu_project_id)
     seqs = gazu.shot.all_sequences_for_project(kitsu_project_id)
@@ -82,6 +186,8 @@ def project_full_sync(
     entities = (
         persons + assets + episodes + seqs + shots + edits + concepts + tasks
     )
+    if casting_enabled:
+        entities += get_casting_links(shots, assets)
 
     for entity in entities:
         entity["ayon_server_url"] = ayon_api.get_base_url()
