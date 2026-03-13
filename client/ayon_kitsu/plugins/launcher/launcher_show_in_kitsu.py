@@ -102,7 +102,10 @@ class ShowInKitsu(LauncherAction):
         project_url = Path(
             gazu.project.get_project_url({"id": project_kitsu_id})
         )
-        return f"{project_url.parent}/episodes/all/assets?search=+type=[{folder_label}]"
+        return (
+            f"{project_url.parent}/episodes/all/assets",
+            f"?search=+type=[{folder_label}]",
+        )
 
     def _get_sequence_url(
         self, project, project_kitsu_id, kitsu_id, folder_path
