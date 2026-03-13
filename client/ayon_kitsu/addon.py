@@ -1,6 +1,6 @@
 """Kitsu addon."""
 
-import os
+from pathlib import Path
 
 from ayon_core.addon import (
     AYONAddon,
@@ -9,7 +9,7 @@ from ayon_core.addon import (
 )
 from .version import __version__
 
-KITSU_ROOT = os.path.dirname(os.path.abspath(__file__))
+KITSU_ROOT = Path(__file__).parent
 
 
 class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
@@ -92,10 +92,10 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
         self.show_dialog()
 
     def get_launcher_action_paths(self):
-        return [os.path.join(KITSU_ROOT, "plugins", "launcher")]
+        return [KITSU_ROOT.joinpath("plugins", "launcher").as_posix()]
 
     def get_publish_plugin_paths(self, host_name=None):
-        return [os.path.join(KITSU_ROOT, "plugins", "publish")]
+        return [KITSU_ROOT.joinpath("plugins", "publish").as_posix()]
 
 
 def is_kitsu_enabled_in_settings(project_settings):
