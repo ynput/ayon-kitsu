@@ -91,13 +91,8 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
         """Implementation of abstract method for `ITrayAction`."""
         self.show_dialog()
 
-    def get_plugin_paths(self):
-        """Implementation of abstract method for `IPluginPaths`."""
-
-        return {
-            "publish": self.get_publish_plugin_paths(),
-            "actions": [os.path.join(KITSU_ROOT, "plugins", "launcher")],
-        }
+    def get_launcher_action_paths(self):
+        return [os.path.join(KITSU_ROOT, "plugins", "launcher")]
 
     def get_publish_plugin_paths(self, host_name=None):
         return [os.path.join(KITSU_ROOT, "plugins", "publish")]

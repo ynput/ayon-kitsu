@@ -103,7 +103,7 @@ class ShowInKitsu(LauncherAction):
                     f"{project_url.parent}/{folder_type.lower()}s/{kitsu_id}"
                 )
         else:
-            return project_url
+            return project_url.as_posix()
 
     def _get_asset_type_url(self, project_kitsu_id, folder_label):
         """Get the URL for the asset type page.
