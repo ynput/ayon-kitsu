@@ -105,7 +105,7 @@ class ShowInKitsu(LauncherAction):
         else:
             return project_url.as_posix()
 
-    def _get_asset_type_url(self, project_kitsu_id, folder_label):
+    def _get_asset_type_url(self, project_kitsu_id: str, folder_label: str) -> str:
         """Get the URL for the asset type page.
 
         Meant to be replaced by gazu.asset.get_asset_type_url when available.
@@ -120,8 +120,8 @@ class ShowInKitsu(LauncherAction):
         )
 
     def _get_sequence_url(
-        self, project, project_kitsu_id, kitsu_id, folder_path
-    ):
+        self, project: dict, project_kitsu_id: str, kitsu_id: str, folder_path: Path
+    ) -> str:
         """Get the URL for the sequence page.
 
         Meant to be replaced by gazu.shot.get_sequence_url when available.
