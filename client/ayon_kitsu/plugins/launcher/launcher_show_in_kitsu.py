@@ -45,23 +45,33 @@ class ShowInKitsu(LauncherAction):
 
     def get_url(
         self,
-        project,
-        folder=None,
-        task=None,
-    ):
+        project: dict,
+        folder: dict = None,
+        task: dict = None,
+    ) -> str:
+        """Get the URL for the project, folder, or task.
+
+        Args:
+            project (dict): The project data.
+            folder (dict): The folder data.
+            task (dict): The task data.
+
+        Returns:
+            str: The URL for the project, folder, or task.
+        """
         if not (project_kitsu_id := project["data"].get("kitsuProjectId")):
             raise RuntimeError(
                 f"Project {project['name']} has no connected kitsu id."
             )
+        project_url = Path(
+            gazu.project.get_project_url({"id": project_kitsu_id})
+        )
 
         if task:
             return gazu.task.get_task_url(
                 {"project_id": project_kitsu_id, "id": task.get("kitsuId")}
             )
         elif folder:
-            project_url = Path(
-                gazu.project.get_project_url({"id": project_kitsu_id})
-            )
             folder_type = folder["folderType"]
             folder_path = Path(folder["path"])
             kitsu_id = folder["data"].get("kitsuId")
@@ -92,6 +102,8 @@ class ShowInKitsu(LauncherAction):
                 return (
                     f"{project_url.parent}/{folder_type.lower()}s/{kitsu_id}"
                 )
+        else:
+            return project_url
 
     def _get_asset_type_url(self, project_kitsu_id, folder_label):
         """Get the URL for the asset type page.
