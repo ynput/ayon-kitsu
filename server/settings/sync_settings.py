@@ -88,6 +88,15 @@ class DefaultSyncInfo(BaseSettingsModel):
     )
 
 
+class SyncCasting(BaseSettingsModel):
+    enabled: bool = SettingsField(False, title="Sync casting links")
+    casting_link_type: str = SettingsField(
+        "breakdown",
+        title="Casting link type",
+        regex=NAME_REGEX,
+    )
+
+
 class SyncSettings(BaseSettingsModel):
     """Enabling 'Delete projects' will remove projects on Ayon when they get deleted on Kitsu"""
 
@@ -95,6 +104,10 @@ class SyncSettings(BaseSettingsModel):
     sync_users: SyncUsers = SettingsField(
         default_factory=SyncUsers,
         title="Sync users",
+    )
+    sync_casting: SyncCasting = SettingsField(
+        default_factory=SyncCasting,
+        title="Sync casting",
     )
     default_sync_info: DefaultSyncInfo = SettingsField(
         default_factory=DefaultSyncInfo,
@@ -108,6 +121,10 @@ SYNC_DEFAULT_VALUES = {
         "enabled": False,
         "default_password": "default_password",
         "access_group": "kitsu_group",
+    },
+    "sync_casting": {
+        "enabled": False,
+        "casting_link_type": "breakdown",
     },
     "default_sync_info": {
         "default_task_info": [
