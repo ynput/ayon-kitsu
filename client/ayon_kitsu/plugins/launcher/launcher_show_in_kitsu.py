@@ -1,5 +1,7 @@
+from pathlib import Path
 import webbrowser
 import ayon_api
+import gazu
 
 from ayon_core.pipeline import LauncherAction
 from ayon_core.addon import AddonsManager
@@ -26,30 +28,11 @@ class ShowInKitsu(LauncherAction):
         if not project:
             raise RuntimeError(f"Project {project_name} not found.")
 
-        project_zou_id = project["data"].get("zou_id")
-        if not project_zou_id:
-            raise RuntimeError(
-                f"Project {project_name} has no connected kitsu id."
-            )
-
-        folder_kitsu_id = None
-        folder_type = None
-        task_kitsu_id = None
-        if selection.is_folder_selected:
-            folder_entity = selection.folder_entity
-            folder_kitsu_id = folder_entity["data"].get("kitsuId")
-            folder_type = folder_entity["folderType"]
-
-            if selection.is_task_selected:
-                task_entity = selection.task_entity
-                task_kitsu_id = task_entity["data"].get("kitsuId")
-
         # Define URL
         url = self.get_url(
-            project_zou_id,
-            folder_kitsu_id,
-            folder_type,
-            task_kitsu_id,
+            project,
+            selection.folder_entity if selection.is_folder_selected else None,
+            selection.task_entity if selection.is_task_selected else None,
         )
 
         # Open URL in webbrowser
@@ -62,29 +45,118 @@ class ShowInKitsu(LauncherAction):
 
     def get_url(
         self,
-        project_kitsu_id,
-        folder_kitsu_id=None,
-        folder_type=None,
-        task_id=None,
-    ):
-        shots_url = {"Shots", "Sequence", "Shot"}
-        kitsu_addon = self.get_kitsu_addon()
+        project: dict,
+        folder: dict = None,
+        task: dict = None,
+    ) -> str:
+        """Get the URL for the project, folder, or task.
 
-        # Get kitsu url with /api stripped
-        kitsu_url = kitsu_addon.server_url.rstrip("/api")
+        Args:
+            project (dict): The project data.
+            folder (dict): The folder data.
+            task (dict): The task data.
 
-        sub_url = f"/productions/{project_kitsu_id}"
-        kitsu_type = "shots" if folder_type in shots_url else "assets"
+        Returns:
+            str: The URL for the project, folder, or task.
+        """
+        if not (project_kitsu_id := project["data"].get("kitsuProjectId")):
+            raise RuntimeError(
+                f"Project {project['name']} has no connected kitsu id."
+            )
+        project_url = Path(
+            gazu.project.get_project_url({"id": project_kitsu_id})
+        )
 
-        if task_id:
-            # Go to task page
-            # /productions/{project-id}/{asset_type}/tasks/{task_id}
-            sub_url += f"/{kitsu_type}/tasks/{task_id}"
+        if task:
+            if not (task_id := task.get("kitsuId")):
+                raise RuntimeError(
+                    f"Task {task['name']} has no connected kitsu entity."
+                )
 
-        elif folder_kitsu_id:
-            # Go to asset or shot page
-            # /productions/{project-id}/assets/{entity_id}
-            # /productions/{project-id}/shots/{entity_id}
-            sub_url += f"/{kitsu_type}/{folder_kitsu_id}"
+            return gazu.task.get_task_url(
+                {"project_id": project_kitsu_id, "id": task_id}
+            )
+        elif folder:
+            folder_type = folder["folderType"]
+            folder_path = Path(folder["path"])
+            if not (kitsu_id := folder["data"].get("kitsuId")):
+                raise RuntimeError(
+                    f"Folder {folder['name']} has no connected kitsu entity."
+                )
 
-        return f"{kitsu_url}{sub_url}"
+            if folder_type == "Folder":
+                if len(folder_path.parents) == 1:  # Root folder
+                    return f"{project_url.parent}/{folder['name']}"
+                elif len(folder_path.parents) == 2:  # Asset type
+                    return self._get_asset_type_url(
+                        project_kitsu_id, folder["label"]
+                    )
+                else:  # Asset
+                    return gazu.asset.get_asset_url(
+                        {"project_id": project_kitsu_id, "id": kitsu_id}
+                    )
+            elif folder_type == "Sequence":
+                return self._get_sequence_url(
+                    project, project_kitsu_id, kitsu_id, folder_path
+                )
+            elif folder_type == "Episode":
+                return gazu.shot.get_episode_url(
+                    {"project_id": project_kitsu_id, "id": kitsu_id}
+                )
+            elif folder_type == "Shot":
+                return gazu.shot.get_shot_url(
+                    {"project_id": project_kitsu_id, "id": kitsu_id}
+                )
+            else:
+                return (
+                    f"{project_url.parent}/{folder_type.lower()}s/{kitsu_id}"
+                )
+        else:
+            return project_url.as_posix()
+
+    def _get_asset_type_url(
+        self, project_kitsu_id: str, folder_label: str
+    ) -> str:
+        """Get the URL for the asset type page.
+
+        Meant to be replaced by gazu.asset.get_asset_type_url when available.
+        See https://github.com/cgwire/gazu/issues/392
+        """
+        project_url = Path(
+            gazu.project.get_project_url({"id": project_kitsu_id})
+        )
+        return (
+            f"{project_url.parent}/episodes/all/assets"
+            f"?search=+type=[{folder_label}]"
+        )
+
+    def _get_sequence_url(
+        self,
+        project: dict,
+        project_kitsu_id: str,
+        kitsu_id: str,
+        folder_path: Path,
+    ) -> str:
+        """Get the URL for the sequence page.
+
+        Meant to be replaced by gazu.shot.get_sequence_url when available.
+        See https://github.com/cgwire/gazu/issues/392
+        """
+        if folder_path.parts[1] == "episodes":
+            episode_folder = ayon_api.get_folder_by_path(
+                project["name"], folder_path.parents[0].as_posix()
+            )
+            episode_url = Path(
+                gazu.shot.get_episode_url(
+                    {
+                        "project_id": project_kitsu_id,
+                        "id": episode_folder["data"].get("kitsuId"),
+                    }
+                )
+            )
+            return f"{episode_url.parent}/sequences/{kitsu_id}"
+        else:
+            project_url = Path(
+                gazu.project.get_project_url({"id": project_kitsu_id})
+            )
+            return f"{project_url.parent}/sequences/{kitsu_id}"
