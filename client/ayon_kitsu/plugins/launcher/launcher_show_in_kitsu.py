@@ -68,13 +68,22 @@ class ShowInKitsu(LauncherAction):
         )
 
         if task:
+            if not (task_id := task.get("kitsuId")):
+                raise RuntimeError(
+                    f"Task {task['name']} has no connected kitsu entity."
+                )
+
             return gazu.task.get_task_url(
-                {"project_id": project_kitsu_id, "id": task.get("kitsuId")}
+                {"project_id": project_kitsu_id, "id": task_id}
             )
         elif folder:
             folder_type = folder["folderType"]
             folder_path = Path(folder["path"])
-            kitsu_id = folder["data"].get("kitsuId")
+            if not (kitsu_id := folder["data"].get("kitsuId")):
+                raise RuntimeError(
+                    f"Folder {folder['name']} has no connected kitsu entity."
+                )
+
             if folder_type == "Folder":
                 if len(folder_path.parents) == 1:  # Root folder
                     return f"{project_url.parent}/{folder['name']}"
