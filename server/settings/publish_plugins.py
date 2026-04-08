@@ -104,6 +104,13 @@ class IntegrateKitsuNotes(BaseSettingsModel):
         title="Custom Comment Template",
     )
 
+class IntegrateKitsuReviews(BaseSettingsModel):
+    match_version_number: bool = SettingsField(
+        title="Match version number",
+        description="If enabled refrain from publishing reviewables directly" \
+        " into Kitsu without passing through AYON, as this can desynchronize" \
+        " product version and revision number and cause errors during publish."
+    )
 
 class PublishPlugins(BaseSettingsModel):
     CollectKitsuFamily: CollectKitsuFamilyPluginModel = SettingsField(
@@ -113,6 +120,10 @@ class PublishPlugins(BaseSettingsModel):
     IntegrateKitsuNote: IntegrateKitsuNotes = SettingsField(
         default_factory=IntegrateKitsuNotes,
         title="Integrate Kitsu Note"
+    )
+    IntegrateKitsuReview: IntegrateKitsuReviews = SettingsField(
+        default_factory=IntegrateKitsuReviews,
+        title="Integrate Kitsu Review"
     )
 
 
@@ -294,5 +305,8 @@ PUBLISH_DEFAULT_VALUES = {
 | family | `{family}` |
 | name | `{name}` |""",
         },
-    }
+    },
+    "IntegrateKitsuReview": {
+        "match_version_number": True,
+    },
 }
