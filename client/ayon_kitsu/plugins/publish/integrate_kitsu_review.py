@@ -45,5 +45,10 @@ class IntegrateKitsuReview(KitsuPublishInstancePlugin):
                 comment=comment_id,
                 preview_file_path=review_path,
                 normalize_movie=True,
+                revision=(
+                    instance.data["version"]
+                    if self.match_version_number
+                    else None
+                ),
             )
             self.log.info("Review upload on comment")
