@@ -107,9 +107,12 @@ class IntegrateKitsuNotes(BaseSettingsModel):
 class IntegrateKitsuReviews(BaseSettingsModel):
     match_version_number: bool = SettingsField(
         title="Match version number",
-        description="If enabled refrain from publishing reviewables directly" \
-        " into Kitsu without passing through AYON, as this can desynchronize" \
-        " product version and revision number and cause errors during publish."
+        description=(
+            "Set Kitsu note revision to match AYON version number.\n\n"
+            "Note: If enabled avoid uploading reviewables directly"
+            " into Kitsu without passing through AYON, as this can desynchronize"
+            " product version and revision number and cause errors during publish."
+        )
     )
 
 class PublishPlugins(BaseSettingsModel):
