@@ -13,6 +13,8 @@ class IntegrateKitsuReview(KitsuPublishInstancePlugin):
     families = ["kitsu"]
     optional = True
 
+    match_version_number = True
+
     def process(self, instance):
         # Check comment has been created
         comment_id = instance.data.get("kitsuComment", {}).get("id")
