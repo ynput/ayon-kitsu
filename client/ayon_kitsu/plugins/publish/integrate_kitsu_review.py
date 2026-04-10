@@ -13,6 +13,8 @@ class IntegrateKitsuReview(KitsuPublishInstancePlugin):
     families = ["kitsu"]
     optional = True
 
+    match_version_number = True
+
     def process(self, instance):
         # Check comment has been created
         comment_id = instance.data.get("kitsuComment", {}).get("id")
@@ -45,6 +47,10 @@ class IntegrateKitsuReview(KitsuPublishInstancePlugin):
                 comment=comment_id,
                 preview_file_path=review_path,
                 normalize_movie=True,
-                revision=instance.data["version"],
+                revision=(
+                    instance.data["version"]
+                    if self.match_version_number
+                    else None
+                ),
             )
             self.log.info("Review upload on comment")
