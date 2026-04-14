@@ -7,10 +7,9 @@ on:
         description: "Run workflow for this PR number"
         required: true
       project_id:
-        type: string
+        type: number
         description: "Github Project Number"
-        required: true
-        default: "16"
+        required: false
   pull_request:
     types:
       - opened
@@ -40,7 +39,7 @@ jobs:
     uses: ynput/ops-repo-automation/.github/workflows/pr_to_project.yml@main
     with:
       repo: "${{ github.repository }}"
-      project_id: ${{ inputs.project_id != '' && fromJSON(inputs.project_id) || 16 }}
+      project_id: ${{ inputs.project_id }}
       pull_request_number: ${{ github.event.pull_request.number ||  fromJSON(inputs.pr_number) }}
     secrets:
       # INFO fallback to default `github.token` is required for PRs from forks
