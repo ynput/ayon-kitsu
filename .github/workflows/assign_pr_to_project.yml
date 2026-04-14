@@ -7,9 +7,10 @@ on:
         description: "Run workflow for this PR number"
         required: true
       project_id:
-        type: number
+        type: string
         description: "Github Project Number"
         required: false
+        default: ""
   pull_request:
     types:
       - opened
