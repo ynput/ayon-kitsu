@@ -140,11 +140,11 @@ class KitsuProcessor:
         gazu_listener_thread.start()
 
     def run_gazu_listeners(self):
-        gazu.events.add_listener(
-            self.event_client,
-            "project:update",
-            lambda data: update_project(self, data),
-        )
+        # gazu.events.add_listener(
+        #     self.event_client,
+        #     "project:update",
+        #     lambda data: update_project(self, data),
+        # )
         gazu.events.add_listener(
             self.event_client,
             "project:delete",

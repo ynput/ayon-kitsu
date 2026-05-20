@@ -53,6 +53,7 @@ KitsuEntityType = Literal[
     "Person",
     "Project",
     "SyncCasting",
+    "TaskStatus"
 ]
 
 
@@ -317,7 +318,7 @@ async def sync_project(
     entity_dict: "EntityDict",
     mock: bool = False,
 ):
-    logging.info("sync_project")
+    logging.info("@@@@@@@sync_project")
     (entity_id,) = required_values(entity_dict, ["id"])
 
     if not project:
@@ -783,6 +784,12 @@ async def sync_casting(
                 f"(asset {asset_kitsu_id} removed from Kitsu)"
             )
 
+async def sync_task_statuses(
+    project: "ProjectEntity",
+    entity_dict: "EntityDict",
+):
+    status_name = entity_dict["name"]
+    await ensure_task_status(project, status_name)
 
 async def push_entities(
     addon: "KitsuAddon",
@@ -846,6 +853,9 @@ async def push_entities(
                 )
             else:
                 logging.warning("SyncCasting received without project context")
+        elif entity_dict["type"] == "TaskStatus":
+            if project:
+                await sync_task_statuses(project, entity_dict)
         elif entity_dict["type"] != "Task":
             await sync_folder(
                 addon,

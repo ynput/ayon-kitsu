@@ -1,6 +1,6 @@
 import sys
 import time
-
+import os
 from nxtools import (
     critical_error,
     log_traceback,
@@ -25,6 +25,7 @@ def main():
 if __name__ == "__main__":
     err = None
     try:
+        print(os.getenv("AYON_BUNDLE_NAME"))
         processor = KitsuProcessor()
     except (KitsuServerError, KitsuSettingsError) as e:
         logging.error(str(e))

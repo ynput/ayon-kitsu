@@ -1,6 +1,5 @@
 import time
 from typing import TYPE_CHECKING, Any
-
 import ayon_api
 import gazu
 from nxtools import logging
@@ -11,6 +10,7 @@ if TYPE_CHECKING:
 from .utils import (
     get_asset_types,
     get_statuses,
+    get_statuses_for_project,
     get_task_types,
     preprocess_asset,
     preprocess_task,
@@ -157,14 +157,18 @@ def project_full_sync(
         project_name (str): The Ayon
     """
     start_time = time.time()
-    logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
+    logging.info(f"@@@@@ Syncing kitsu project {kitsu_project_id} to {project_name}")
     asset_types = get_asset_types(kitsu_project_id)
     task_statuses = get_statuses()
+    task_statuses_for_project = get_statuses_for_project(kitsu_project_id)
+    logging.debug(f"@@@@@@ task_statuses_for_project{task_statuses_for_project} SyncCasting entities")
     task_types = get_task_types(kitsu_project_id)
     persons = gazu.person.all_persons()
 
     assets = get_assets(kitsu_project_id, asset_types)
     tasks = get_tasks(kitsu_project_id, task_types, task_statuses)
+    task_status_names = set(t.get("task_status_name") for t in tasks if t.get("task_status_name"))
+    logging.info(f"@@@@@@ task status names used: {task_status_names}")
     sync_casting_settings = (
         parent.settings.get("sync_settings", {})
         .get("sync_casting", {})
@@ -183,8 +187,21 @@ def project_full_sync(
     except Exception:
         concepts = []
 
+    statuses = [
+        {
+            "id": status_id,
+            "type": "TaskStatus",
+            "name": status_name,
+        }
+        for status_id, status_name in task_statuses_for_project.items()
+    ]
+    logging.debug(f"@@@@@@ task_statuses_for_project{statuses}")
+
+    kitsu_project = gazu.project.get_project(kitsu_project_id)
+    kitsu_project["type"] = "Project"
+    
     entities = (
-        persons + assets + episodes + seqs + shots + edits + concepts + tasks
+        [kitsu_project] + persons + assets + episodes + seqs + shots + edits + concepts + tasks + statuses
     )
     if casting_enabled:
         entities += get_casting_links(shots, assets)
@@ -192,6 +209,7 @@ def project_full_sync(
     for entity in entities:
         entity["ayon_server_url"] = ayon_api.get_base_url()
 
+    logging.info(f"@@@@@@ sending project entity: {kitsu_project.get('type')} {kitsu_project.get('id')}")
     ayon_api.post(
         f"{parent.entrypoint}/push",
         project_name=project_name,

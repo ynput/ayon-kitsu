@@ -14,6 +14,7 @@ def get_asset_types(kitsu_project_id: str) -> dict[str, str]:
 
 def get_task_types(kitsu_project_id: str) -> dict[str, str]:
     raw_task_types = gazu.task.all_task_types_for_project(kitsu_project_id)
+    # print(f"@@@@@@@@@@@@@@@ raw_task_types\n{raw_task_types[0]}\n")
     kitsu_task_types = {}
     for task_type in raw_task_types:
         kitsu_task_types[task_type["id"]] = task_type["name"]
@@ -22,11 +23,18 @@ def get_task_types(kitsu_project_id: str) -> dict[str, str]:
 
 def get_statuses() -> dict[str, str]:
     raw_statuses = gazu.task.all_task_statuses()
+    # print(f"@@@@@@@@@@@@@@@@@@@@@@ raw_statuses\n{raw_statuses}\n")
     kitsu_statuses = {}
     for status in raw_statuses:
         kitsu_statuses[status["id"]] = status["name"]
     return kitsu_statuses
 
+def get_statuses_for_project(kitsu_project_id: str) -> dict[str, str]:
+    raw_statuses = gazu.task.all_task_statuses_for_project(kitsu_project_id)
+    kitsu_statuses = {}
+    for status in raw_statuses:
+        kitsu_statuses[status["id"]] = status["name"]
+    return kitsu_statuses
 
 def preprocess_asset(
     kitsu_project_id: str,
