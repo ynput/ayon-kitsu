@@ -318,7 +318,6 @@ async def sync_project(
     entity_dict: "EntityDict",
     mock: bool = False,
 ):
-    logging.info("@@@@@@@sync_project")
     (entity_id,) = required_values(entity_dict, ["id"])
 
     if not project:

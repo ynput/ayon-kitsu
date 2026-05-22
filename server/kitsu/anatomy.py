@@ -156,9 +156,9 @@ async def parse_statuses(
         result.append(status)
 
     if ayon_project:
-        kitsu_names = {s.name for s in result}
+        kitsu_statuses_names = {s.name for s in result}
         for existing_status in ayon_project.statuses:
-            if existing_status["name"] not in kitsu_names:
+            if existing_status["name"] not in kitsu_statuses_names:
                 result.append(Status(**existing_status))
 
     return result
