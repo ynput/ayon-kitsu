@@ -122,8 +122,8 @@ async def parse_statuses(
         color
 
     """
-
-    task_status_response = await addon.kitsu.get(f"data/projects/{kitsu_project_id}/settings/task-status")
+    # Get the statuses from the project instead of studio
+    task_status_response = await addon.kitsu.get(f"data/projects/{kitsu_project_id}/settings/task-status") 
     if task_status_response.status_code != 200:
         raise AyonException("Could not get Kitsu statuses")
 
@@ -155,6 +155,7 @@ async def parse_statuses(
         )
         result.append(status)
 
+    # Ensure that status list gets every linked Ayon statuses
     if ayon_project:
         kitsu_statuses_names = {s.name for s in result}
         for existing_status in ayon_project.statuses:

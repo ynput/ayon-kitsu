@@ -27,12 +27,22 @@ def get_statuses() -> dict[str, str]:
         kitsu_statuses[status["id"]] = status["name"]
     return kitsu_statuses
 
+
 def get_statuses_for_project(kitsu_project_id: str) -> dict[str, str]:
+    """Get all the statuses assigned to a kistu project.
+
+    Args:
+        kitsu_project_id (str): The Kitsu project id
+
+    Returns:
+        dict: Dictionary of kitsu statuses
+    """
     raw_statuses = gazu.task.all_task_statuses_for_project(kitsu_project_id)
     kitsu_statuses = {}
     for status in raw_statuses:
         kitsu_statuses[status["id"]] = status["name"]
     return kitsu_statuses
+
 
 def preprocess_asset(
     kitsu_project_id: str,

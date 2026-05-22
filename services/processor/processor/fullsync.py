@@ -194,9 +194,18 @@ def project_full_sync(
 
     kitsu_project = gazu.project.get_project(kitsu_project_id)
     kitsu_project["type"] = "Project"
-    
+
     entities = (
-        [kitsu_project] + persons + assets + episodes + seqs + shots + edits + concepts + tasks + statuses
+        [kitsu_project]
+        + persons
+        + assets
+        + episodes
+        + seqs
+        + shots
+        + edits
+        + concepts
+        + tasks
+        + statuses
     )
     if casting_enabled:
         entities += get_casting_links(shots, assets)
