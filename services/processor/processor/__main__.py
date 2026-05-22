@@ -1,5 +1,6 @@
 import sys
 import time
+
 from nxtools import (
     critical_error,
     log_traceback,

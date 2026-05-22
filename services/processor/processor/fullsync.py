@@ -1,5 +1,6 @@
 import time
 from typing import TYPE_CHECKING, Any
+
 import ayon_api
 import gazu
 from nxtools import logging
@@ -192,12 +193,8 @@ def project_full_sync(
         for status_id, status_name in task_statuses_for_project.items()
     ]
 
-    kitsu_project = gazu.project.get_project(kitsu_project_id)
-    kitsu_project["type"] = "Project"
-
     entities = (
-        [kitsu_project]
-        + persons
+        persons
         + assets
         + episodes
         + seqs
