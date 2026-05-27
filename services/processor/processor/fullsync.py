@@ -158,6 +158,7 @@ def project_full_sync(
         project_name (str): The Ayon
     """
     start_time = time.time()
+    logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
     asset_types = get_asset_types(kitsu_project_id)
     task_statuses = get_statuses()
     task_statuses_for_project = get_statuses_for_project(kitsu_project_id)
