@@ -105,6 +105,13 @@ class IntegrateKitsuNotes(BaseSettingsModel):
     )
 
 class IntegrateKitsuReviews(BaseSettingsModel):
+    normalize_movie: bool = SettingsField(
+        title="Normalize movie",
+        description=(
+            "When enabled, Kitsu will transcode uploaded movie previews"
+            " for web playback."
+        ),
+    )
     match_version_number: bool = SettingsField(
         title="Match version number",
         description=(
@@ -310,6 +317,7 @@ PUBLISH_DEFAULT_VALUES = {
         },
     },
     "IntegrateKitsuReview": {
+        "normalize_movie": True,
         "match_version_number": True,
     },
 }
