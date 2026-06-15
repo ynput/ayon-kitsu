@@ -288,17 +288,6 @@ async def sync_person(
                     json=payload,
                     headers=headers,
                 )
-            # Rename the user
-            # TODO: We should discourage renaming users.
-            # Maybe just change the fullName in the case there's a typo,
-            # but changing username may have weird side effects.
-            payload = {"newName": username}
-            async with httpx.AsyncClient() as client:
-                await client.patch(
-                    f"{ayon_server_url}/api/users/{target_user.name}/rename",
-                    json=payload,
-                    headers=headers,
-                )
         except Exception as e:
             print(e)
     else:  # Create user

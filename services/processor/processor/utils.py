@@ -225,6 +225,7 @@ def person_needs_sync(
     return (
         existing_ayon_user.get("full_name") != person.get("full_name")
         or existing_ayon_user.get("active") != person.get("active")
+        or existing_ayon_user.get("email") != person.get("email", "")
     )
 
 
