@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 from .utils import (
     get_asset_types,
+    get_persons,
     get_statuses,
     get_task_types,
     preprocess_asset,
@@ -161,7 +162,7 @@ def project_full_sync(
     asset_types = get_asset_types(kitsu_project_id)
     task_statuses = get_statuses()
     task_types = get_task_types(kitsu_project_id)
-    persons = gazu.person.all_persons()
+    persons = get_persons(parent.entrypoint)
 
     assets = get_assets(kitsu_project_id, asset_types)
     tasks = get_tasks(kitsu_project_id, task_types, task_statuses)
