@@ -81,7 +81,7 @@ def preprocess_task(
 
 def _remove_accents(s: str) -> str:
     """Strip diacritics and normalize special characters for AYON usernames.
-    
+
     Args:
         s: The string to remove accents from.
 
@@ -91,9 +91,18 @@ def _remove_accents(s: str) -> str:
     nfkd = unicodedata.normalize("NFKD", s)
     result = "".join(c for c in nfkd if not unicodedata.combining(c))
     replacement_map = {
-        "Æ": "AE", "Ð": "D", "Ø": "O", "Þ": "TH",
-        "ß": "ss", "æ": "ae", "ð": "d", "ø": "o", "þ": "th",
-        "Œ": "OE", "œ": "oe", "ƒ": "f",
+        "Æ": "AE",
+        "Ð": "D",
+        "Ø": "O",
+        "Þ": "TH",
+        "ß": "ss",
+        "æ": "ae",
+        "ð": "d",
+        "ø": "o",
+        "þ": "th",
+        "Œ": "OE",
+        "œ": "oe",
+        "ƒ": "f",
     }
     for k, v in replacement_map.items():
         result = result.replace(k, v)
@@ -159,7 +168,8 @@ def build_ayon_user_lookups(
     """Build lookup tables from the user sync-info list.
 
     Args:
-        users: List of user dicts as returned by :func:`get_ayon_user_sync_info`.
+        users: List of user dicts as returned by
+            :func:`get_ayon_user_sync_info`.
 
     Returns:
         Three dicts keyed by kitsu_id, email, and AYON username respectively.
@@ -186,7 +196,7 @@ def person_needs_sync(
     """Return whether a Kitsu person should be pushed to AYON.
 
     Matching priority:
-    1. ``kitsuId`` — the canonical link once a user has been synced at least once.
+    1. ``kitsuId`` — canonical link once a user has been synced at least once.
     2. Email — fallback for users synced before kitsuId tracking.
     3. Derived username — if a username-only match is found, it means
        this is a duplicate Kitsu account for the same AYON user and is skipped.
@@ -213,7 +223,11 @@ def person_needs_sync(
 
     id_match_ayon_user = ayon_users_by_kitsu_id.get(kitsu_id)
     email_match_ayon_user = ayon_users_by_email.get(email)
-    existing_ayon_user = id_match_ayon_user or email_match_ayon_user or ayon_users_by_name.get(username)
+    existing_ayon_user = (
+        id_match_ayon_user
+        or email_match_ayon_user
+        or ayon_users_by_name.get(username)
+    )
 
     if not existing_ayon_user:
         return True
@@ -233,7 +247,7 @@ def get_persons(entrypoint: str) -> list[dict]:
     """Return Kitsu persons that are new or changed compared to AYON users.
 
     Args:
-        entrypoint: Base addon REST path forwarded to :func:`get_ayon_user_sync_info`.
+        entrypoint: REST forwarded to :func:`get_ayon_user_sync_info`.
     """
     users = get_ayon_user_sync_info(entrypoint)
     by_kitsu_id, by_email, by_name = build_ayon_user_lookups(users)
