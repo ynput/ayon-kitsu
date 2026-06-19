@@ -199,7 +199,12 @@ def create_or_update_task(parent: "KitsuProcessor", data: dict[str, str]):
         return  # do nothing as this kitsu and ayon project are not paired
 
     entity = gazu.task.get_task(data["task_id"])
-    entity = utils.preprocess_task(entity["project_id"], entity)
+    entity = utils.preprocess_task(
+        entity,
+        utils.get_task_types(entity["project_id"]),
+        utils.get_statuses(),
+        utils.get_ayon_users_by_email()
+    )
 
     # Add ayon base url so we can use it in REST calls later on
     entity["ayon_server_url"] = ayon_api.get_base_url()

@@ -28,6 +28,17 @@ def get_statuses() -> dict[str, str]:
     return kitsu_statuses
 
 
+def get_ayon_users_by_email() -> dict[str, str]:
+    """Get AYON users by email.
+
+    Returns:
+        dict[str, str]: A dictionary of AYON users by email.
+    """
+    return {
+        user["attrib"]["email"]: user["name"] for user in ayon_api.get_users()
+    }
+
+
 def preprocess_asset(
     kitsu_project_id: str,
     asset: dict[str, str],
@@ -42,17 +53,11 @@ def preprocess_asset(
 
 
 def preprocess_task(
-    kitsu_project_id: str,
     task: dict[str, str | list[str]],
-    task_types: dict[str, str | list[str]] = {},
-    statuses: dict[str, str] = {},
+    task_types: dict[str, str | list[str]],
+    statuses: dict[str, str],
+    ayon_users_by_email: dict[str, str],
 ) -> dict[str, str | list[str]]:
-    if not task_types:
-        task_types = get_task_types(kitsu_project_id)
-
-    if not statuses:
-        statuses = get_statuses()
-
     if "task_type_id" in task and task["task_type_id"] in task_types:
         task["task_type_name"] = task_types[task["task_type_id"]]
 
@@ -62,14 +67,11 @@ def preprocess_task(
     if "name" in task and "task_type_name" in task and task["name"] == "main":
         task["name"] = task["task_type_name"].lower()
 
-    # Match the assigned ayon user with the assigned kitsu email
-    ayon_users = {
-        user["attrib"]["email"]: user["name"] for user in ayon_api.get_users()
-    }
     task_emails = {user["email"] for user in task["persons"]}
-    task["assignees"] = []
-    task["assignees"].extend(
-        ayon_users[email] for email in task_emails if email in ayon_users
-    )
+    task["assignees"] = [
+        ayon_users_by_email[email]
+        for email in task_emails
+        if email in ayon_users_by_email
+    ]
 
     return task
