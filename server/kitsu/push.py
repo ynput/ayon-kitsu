@@ -1,5 +1,6 @@
 import json
 import time
+import asyncio
 from typing import TYPE_CHECKING, Any, Literal, get_args
 
 import httpx
@@ -935,6 +936,36 @@ async def remove_entities(
             )
             if not folder:
                 continue
+
+            link_type = (
+                settings.sync_settings.sync_casting.casting_link_type
+                or "breakdown"
+            )
+
+            async with asyncio.TaskGroup() as group:
+                for link in await get_links_for_output(
+                    project.name,
+                    folder.id,
+                    f"{link_type}|folder|folder",
+                ):
+                    # Try to get asset_kitsu_id from link data
+                    link_data = link.get("data")
+                    kitsu_asset_id = (
+                        link_data["kitsuAssetId"] if link_data else None
+                    )
+
+                    if (
+                        kitsu_asset_id
+                        and folder.data.get("kitsuId") == kitsu_asset_id
+                    ):
+                        group.create_task(
+                            delete_entity_link(
+                                project.name,
+                                user,
+                                entity_dict["ayon_server_url"],
+                                link["id"],
+                            )
+                        )
 
             await delete_folder(
                 project_name=project.name,
