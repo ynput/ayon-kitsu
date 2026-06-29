@@ -33,6 +33,7 @@ from .utils import (
     update_folder,
     update_task,
 )
+from ayon_api import get_products, delete_product
 
 
 from .addon_helpers import to_username, required_values
@@ -966,6 +967,11 @@ async def remove_entities(
                                 link["id"],
                             )
                         )
+
+            for product in get_products(
+                project.name, folder_ids=[folder.id], fields=["id"]
+            ):
+                delete_product(project.name, product["id"])
 
             await delete_folder(
                 project_name=project.name,
