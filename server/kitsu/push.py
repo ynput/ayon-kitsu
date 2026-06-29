@@ -11,6 +11,7 @@ from ayon_server.entities import FolderEntity, ProjectEntity, UserEntity
 from ayon_server.helpers.deploy_project import anatomy_to_project_data
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Field, OPModel
+from ayon_server.products import delete_product
 
 from .anatomy import get_kitsu_project_anatomy, parse_attrib
 from .constants import (
@@ -33,7 +34,6 @@ from .utils import (
     update_folder,
     update_task,
 )
-from ayon_api import get_products, delete_product
 
 
 from .addon_helpers import to_username, required_values
@@ -968,10 +968,9 @@ async def remove_entities(
                             )
                         )
 
-            for product in get_products(
-                project.name, folder_ids=[folder.id], fields=["id"]
-            ):
-                delete_product(project.name, product["id"])
+            for product in folder.data.get("products"):
+                logging.info(f"deleting product {product.get('name')} for folder {folder.id}")
+                delete_product(user, project.name, product["id"])
 
             await delete_folder(
                 project_name=project.name,
