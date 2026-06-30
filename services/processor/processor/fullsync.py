@@ -146,6 +146,42 @@ def get_casting_links(
     return casting_entities
 
 
+# Generous timeout for the bulk /push request. The server processes the whole
+# entity batch in a single request which can take over the ayon_api default
+# of 10s for a full sync. Too short a timeout makes the client stop and retry,
+# causing the server to reprocess the entire batch repeatedly.
+PUSH_TIMEOUT = 600
+
+
+def push_entities(
+    parent: "KitsuProcessor",
+    project_name: str,
+    entities: list[dict[str, Any]],
+):
+    """POST entities to the addon /push endpoint.
+
+    Uses a long timeout and disables retries: the push is a large,
+    non-idempotent bulk operation, so re-sending it on a slow
+    connection would make the server reprocess every entity again.
+
+    Args:
+        parent: The parent processor
+        project_name: The Ayon project name
+        entities: The list of entities to push
+    """
+    con = ayon_api.get_server_api_connection()
+    prev_max_retries = con.max_retries
+    con.set_max_retries(1)
+    try:
+        return con.raw_post(
+            f"{parent.entrypoint}/push",
+            json={"project_name": project_name, "entities": entities},
+            timeout=PUSH_TIMEOUT,
+        )
+    finally:
+        con.set_max_retries(prev_max_retries)
+
+
 def project_full_sync(
     parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
 ):
@@ -192,11 +228,7 @@ def project_full_sync(
     for entity in entities:
         entity["ayon_server_url"] = ayon_api.get_base_url()
 
-    ayon_api.post(
-        f"{parent.entrypoint}/push",
-        project_name=project_name,
-        entities=entities,
-    )
+    push_entities(parent, project_name, entities)
     logging.info(
         f"Full Sync for project {project_name}"
         f" completed in {time.time() - start_time}s"
