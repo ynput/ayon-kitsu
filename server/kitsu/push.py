@@ -936,7 +936,7 @@ async def remove_entities(
             if not folder:
                 continue
 
-            folder.delete(force=True)
+            await folder.delete(force=True)
             logging.info(f"Deleted {entity_dict['type']} '{folder.name}'")
             folders[entity_dict["id"]] = folder.id
 
