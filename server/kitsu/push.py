@@ -53,6 +53,7 @@ KitsuEntityType = Literal[
     "Person",
     "Project",
     "SyncCasting",
+    "TaskStatus",
 ]
 
 
@@ -819,9 +820,7 @@ async def push_entities(
             continue
 
         if entity_dict["type"] == "Project":
-            await sync_project(
-                addon, user, project, entity_dict, payload.mock
-            )
+            await sync_project(addon, user, project, entity_dict, payload.mock)
         elif entity_dict["type"] == "Person":
             if settings.sync_settings.sync_users.enabled:
                 await create_access_group(
@@ -846,6 +845,10 @@ async def push_entities(
                 )
             else:
                 logging.warning("SyncCasting received without project context")
+        #
+        elif entity_dict["type"] == "TaskStatus" and project:
+            status_name = entity_dict["name"]
+            await ensure_task_status(project, status_name)
         elif entity_dict["type"] != "Task":
             await sync_folder(
                 addon,

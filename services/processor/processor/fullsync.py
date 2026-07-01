@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 from .utils import (
     get_asset_types,
     get_statuses,
+    get_statuses_for_project,
     get_task_types,
     preprocess_asset,
     preprocess_task,
@@ -160,6 +161,7 @@ def project_full_sync(
     logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
     asset_types = get_asset_types(kitsu_project_id)
     task_statuses = get_statuses()
+    task_statuses_for_project = get_statuses_for_project(kitsu_project_id)
     task_types = get_task_types(kitsu_project_id)
     persons = gazu.person.all_persons()
 
@@ -183,8 +185,25 @@ def project_full_sync(
     except Exception:
         concepts = []
 
+    statuses = [
+        {
+            "id": status_id,
+            "type": "TaskStatus",
+            "name": status_name,
+        }
+        for status_id, status_name in task_statuses_for_project.items()
+    ]
+
     entities = (
-        persons + assets + episodes + seqs + shots + edits + concepts + tasks
+        persons
+        + assets
+        + episodes
+        + seqs
+        + shots
+        + edits
+        + concepts
+        + tasks
+        + statuses
     )
     if casting_enabled:
         entities += get_casting_links(shots, assets)
