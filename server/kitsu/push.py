@@ -1,6 +1,5 @@
 import json
 import time
-import asyncio
 from typing import TYPE_CHECKING, Any, Literal, get_args
 
 import httpx
@@ -936,11 +935,6 @@ async def remove_entities(
             )
             if not folder:
                 continue
-
-            link_type = (
-                settings.sync_settings.sync_casting.casting_link_type
-                or "breakdown"
-            )
 
             folder.delete(force=True)
             logging.info(f"Deleted {entity_dict['type']} '{folder.name}'")
