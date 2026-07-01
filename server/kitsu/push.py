@@ -11,7 +11,6 @@ from ayon_server.entities import FolderEntity, ProjectEntity, UserEntity
 from ayon_server.helpers.deploy_project import anatomy_to_project_data
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Field, OPModel
-from ayon_server.products import delete_product
 
 from .anatomy import get_kitsu_project_anatomy, parse_attrib
 from .constants import (
@@ -943,40 +942,7 @@ async def remove_entities(
                 or "breakdown"
             )
 
-            async with asyncio.TaskGroup() as group:
-                for link in await get_links_for_output(
-                    project.name,
-                    folder.id,
-                    f"{link_type}|folder|folder",
-                ):
-                    # Try to get asset_kitsu_id from link data
-                    link_data = link.get("data")
-                    kitsu_asset_id = (
-                        link_data["kitsuAssetId"] if link_data else None
-                    )
-
-                    if (
-                        kitsu_asset_id
-                        and folder.data.get("kitsuId") == kitsu_asset_id
-                    ):
-                        group.create_task(
-                            delete_entity_link(
-                                project.name,
-                                user,
-                                entity_dict["ayon_server_url"],
-                                link["id"],
-                            )
-                        )
-
-            for product in folder.data.get("products"):
-                logging.info(f"deleting product {product.get('name')} for folder {folder.id}")
-                delete_product(user, project.name, product["id"])
-
-            await delete_folder(
-                project_name=project.name,
-                folder_id=folder.id,
-                user=user,
-            )
+            folder.delete(force=True)
             logging.info(f"Deleted {entity_dict['type']} '{folder.name}'")
             folders[entity_dict["id"]] = folder.id
 
