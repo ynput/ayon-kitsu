@@ -21,7 +21,6 @@ from .utils import (
     create_folder,
     create_task,
     delete_entity_link,
-    delete_folder,
     delete_task,
     get_folder_by_kitsu_id,
     get_links_for_output,
