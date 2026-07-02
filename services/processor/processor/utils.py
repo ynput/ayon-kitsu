@@ -223,17 +223,18 @@ def person_needs_sync(
 
     id_match_ayon_user = ayon_users_by_kitsu_id.get(kitsu_id)
     email_match_ayon_user = ayon_users_by_email.get(email)
-    existing_ayon_user = (
-        id_match_ayon_user
-        or email_match_ayon_user
-        or ayon_users_by_name.get(username)
-    )
+    name_match_ayon_user = ayon_users_by_name.get(username)
+    existing_ayon_user = id_match_ayon_user or email_match_ayon_user or name_match_ayon_user
 
     if not existing_ayon_user:
         return True
-    elif not id_match_ayon_user and not email_match_ayon_user:
-        # Username-only match — duplicate Kitsu account, always skip.
-        # i.e two "John Doe" (username `john.doe`) users with different emails.
+
+    # Backfill kitsu_id on legacy users matched by email/username.
+    if not id_match_ayon_user and not existing_ayon_user.get("kitsu_id"):
+        return True
+
+    if name_match_ayon_user and not id_match_ayon_user and not email_match_ayon_user:
+        # Username-only match with an already-linked user => duplicate Kitsu account.
         return False
 
     return (
