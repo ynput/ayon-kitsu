@@ -1,7 +1,40 @@
 """ utils shared between fullsync.py and update_from_kitsu.py """
 
+from typing import Iterable, Optional
+
 import ayon_api
 import gazu
+
+
+def get_ayon_folders_by_kitsu_ids(
+    project_name: str,
+    kitsu_ids: set[str],
+    folder_types: Optional[Iterable[str]] = None,
+) -> dict[str, dict]:
+    """Find AYON folders by their stored Kitsu ids.
+
+    Args:
+        project_name: The name of the AYON project.
+        kitsu_ids: Kitsu ids of the folders to find.
+        folder_types: An optional iterable of folder types to filter by.
+
+    Returns:
+        Mapping of kitsuId -> AYON folder dict for ids that were found.
+    """
+    result: dict[str, dict] = {}
+    for folder in ayon_api.get_folders(
+        project_name,
+        folder_types=folder_types,
+        fields={"id", "name", "parentId", "folderType", "data"},
+    ):
+        folder_kitsu_id = (folder.get("data") or {}).get("kitsuId")
+        if folder_kitsu_id in kitsu_ids:
+            result[folder_kitsu_id] = folder
+
+            # Stop if we have found all the folders we need
+            if len(result) == len(kitsu_ids):
+                break
+    return result
 
 
 def get_asset_types(kitsu_project_id: str) -> dict[str, str]:
