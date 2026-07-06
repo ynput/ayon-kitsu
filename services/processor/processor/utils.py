@@ -1,5 +1,7 @@
 """ utils shared between fullsync.py and update_from_kitsu.py """
 
+from typing import Any
+
 import ayon_api
 import gazu
 
@@ -53,11 +55,11 @@ def preprocess_asset(
 
 
 def preprocess_task(
-    task: dict[str, str | list[str]],
-    task_types: dict[str, str | list[str]],
+    task: dict[str, Any],
+    task_types: dict[str, str],
     statuses: dict[str, str],
     ayon_users_by_email: dict[str, str],
-) -> dict[str, str | list[str]]:
+) -> dict[str, Any]:
     if "task_type_id" in task and task["task_type_id"] in task_types:
         task["task_type_name"] = task_types[task["task_type_id"]]
 

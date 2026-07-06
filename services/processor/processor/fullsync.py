@@ -31,12 +31,14 @@ def get_tasks(
     kitsu_project_id: str,
     task_types: dict[str, str],
     task_statuses: dict[str, str],
+    persons: list[dict[str, Any]],
 ) -> list[dict[str, str]]:
     persons_by_id: dict[str, dict] = {
-        p["id"]: p for p in gazu.person.all_persons()
+        p["id"]: p for p in persons
     }
 
     tasks: list[dict[str, str]] = []
+    ayon_users_by_email = get_ayon_users_by_email()
     for record in gazu.task.all_tasks_for_project(kitsu_project_id):
         record["persons"] = [
             {"email": persons_by_id[assignee_id]["email"]}
@@ -48,7 +50,7 @@ def get_tasks(
                 record,
                 task_types,
                 task_statuses,
-                get_ayon_users_by_email(),
+                ayon_users_by_email,
             )
         )
     return tasks
@@ -172,7 +174,7 @@ def project_full_sync(
     persons = gazu.person.all_persons()
 
     assets = get_assets(kitsu_project_id, asset_types)
-    tasks = get_tasks(kitsu_project_id, task_types, task_statuses)
+    tasks = get_tasks(kitsu_project_id, task_types, task_statuses, persons)
     sync_casting_settings = (
         parent.settings.get("sync_settings", {})
         .get("sync_casting", {})
