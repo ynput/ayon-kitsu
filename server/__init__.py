@@ -104,7 +104,10 @@ class KitsuAddon(BaseServerAddon):
         await self.ensure_kitsu(mock)
         return await get_pairing_list(self)
 
-    async def list_users(self) -> list[dict[str, Any]]:
+    async def list_users(self, user: CurrentUser) -> list[dict[str, Any]]:
+        if not user.is_manager:
+            raise ForbiddenException("Only managers can list AYON users")
+
         users = await get_user_sync_list()
         return [
             {
