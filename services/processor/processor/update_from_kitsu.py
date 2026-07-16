@@ -17,7 +17,7 @@ def _ensure_asset_type_folder(
     folders_by_kitsu_id: dict[str, dict],
 ) -> str | None:
     """Return the AYON folder id for an asset type, creating it if needed.
-    
+
     Args:
         project_name: The name of the AYON project.
         entity_type_id: The Kitsu entity type id.
@@ -25,7 +25,7 @@ def _ensure_asset_type_folder(
         folders_by_kitsu_id: A dictionary of AYON folders by Kitsu id.
 
     Returns:
-        The AYON folder id for the asset type, or None if the folder cannot be created.
+        The AYON folder id for the asset type.
     """
     asset_type_folder = folders_by_kitsu_id.get(entity_type_id)
     if asset_type_folder:
@@ -109,7 +109,9 @@ def move_folders_by_asset_type(
         product["folderId"]
         for product in ayon_api.get_products(
             project_name,
-            folder_ids=[asset_folder["id"] for _, asset_folder, _ in folders_to_move],
+            folder_ids=[
+                asset_folder["id"] for _, asset_folder, _ in folders_to_move
+            ],
             fields={"folderId"},
         )
     }
