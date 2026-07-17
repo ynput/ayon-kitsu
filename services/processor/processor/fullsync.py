@@ -15,7 +15,7 @@ from .utils import (
     preprocess_asset,
     preprocess_task,
 )
-from .update_from_kitsu import move_folders_by_asset_type
+from .utils import move_folders_by_asset_type
 
 
 def get_assets(
