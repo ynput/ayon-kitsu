@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 import webbrowser
 import ayon_api
 import gazu
@@ -28,12 +29,21 @@ class ShowInKitsu(LauncherAction):
         if not project:
             raise RuntimeError(f"Project {project_name} not found.")
 
-        # Define URL
-        url = self.get_url(
-            project,
-            selection.folder_entity if selection.is_folder_selected else None,
-            selection.task_entity if selection.is_task_selected else None,
+        folder = (
+            selection.folder_entity
+            if selection.is_folder_selected
+            else None
         )
+        task = selection.task_entity if selection.is_task_selected else None
+        if message := self._get_unavailable_message(project, folder, task):
+            self.get_kitsu_addon().show_tray_message(
+                "Show in Kitsu unavailable",
+                message,
+            )
+            return
+
+        # Define URL
+        url = self.get_url(project, folder, task)
 
         # Open URL in webbrowser
         self.log.info(f"Opening URL: {url}")
@@ -42,6 +52,34 @@ class ShowInKitsu(LauncherAction):
             # Try in new tab
             new=2,
         )
+
+    @staticmethod
+    def _get_unavailable_message(
+        project: dict,
+        folder: dict = None,
+        task: dict = None,
+    ) -> Optional[str]:
+        """Return an artist-facing explanation for unavailable Kitsu links."""
+        if not project.get("data", {}).get("kitsuProjectId"):
+            return (
+                f"'{project['name']}' is not connected to Kitsu. "
+                "Ask your project administrator to connect the project."
+            )
+
+        if task and not task.get("data", {}).get("kitsuId"):
+            return (
+                f"The task '{task['name']}' is not connected to a Kitsu task. "
+                "Select a synced task or ask your project administrator "
+                "for help."
+            )
+
+        if folder and not folder.get("data", {}).get("kitsuId"):
+            return (
+                f"The folder '{folder['name']}' is not connected to Kitsu. "
+                "Select a synced folder or ask your project administrator "
+                "for help."
+            )
+        return None
 
     def get_url(
         self,
@@ -68,7 +106,7 @@ class ShowInKitsu(LauncherAction):
         )
 
         if task:
-            if not (task_id := task.get("kitsuId")):
+            if not (task_id := task.get("data", {}).get("kitsuId")):
                 raise RuntimeError(
                     f"Task {task['name']} has no connected kitsu entity."
                 )
