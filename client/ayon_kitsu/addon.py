@@ -67,6 +67,13 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
     def ensure_is_process_ready(self, process_context):
         """Block process launch if Kitsu credentials are missing or invalid."""
         from ayon_core.addon import ProcessPreparationError
+
+        if not self.server_url:
+            raise ProcessPreparationError(
+                "Kitsu server is not configured. Set the Kitsu Server "
+                "value in AYON Studio Settings before launching a host."
+            )
+
         from .credentials import (
             load_credentials,
             validate_credentials,
