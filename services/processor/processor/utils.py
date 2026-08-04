@@ -15,12 +15,12 @@ def get_ayon_folders_by_kitsu_ids(
     """Find AYON folders by their stored Kitsu ids.
 
     Args:
-        project_name: The name of the AYON project.
-        kitsu_ids: Kitsu ids of the folders to find.
-        folder_types: An optional iterable of folder types to filter by.
+        project_name (str): The name of the AYON project.
+        kitsu_ids (set[str]): Kitsu ids of the folders to find.
+        folder_types (Optional[Iterable[str]]): An optional iterable of folder types to filter by.
 
     Returns:
-        Mapping of kitsuId -> AYON folder dict for ids that were found.
+        dict[str, dict]: Mapping of kitsuId -> AYON folder dict for ids that were found.
     """
     result: dict[str, dict] = {}
     for folder in ayon_api.get_folders(
@@ -47,13 +47,13 @@ def _ensure_asset_type_folder(
     """Return the AYON folder id for an asset type, creating it if needed.
 
     Args:
-        project_name: The name of the AYON project.
-        entity_type_id: The Kitsu entity type id.
-        asset_type_name: The name of the asset type.
-        folders_by_kitsu_id: A dictionary of AYON folders by Kitsu id.
+        project_name (str): The name of the AYON project.
+        entity_type_id (str): The Kitsu entity type id.
+        asset_type_name (str): The name of the asset type.
+        folders_by_kitsu_id (dict): A dictionary of AYON folders by Kitsu id.
 
     Returns:
-        The AYON folder id for the asset type.
+        str: The AYON folder id for the asset type.
     """
     asset_type_folder = folders_by_kitsu_id.get(entity_type_id)
     if asset_type_folder:
@@ -91,8 +91,8 @@ def move_folders_by_asset_type(
     asset-type folders in place even if they become empty.
 
     Args:
-        project_name: The name of the AYON project.
-        entities: List of kitsu entities to process.
+        project_name (str): The name of the AYON project.
+        entities (list[dict[str, Any]]): List of kitsu entities to process.
     """
     entities_ids: set[str] = {"asset"}
     for entity in entities:
