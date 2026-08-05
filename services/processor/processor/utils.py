@@ -17,10 +17,10 @@ def get_ayon_folders_by_kitsu_ids(
     Args:
         project_name (str): The name of the AYON project.
         kitsu_ids (set[str]): Kitsu ids of the folders to find.
-        folder_types (Optional[Iterable[str]]): An optional iterable of folder types to filter by.
+        folder_types (Optional[Iterable[str]]): Folder types to filter by.
 
     Returns:
-        dict[str, dict]: Mapping of kitsuId -> AYON folder dict for ids that were found.
+        dict[str, dict]: Mapping of kitsuId -> AYON folder dict for found ids.
     """
     result: dict[str, dict] = {}
     for folder in ayon_api.get_folders(
