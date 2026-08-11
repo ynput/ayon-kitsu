@@ -107,10 +107,28 @@ def move_folders_by_asset_type(
 
     folders_to_move: list[tuple[dict[str, Any], dict, str]] = []
     for entity in entities:
-        entity_type_id = entity["entity_type_id"]
-        asset_type_name = entity["asset_type_name"]
+        entity_type_id = entity.get("entity_type_id")
+        asset_type_name = entity.get("asset_type_name")
 
-        asset_folder = folders_by_kitsu_id.get(entity["id"])
+        if not entity_type_id or not asset_type_name:
+            # Asset type couldn't be resolved (e.g. brand new asset type
+            # not yet cached) - nothing to re-parent, skip safely.
+            logging.warning(
+                f"Cannot move asset {entity.get('name')}: "
+                "missing entity_type_id/asset_type_name on entity"
+            )
+            continue
+
+        asset_folder = folders_by_kitsu_id.get(entity.get("id"))
+        if not asset_folder:
+            # The folder may not have been indexed yet (e.g. it was just
+            # created by the /push call). Skip it instead of crashing -
+            # it will be re-parented on the next sync if still needed.
+            logging.warning(
+                f"Cannot move asset {entity.get('name')}: "
+                "folder not found in AYON"
+            )
+            continue
 
         desired_parent_id = _ensure_asset_type_folder(
             project_name,
