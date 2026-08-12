@@ -250,7 +250,7 @@ def person_needs_sync(
     )
 
 
-def get_persons(entrypoint: str) -> list[dict]:
+def get_persons_to_update(entrypoint: str) -> list[dict]:
     """Return Kitsu persons that are new or changed compared to AYON users.
 
     Args:
