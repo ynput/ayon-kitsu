@@ -2,8 +2,6 @@
 
 import re
 import unicodedata
-from typing import Any
-
 from typing import Iterable, Optional, Any
 
 import ayon_api
