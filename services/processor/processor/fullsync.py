@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 from .utils import (
     get_asset_types,
+    get_persons_to_update,
     get_statuses,
     get_task_types,
     preprocess_asset,
@@ -162,10 +163,12 @@ def project_full_sync(
     asset_types = get_asset_types(kitsu_project_id)
     task_statuses = get_statuses()
     task_types = get_task_types(kitsu_project_id)
-    persons = gazu.person.all_persons()
+    persons_to_update = get_persons_to_update(parent.entrypoint)
 
     assets = get_assets(kitsu_project_id, asset_types)
-    tasks = get_tasks(kitsu_project_id, task_types, task_statuses)
+    tasks = get_tasks(
+        kitsu_project_id, task_types, task_statuses, gazu.person.all_persons()
+    )
     sync_casting_settings = (
         parent.settings.get("sync_settings", {})
         .get("sync_casting", {})
@@ -185,7 +188,14 @@ def project_full_sync(
         concepts = []
 
     entities = (
-        persons + assets + episodes + seqs + shots + edits + concepts + tasks
+        persons_to_update
+        + assets
+        + episodes
+        + seqs
+        + shots
+        + edits
+        + concepts
+        + tasks
     )
     if casting_enabled:
         entities += get_casting_links(shots, assets)
