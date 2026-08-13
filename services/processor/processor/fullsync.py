@@ -16,6 +16,7 @@ from .utils import (
     preprocess_asset,
     preprocess_task,
 )
+from .utils import move_folders_by_asset_type
 
 
 def get_assets(
@@ -207,6 +208,10 @@ def project_full_sync(
         project_name=project_name,
         entities=entities,
     )
+
+    # Re-parent assets whose type changed while the processor was offline
+    move_folders_by_asset_type(project_name, assets)
+
     logging.info(
         f"Full Sync for project {project_name}"
         f" completed in {time.time() - start_time}s"

@@ -9,7 +9,6 @@ from . import utils
 if TYPE_CHECKING:
     from .processor import KitsuProcessor
 
-
 def update_project(parent: "KitsuProcessor", data: dict[str, str]):
     logging.info(f"update_project: {data}")
     project_name = parent.get_paired_ayon_project(data["project_id"])
@@ -59,11 +58,14 @@ def create_or_update_asset(parent: "KitsuProcessor", data: dict[str, str]):
     # Add ayon base url so we can use it in REST calls later on
     entity["ayon_server_url"] = ayon_api.get_base_url()
 
-    return ayon_api.post(
+    result = ayon_api.post(
         f"{parent.entrypoint}/push",
         project_name=project_name,
         entities=[entity],
     )
+    # Re-parent after push so the folder is guaranteed to exist in AYON
+    utils.move_folders_by_asset_type(project_name, [entity])
+    return result
 
 
 def delete_asset(parent: "KitsuProcessor", data: dict[str, str]):
