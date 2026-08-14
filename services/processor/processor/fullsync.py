@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 from .utils import (
     get_asset_types,
+    get_ayon_users_by_email,
     get_persons_to_update,
     get_statuses,
     get_task_types,
@@ -31,18 +32,27 @@ def get_assets(
 def get_tasks(
     kitsu_project_id: str,
     task_types: dict[str, str],
-    task_statuses: dict[str, str]
+    task_statuses: dict[str, str],
+    persons: list[dict[str, Any]],
 ) -> list[dict[str, str]]:
+    persons_by_id: dict[str, dict] = {
+        p["id"]: p for p in persons
+    }
+
     tasks: list[dict[str, str]] = []
+    ayon_users_by_email = get_ayon_users_by_email()
     for record in gazu.task.all_tasks_for_project(kitsu_project_id):
-        record["persons"]: list[dict[str, str]] = []
-        for id in record["assignees"]:
-            record["persons"].append({
-                "email": gazu.person.get_person(id)["email"]
-            })
+        record["persons"] = [
+            {"email": persons_by_id[assignee_id]["email"]}
+            for assignee_id in record["assignees"]
+            if assignee_id in persons_by_id
+        ]
         tasks.append(
             preprocess_task(
-                kitsu_project_id, record, task_types, task_statuses
+                record,
+                task_types,
+                task_statuses,
+                ayon_users_by_email,
             )
         )
     return tasks

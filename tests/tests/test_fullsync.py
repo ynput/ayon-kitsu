@@ -93,6 +93,7 @@ def test_get_tasks(gazu, monkeypatch):
         PROJECT_ID,
         {"task-type-id-1": "Animation", "task-type-id-2": "Compositing"},
         {"task-status-id-1": "Todo", "task-status-id-2": "Approved"},
+        mock_data.all_persons,
     )
     # assert len(res) == 2
     # assert res[0]['id'] == "task-id-1"
