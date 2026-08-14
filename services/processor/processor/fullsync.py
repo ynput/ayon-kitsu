@@ -11,11 +11,13 @@ if TYPE_CHECKING:
 from .utils import (
     get_asset_types,
     get_ayon_users_by_email,
+    get_persons_to_update,
     get_statuses,
     get_task_types,
     preprocess_asset,
     preprocess_task,
 )
+from .utils import move_folders_by_asset_type
 
 
 def get_assets(
@@ -171,10 +173,12 @@ def project_full_sync(
     asset_types = get_asset_types(kitsu_project_id)
     task_statuses = get_statuses()
     task_types = get_task_types(kitsu_project_id)
-    persons = gazu.person.all_persons()
+    persons_to_update = get_persons_to_update(parent.entrypoint)
 
     assets = get_assets(kitsu_project_id, asset_types)
-    tasks = get_tasks(kitsu_project_id, task_types, task_statuses, persons)
+    tasks = get_tasks(
+        kitsu_project_id, task_types, task_statuses, gazu.person.all_persons()
+    )
     sync_casting_settings = (
         parent.settings.get("sync_settings", {})
         .get("sync_casting", {})
@@ -194,7 +198,14 @@ def project_full_sync(
         concepts = []
 
     entities = (
-        persons + assets + episodes + seqs + shots + edits + concepts + tasks
+        persons_to_update
+        + assets
+        + episodes
+        + seqs
+        + shots
+        + edits
+        + concepts
+        + tasks
     )
     if casting_enabled:
         entities += get_casting_links(shots, assets)
@@ -207,6 +218,10 @@ def project_full_sync(
         project_name=project_name,
         entities=entities,
     )
+
+    # Re-parent assets whose type changed while the processor was offline
+    move_folders_by_asset_type(project_name, assets)
+
     logging.info(
         f"Full Sync for project {project_name}"
         f" completed in {time.time() - start_time}s"

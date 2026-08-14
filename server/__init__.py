@@ -11,6 +11,7 @@ from ayon_server.secrets import Secrets
 from .kitsu import Kitsu, KitsuMock
 from .kitsu.init_pairing import InitPairingRequest, init_pairing, sync_request
 from .kitsu.pairing_list import PairingItemModel, get_pairing_list
+from .kitsu.user_list import get_user_sync_list
 from .kitsu.push import (
     PushEntitiesRequestModel,
     RemoveEntitiesRequestModel,
@@ -54,6 +55,7 @@ class KitsuAddon(BaseServerAddon):
         self.add_endpoint("/sync/{project_name}", self.sync, method="POST")
         self.add_endpoint("/push", self.push, method="POST")
         self.add_endpoint("/remove", self.remove, method="POST")
+        self.add_endpoint("/users", self.list_users, method="GET")
 
     async def setup(self):
         pass
@@ -101,6 +103,22 @@ class KitsuAddon(BaseServerAddon):
     ) -> list[PairingItemModel]:
         await self.ensure_kitsu(mock)
         return await get_pairing_list(self)
+
+    async def list_users(self, user: CurrentUser) -> list[dict[str, Any]]:
+        if not user.is_manager:
+            raise ForbiddenException("Only managers can list AYON users")
+
+        users = await get_user_sync_list()
+        return [
+            {
+                "name": user.name,
+                "kitsu_id": user.kitsu_id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "active": user.active,
+            }
+            for user in users
+        ]
 
     async def init_pairing(
         self,

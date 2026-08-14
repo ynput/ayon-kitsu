@@ -9,7 +9,6 @@ from . import utils
 if TYPE_CHECKING:
     from .processor import KitsuProcessor
 
-
 def update_project(parent: "KitsuProcessor", data: dict[str, str]):
     logging.info(f"update_project: {data}")
     project_name = parent.get_paired_ayon_project(data["project_id"])
@@ -59,11 +58,14 @@ def create_or_update_asset(parent: "KitsuProcessor", data: dict[str, str]):
     # Add ayon base url so we can use it in REST calls later on
     entity["ayon_server_url"] = ayon_api.get_base_url()
 
-    return ayon_api.post(
+    result = ayon_api.post(
         f"{parent.entrypoint}/push",
         project_name=project_name,
         entities=[entity],
     )
+    # Re-parent after push so the folder is guaranteed to exist in AYON
+    utils.move_folders_by_asset_type(project_name, [entity])
+    return result
 
 
 def delete_asset(parent: "KitsuProcessor", data: dict[str, str]):
@@ -309,10 +311,19 @@ def delete_concept(parent: "KitsuProcessor", data: dict[str, str]):
 
 
 def create_or_update_person(parent: "KitsuProcessor", data: dict[str, str]):
+    """Push a Kitsu person to AYON when their data has changed."""
     logging.info(f"create_or_update_person: {data}")
     entity = gazu.person.get_person(data["person_id"])
 
-    # Add ayon base url so we can use it in REST calls later on
+    ayon_users = utils.get_ayon_user_sync_info(parent.entrypoint)
+    by_kitsu_id, by_email, by_name = utils.build_ayon_user_lookups(ayon_users)
+    if not utils.person_needs_sync(entity, by_kitsu_id, by_email, by_name):
+        logging.info(
+            f"create_or_update_person: skipping {entity.get('full_name')!r}"
+            f" — AYON already up to date"
+        )
+        return
+
     entity["ayon_server_url"] = ayon_api.get_base_url()
 
     return ayon_api.post(
@@ -324,18 +335,14 @@ def create_or_update_person(parent: "KitsuProcessor", data: dict[str, str]):
 
 def delete_person(parent: "KitsuProcessor", data: dict[str, str]):
     logging.info(f"delete_person: {data}")
-    project_name = parent.get_paired_ayon_project(data["project_id"])
-    if not project_name:
-        return  # do nothing as this kitsu and ayon project are not paired
-
     entity = {
         "id": data["person_id"],
-        "type": "person",
+        "type": "Person",
         "ayon_server_url": ayon_api.get_base_url(),
     }
     return ayon_api.post(
         f"{parent.entrypoint}/remove",
-        project_name=project_name,
+        project_name="",
         entities=[entity],
     )
 
