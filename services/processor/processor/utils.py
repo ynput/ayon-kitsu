@@ -4,7 +4,6 @@ import re
 import unicodedata
 from typing import Iterable, Optional, Any
 
-from typing import Any
 
 import ayon_api
 import gazu
