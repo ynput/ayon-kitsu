@@ -1,6 +1,6 @@
 """Kitsu addon."""
 
-import os
+from pathlib import Path
 
 from ayon_core.addon import (
     AYONAddon,
@@ -9,7 +9,7 @@ from ayon_core.addon import (
 )
 from .version import __version__
 
-KITSU_ROOT = os.path.dirname(os.path.abspath(__file__))
+KITSU_ROOT = Path(__file__).parent
 
 
 class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
@@ -55,13 +55,7 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
         )
 
         login, password = load_credentials()
-
-        if login is None or password is None:
-            # TODO raise correct type
-            raise
-
-        # Check credentials, ask them if needed
-        if validate_credentials(login, password):
+        if login and password and validate_credentials(login, password):
             set_credentials_envs(login, password)
         else:
             self.show_dialog()
@@ -69,6 +63,31 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
     def get_global_environments(self):
         """Kitsu's global environments."""
         return {"KITSU_SERVER": self.server_url}
+
+    def ensure_is_process_ready(self, process_context):
+        """Block process launch if Kitsu credentials are missing or invalid."""
+        from ayon_core.addon import ProcessPreparationError
+        from .credentials import (
+            load_credentials,
+            validate_credentials,
+            set_credentials_envs,
+        )
+
+        login, password = load_credentials()
+        if login is None or password is None:
+            raise ProcessPreparationError(
+                "Kitsu credentials are not set. "
+                "Please fill them via the Kitsu Connect tray action."
+            )
+
+        if not validate_credentials(
+            login, password, kitsu_url=self.server_url
+        ):
+            raise ProcessPreparationError(
+                "Kitsu credentials are invalid. "
+                "Please update them via the Kitsu Connect tray action."
+            )
+        set_credentials_envs(login, password)
 
     def _get_dialog(self):
         if self._dialog is None:
@@ -91,17 +110,11 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
         """Implementation of abstract method for `ITrayAction`."""
         self.show_dialog()
 
-    def get_plugin_paths(self):
-        """Implementation of abstract method for `IPluginPaths`."""
-
-        return {
-            "publish": self.get_publish_plugin_paths(),
-            # The laucher action is not working since AYON conversion
-            # "actions": [os.path.join(KITSU_ROOT, "plugins", "launcher")],
-        }
+    def get_launcher_action_paths(self):
+        return [KITSU_ROOT.joinpath("plugins", "launcher").as_posix()]
 
     def get_publish_plugin_paths(self, host_name=None):
-        return [os.path.join(KITSU_ROOT, "plugins", "publish")]
+        return [KITSU_ROOT.joinpath("plugins", "publish").as_posix()]
 
 
 def is_kitsu_enabled_in_settings(project_settings):
