@@ -1,6 +1,10 @@
 include .env
 
-AYON_ADDON_VERSION=$(shell python -c "import os;import sys;content={};f=open('$(CURDIR)/../../package.py');exec(f.read(),content);f.close();print(content['version'])")
+# Set AYON_ADDON_VERSION if not set in env file.
+ifeq ($(AYON_ADDON_VERSION),False)
+    AYON_ADDON_VERSION=$(shell python -c "import os;import sys;content={};f=open('$(CURDIR)/../../package.py');exec(f.read(),content);f.close();print(content['version'])")
+endif
+
 AYON_ADDON_NAME=kitsu
 SERVICE_NAME=processor
 BASE_NAME := ayon-$(AYON_ADDON_NAME)-$(SERVICE_NAME)
@@ -19,11 +23,6 @@ default:
 	@echo *   clean        Remove local images.
 	@echo *   dev          Run a service locally
 	@echo *   dist         Upload the image to a registry
-
-# Check the usage of `+git` version.
-ifeq ($(AYON_USE_GIT_SUFFIX_FOR_ADDONS),True)
-    AYON_ADDON_VERSION=$(shell python -c "print('$(AYON_ADDON_VERSION)'.split('-')[0].split('+')[0] + '+git')")
-endif
 
 export AYON_ADDON_VERSION
 export AYON_ADDON_NAME
