@@ -21,7 +21,6 @@ from .utils import (
     create_folder,
     create_task,
     delete_entity_link,
-    delete_folder,
     delete_task,
     get_folder_by_kitsu_id,
     get_links_for_output,
@@ -934,11 +933,7 @@ async def remove_entities(
             if not folder:
                 continue
 
-            await delete_folder(
-                project_name=p.name,
-                folder_id=folder.id,
-                user=user,
-            )
+            await folder.delete(force=True)
             logging.info(f"Deleted {entity_dict['type']} '{folder.name}'")
             folders[entity_dict["id"]] = folder.id
 
