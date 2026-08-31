@@ -104,6 +104,23 @@ class IntegrateKitsuNotes(BaseSettingsModel):
         title="Custom Comment Template",
     )
 
+class IntegrateKitsuReviews(BaseSettingsModel):
+    normalize_movie: bool = SettingsField(
+        title="Normalize movie",
+        description=(
+            "When enabled, Kitsu will transcode uploaded movie previews"
+            " for web playback."
+        ),
+    )
+    match_version_number: bool = SettingsField(
+        title="Match version number",
+        description=(
+            "Set Kitsu note revision to match AYON version number.\n\n"
+            "Note: If enabled avoid uploading reviewables directly"
+            " into Kitsu without passing through AYON, as this can desynchronize"
+            " product version and revision number and cause errors during publish."
+        )
+    )
 
 class PublishPlugins(BaseSettingsModel):
     CollectKitsuFamily: CollectKitsuFamilyPluginModel = SettingsField(
@@ -113,6 +130,10 @@ class PublishPlugins(BaseSettingsModel):
     IntegrateKitsuNote: IntegrateKitsuNotes = SettingsField(
         default_factory=IntegrateKitsuNotes,
         title="Integrate Kitsu Note"
+    )
+    IntegrateKitsuReview: IntegrateKitsuReviews = SettingsField(
+        default_factory=IntegrateKitsuReviews,
+        title="Integrate Kitsu Review"
     )
 
 
@@ -294,5 +315,9 @@ PUBLISH_DEFAULT_VALUES = {
 | family | `{family}` |
 | name | `{name}` |""",
         },
-    }
+    },
+    "IntegrateKitsuReview": {
+        "normalize_movie": True,
+        "match_version_number": True,
+    },
 }

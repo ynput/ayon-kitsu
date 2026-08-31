@@ -254,6 +254,7 @@ async def sync_person(
 
     payload = {
         "name": username,
+        "active": entity_dict.get("active", True),
         "attrib": {
             "fullName": entity_dict.get("full_name", ""),
             "email": entity_dict.get("email", ""),
@@ -283,17 +284,6 @@ async def sync_person(
             async with httpx.AsyncClient() as client:
                 await client.patch(
                     f"{ayon_server_url}/api/users/{target_user.name}",
-                    json=payload,
-                    headers=headers,
-                )
-            # Rename the user
-            # TODO: We should discourage renaming users.
-            # Maybe just change the fullName in the case there's a typo,
-            # but changing username may have weird side effects.
-            payload = {"newName": username}
-            async with httpx.AsyncClient() as client:
-                await client.patch(
-                    f"{ayon_server_url}/api/users/{target_user.name}/rename",
                     json=payload,
                     headers=headers,
                 )
@@ -878,13 +868,19 @@ async def remove_entities(
     payload: RemoveEntitiesRequestModel,
 ) -> dict[str, dict[Any, Any]]:
     start_time = time.time()
-    project = await ProjectEntity.load(payload.project_name)
+    project = None
 
     # A mapping of kitsu entity ids to folder ids
     # they are added when a task or folder are deleted and returned
     #   by the method - useful for testing
     folders = {}
     tasks = {}
+
+    async def get_project() -> "ProjectEntity":
+        nonlocal project
+        if project is None:
+            project = await ProjectEntity.load(payload.project_name)
+        return project
 
     settings = await addon.get_studio_settings()
     for entity_dict in payload.entities:
@@ -899,7 +895,7 @@ async def remove_entities(
                 await update_project(
                     addon,
                     user,
-                    project,
+                    await get_project(),
                     entity_dict,
                 )
         elif entity_dict["type"] == "Person":
@@ -910,8 +906,9 @@ async def remove_entities(
             await target_user.delete()
 
         elif entity_dict["type"] == "Task":
+            p = await get_project()
             task = await get_task_by_kitsu_id(
-                project.name,
+                p.name,
                 entity_dict["id"],
                 tasks,
             )
@@ -919,7 +916,7 @@ async def remove_entities(
                 continue
 
             await delete_task(
-                project_name=project.name,
+                project_name=p.name,
                 task_id=task.id,
                 user=user,
             )
@@ -927,15 +924,21 @@ async def remove_entities(
             tasks[entity_dict["id"]] = task.id
 
         else:
+            p = await get_project()
             folder = await get_folder_by_kitsu_id(
-                project.name,
+                p.name,
                 entity_dict["id"],
                 folders,
             )
             if not folder:
                 continue
 
-            await folder.delete(force=True)
+            await delete_folder(
+                project_name=p.name,
+                folder_id=folder.id,
+                user=user,
+                force=True,
+            )
             logging.info(f"Deleted {entity_dict['type']} '{folder.name}'")
             folders[entity_dict["id"]] = folder.id
 
