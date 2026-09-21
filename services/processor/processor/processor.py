@@ -331,11 +331,13 @@ class KitsuProcessor:
                 for pair in self.pairing_list:
                     project_id = pair.get("kitsuProjectId")
                     project_name = pair.get("ayonProjectName")
-                    if project_id and project_name:
-                        project_full_sync(
-                            self,
-                            project_id,
-                            project_name,
+                    if not project_id or not project_name:
+                        continue
+                    try:
+                        project_full_sync(self, project_id, project_name)
+                    except Exception:
+                        log_traceback(
+                            f"Unable to sync kitsu project {project_name}"
                         )
                 startup = False
 
