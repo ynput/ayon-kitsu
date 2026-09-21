@@ -24,5 +24,6 @@ class CollectKitsuJobEnvVars(pyblish.api.ContextPlugin):
         ]:
             value = os.getenv(key)
             if value:
-                self.log.debug(f"Setting job env: {key}: {value}")
+                logged = "<hidden password>" if key == "KITSU_PWD" else value
+                self.log.debug(f"Setting job env: {key}: {logged}")
                 env[key] = value
