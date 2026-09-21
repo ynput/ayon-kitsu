@@ -310,8 +310,13 @@ class KitsuProcessor:
         self, kitsu_project_id: str, ayon_project_name: str
     ):
         """add a new pair to the list"""
-        if self.get_paired_ayon_project(kitsu_project_id):
-            return
+        # The pairing endpoint also returns the projects that are not paired
+        # yet, with a null ayonProjectName, so the existing entry is updated
+        # rather than shadowed by a second one carrying the same id.
+        for pair in self.pairing_list:
+            if pair["kitsuProjectId"] == kitsu_project_id:
+                pair["ayonProjectName"] = ayon_project_name
+                return
         self.pairing_list.append(
             {
                 "kitsuProjectId": kitsu_project_id,
