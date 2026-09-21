@@ -25,13 +25,20 @@ class Kitsu:
                 )
         except httpx.HTTPError as e:
             raise KitsuLoginException(
-                "Could not login to Kitsu (server error)"
+                f"Could not reach Kitsu at {self.base_url}: {e}"
             ) from e
 
-        token = response.json().get("access_token")
+        try:
+            token = response.json().get("access_token")
+        except ValueError:
+            # A proxy or a crashing Kitsu answers html, not the expected json.
+            token = None
+
         if not token:
             raise KitsuLoginException(
-                "Could not login to Kitsu (invalid credentials)"
+                f"Could not login to Kitsu at {self.base_url} as"
+                f" {self.email} (status {response.status_code}):"
+                f" {response.text[:500]}"
             )
         self.token = token
 
