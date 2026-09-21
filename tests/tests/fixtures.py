@@ -147,6 +147,7 @@ def gazu():
 def processor(kitsu_url):
     class MockProcessor:
         entrypoint = kitsu_url
+        settings = {}
 
         def get_paired_ayon_project(self, kitsu_project_id):
             return PROJECT_NAME
