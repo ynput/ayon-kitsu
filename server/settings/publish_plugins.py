@@ -5,11 +5,17 @@ class CollectFamilyAdvancedFilterModel(BaseSettingsModel):
     _layout = "expanded"
     families: list[str] = SettingsField(
         default_factory=list,
-        title="Additional Families"
+        title="Additional Families",
+        description=(
+            "All of these families must be present on the instance for the"
+            " filter to apply. When several filters match, the one listing"
+            " the most families wins."
+        ),
     )
     add_kitsu_family: bool = SettingsField(
         True,
-        title="Add Kitsu Family"
+        title="Add Kitsu Family",
+        description="Value overriding the profile when this filter matches.",
     )
 
 
@@ -18,10 +24,16 @@ class CollectFamilyProfile(BaseSettingsModel):
     host_names: list[str] = SettingsField(
         default_factory=list,
         title="Host names",
+        description="Hosts the profile applies to. Empty matches any host.",
     )
     product_base_types: list[str] = SettingsField(
         default_factory=list,
         title="Families",
+        description=(
+            "Product base types the profile applies to. Empty matches any."
+            " Instances without a base type are matched on their product"
+            " type instead."
+        ),
     )
     task_types: list[str] = SettingsField(
         default_factory=list,
@@ -30,14 +42,24 @@ class CollectFamilyProfile(BaseSettingsModel):
     task_names: list[str] = SettingsField(
         default_factory=list,
         title="Task names",
+        description="Task names the profile applies to. Empty matches any.",
     )
     add_kitsu_family: bool = SettingsField(
         True,
         title="Add Kitsu Family",
+        description=(
+            "Add the 'kitsu' family to matching instances, which is what"
+            " makes them integrate to Kitsu on publish."
+        ),
     )
     advanced_filtering: list[CollectFamilyAdvancedFilterModel] = SettingsField(
         title="Advanced adding if additional families present",
         default_factory=list,
+        description=(
+            "Take the decision again on all the instance families rather"
+            " than on its base type alone, e.g. to catch editorial"
+            " instances carrying 'review'."
+        ),
     )
 
 
@@ -73,10 +95,20 @@ class StatusChangeFamilyRequirementModel(BaseSettingsModel):
 
 class StatusChangeConditionsModel(BaseSettingsModel):
     status_conditions: list[StatusChangeCondition] = SettingsField(
-        default_factory=list, title="Status conditions"
+        default_factory=list,
+        title="Status conditions",
+        description=(
+            "The current Kitsu task status must satisfy every condition for"
+            " the status to change. Short names are compared without case."
+        ),
     )
     family_requirements: list[StatusChangeFamilyRequirementModel] = SettingsField(
-        default_factory=list, title="Family requirements"
+        default_factory=list,
+        title="Family requirements",
+        description=(
+            "The published product types must satisfy one of these"
+            " requirements for the status to change."
+        ),
     )
 
 
@@ -88,13 +120,28 @@ class CustomCommentTemplateModel(BaseSettingsModel):
 
     enabled: bool = SettingsField(True)
     comment_template: str = SettingsField(
-        "", widget="textarea", title="Custom comment"
+        "",
+        widget="textarea",
+        title="Custom comment",
+        description=(
+            "Every {key} is replaced by the matching key of the publish"
+            " instance data. An unknown key renders as an empty string."
+        ),
     )
 
 
 class IntegrateKitsuNotes(BaseSettingsModel):
-    set_status_note: bool = SettingsField(title="Set status on note")
-    note_status_shortname: str = SettingsField(title="Note shortname")
+    set_status_note: bool = SettingsField(
+        title="Set status on note",
+        description="Change the Kitsu task status when the note is posted.",
+    )
+    note_status_shortname: str = SettingsField(
+        title="Note shortname",
+        description=(
+            "Short name of the Kitsu status to set. It must match the Kitsu"
+            " spelling exactly, the lookup is case sensitive."
+        ),
+    )
     status_change_conditions: StatusChangeConditionsModel = SettingsField(
         default_factory=StatusChangeConditionsModel,
         title="Status change conditions"
