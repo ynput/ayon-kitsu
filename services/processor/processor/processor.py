@@ -286,9 +286,12 @@ class KitsuProcessor:
         logging.info("Gazu event listeners added")
         gazu.events.run_client(self.event_client)
 
-    def get_pairing_list(self):
-        """maintain a list of pairings so that we can check
-        the kitsu change is in a paired project and get the ayon project name
+    def get_pairing_list(self) -> dict[str, str | None]:
+        """maintain the ayon project name of each kitsu project, so that we
+        can check the kitsu change is in a paired project
+
+        The endpoint lists every kitsu project, the ones that are not paired
+        yet carrying a null ayon project name.
         """
         logging.info("get_pairing_list")
         res = ayon_api.get(f"{self.entrypoint}/pairing")
@@ -298,31 +301,20 @@ class KitsuProcessor:
             f" Status code '{res.status_code}': {res.detail}"
         )
 
-        return res.data
+        return {
+            pair["kitsuProjectId"]: pair["ayonProjectName"]
+            for pair in res.data
+        }
 
     def get_paired_ayon_project(self, kitsu_project_id: str) -> str | None:
         """returns the ayon project if paired else None"""
-        for pair in self.pairing_list:
-            if pair["kitsuProjectId"] == kitsu_project_id:
-                return pair["ayonProjectName"]
+        return self.pairing_list.get(kitsu_project_id)
 
     def set_paired_ayon_project(
         self, kitsu_project_id: str, ayon_project_name: str
     ):
-        """add a new pair to the list"""
-        # The pairing endpoint also returns the projects that are not paired
-        # yet, with a null ayonProjectName, so the existing entry is updated
-        # rather than shadowed by a second one carrying the same id.
-        for pair in self.pairing_list:
-            if pair["kitsuProjectId"] == kitsu_project_id:
-                pair["ayonProjectName"] = ayon_project_name
-                return
-        self.pairing_list.append(
-            {
-                "kitsuProjectId": kitsu_project_id,
-                "ayonProjectName": ayon_project_name
-            }
-        )
+        """pair a kitsu project with an ayon one"""
+        self.pairing_list[kitsu_project_id] = ayon_project_name
 
     def start_processing(self):
         logging.info("KitsuProcessor started")
@@ -332,9 +324,7 @@ class KitsuProcessor:
             # Sync all paired projects
             if startup:
                 logging.info("Running sync for all paired projects")
-                for pair in self.pairing_list:
-                    project_id = pair.get("kitsuProjectId")
-                    project_name = pair.get("ayonProjectName")
+                for project_id, project_name in self.pairing_list.items():
                     if project_id and project_name:
                         project_full_sync(
                             self,
