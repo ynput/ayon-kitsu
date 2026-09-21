@@ -1,3 +1,4 @@
+from copy import deepcopy
 from pprint import pprint
 
 import ayon_api
@@ -79,33 +80,48 @@ def test_get_assets(gazu, monkeypatch):
 
 
 def test_get_tasks(gazu, monkeypatch):
+    # preprocess_task rewrites the records, so hand it a copy to stay
+    # independent from the other tests sharing this mock data.
     monkeypatch.setattr(
         gazu.task,
         "all_tasks_for_project",
-        lambda x: mock_data.all_tasks_for_project,
+        lambda x: deepcopy(mock_data.all_tasks_for_project),
     )
     monkeypatch.setattr(
-        gazu.person,
-        "get_person",
-        lambda x: mock_data.all_persons[0],
+        ayon_api,
+        "get_users",
+        lambda: [
+            {"name": "ayon.user1", "attrib": {"email": "user-id-1@temp.com"}},
+            {"name": "ayon.user3", "attrib": {"email": "user-id-3@temp.com"}},
+        ],
     )
     res = fullsync.get_tasks(
         PROJECT_ID,
         {"task-type-id-1": "Animation", "task-type-id-2": "Compositing"},
         {"task-status-id-1": "Todo", "task-status-id-2": "Approved"},
+        [
+            {"id": "user-id-1", "email": "user-id-1@temp.com"},
+            {"id": "user-id-3", "email": "user-id-3@temp.com"},
+        ],
     )
-    # assert len(res) == 2
-    # assert res[0]['id'] == "task-id-1"
-    # assert res[0]['name'] == "animation"
-    # assert res[0]['task_type_name'] == 'Animation'
-    # assert res[0]['task_status_name'] == 'Approved'
+    assert len(res) == 2
 
+    assert res[0]["id"] == "task-id-1"
+    assert res[0]["name"] == "animation"
+    assert res[0]["task_type_name"] == "Animation"
+    assert res[0]["task_status_name"] == "Approved"
+    assert res[0]["persons"] == [
+        {"email": "user-id-1@temp.com"},
+        {"email": "user-id-3@temp.com"},
+    ]
+    assert sorted(res[0]["assignees"]) == ["ayon.user1", "ayon.user3"]
 
-#
-# assert res[1]['id'] == "task-id-2"
-# assert res[1]['name'] == "compositing"
-# assert res[1]['task_type_name'] == 'Compositing'
-# assert res[1]['task_status_name'] == 'Todo'
+    assert res[1]["id"] == "task-id-2"
+    assert res[1]["name"] == "compositing"
+    assert res[1]["task_type_name"] == "Compositing"
+    assert res[1]["task_status_name"] == "Todo"
+    assert res[1]["persons"] == []
+    assert res[1]["assignees"] == []
 
 
 def test_full_sync(gazu, processor, monkeypatch, mocker):
@@ -176,7 +192,7 @@ def test_full_sync(gazu, processor, monkeypatch, mocker):
     api_patch = mocker.patch.object(ayon_api, "post")
 
     processor.entrypoint = "/addons/kitsu/9.9.9"
-    res = fullsync.full_sync(processor, PROJECT_ID, "AYON_Project")
+    res = fullsync.project_full_sync(processor, PROJECT_ID, "AYON_Project")
 
     # assert logging
     log_calls = log_info.call_args_list
