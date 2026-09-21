@@ -57,14 +57,17 @@ class Kitsu:
                 )
         except httpx.HTTPError as e:
             raise KitsuLoginException(
-                "Could not login to Kitsu (server error)"
+                f"Could not reach Kitsu at {self.base_url}: {e}"
             ) from e
 
         if response.status_code == 401:
             await self.login()
         elif response.is_error:
+            # The body is whatever Kitsu chose to answer, so keep enough of
+            # it to diagnose and no more.
             raise KitsuLoginException(
-                "Could not login to Kitsu (server error)"
+                "Could not login to Kitsu (server error"
+                f" {response.status_code}): {response.text[:500]}"
             )
 
     async def request(
