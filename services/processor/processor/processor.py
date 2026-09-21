@@ -325,11 +325,13 @@ class KitsuProcessor:
             if startup:
                 logging.info("Running sync for all paired projects")
                 for project_id, project_name in self.pairing_list.items():
-                    if project_id and project_name:
-                        project_full_sync(
-                            self,
-                            project_id,
-                            project_name,
+                    if not project_id or not project_name:
+                        continue
+                    try:
+                        project_full_sync(self, project_id, project_name)
+                    except Exception:
+                        log_traceback(
+                            f"Unable to sync kitsu project {project_name}"
                         )
                 startup = False
 
