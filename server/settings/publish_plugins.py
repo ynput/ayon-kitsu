@@ -195,7 +195,7 @@ PUBLISH_DEFAULT_VALUES = {
                 "product_base_types": [],
                 "task_types": [],
                 "task_names": [],
-                "add_ftrack_family": True,
+                "add_kitsu_family": True,
                 "advanced_filtering": []
             },
             {

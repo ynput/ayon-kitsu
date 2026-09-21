@@ -5,14 +5,6 @@ from .sync_settings import SyncSettings, SYNC_DEFAULT_VALUES
 from .publish_plugins import PublishPlugins, PUBLISH_DEFAULT_VALUES
 
 
-## Entities naming pattern
-#
-class EntityPattern(BaseSettingsModel):
-    episode: str = SettingsField(title="Episode")
-    sequence: str = SettingsField(title="Sequence")
-    shot: str = SettingsField(title="Shot")
-
-
 class KitsuSettings(BaseSettingsModel):
     #
     ## Root fields
