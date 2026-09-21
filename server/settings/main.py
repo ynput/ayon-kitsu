@@ -13,18 +13,29 @@ class KitsuSettings(BaseSettingsModel):
     server: str = SettingsField(
         "",
         title="Kitsu Server",
+        description=(
+            "URL of the Kitsu instance, e.g. 'https://kitsu.mystudio.com'."
+            " The '/api' suffix is appended automatically."
+        ),
         scope=["studio"],
     )
     login_email: str = SettingsField(
         "kitsu_email",
         enum_resolver=secrets_enum,
         title="Kitsu user email",
+        description=(
+            "AYON secret holding the email of the Kitsu account the addon"
+            " uses to synchronize projects and users."
+        ),
         scope=["studio"],
     )
     login_password: str | None = SettingsField(
         "kitsu_password",
         enum_resolver=secrets_enum,
         title="Kitsu user password",
+        description=(
+            "AYON secret holding the password of that same Kitsu account."
+        ),
         scope=["studio"],
     )
     publish: PublishPlugins = SettingsField(
