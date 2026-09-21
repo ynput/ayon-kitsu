@@ -31,15 +31,21 @@ def get_assets(
 def get_tasks(
     kitsu_project_id: str,
     task_types: dict[str, str],
-    task_statuses: dict[str, str]
+    task_statuses: dict[str, str],
+    persons: list[dict[str, str]],
 ) -> list[dict[str, str]]:
+    emails_by_person_id = {
+        person["id"]: person["email"] for person in persons
+    }
     tasks: list[dict[str, str]] = []
     for record in gazu.task.all_tasks_for_project(kitsu_project_id):
-        record["persons"]: list[dict[str, str]] = []
-        for id in record["assignees"]:
-            record["persons"].append({
-                "email": gazu.person.get_person(id)["email"]
-            })
+        # Unknown assignees are skipped: `persons` leaves out the accounts
+        # Kitsu no longer exposes, and one of them must not fail the sync.
+        record["persons"] = [
+            {"email": emails_by_person_id[assignee_id]}
+            for assignee_id in record["assignees"]
+            if assignee_id in emails_by_person_id
+        ]
         tasks.append(
             preprocess_task(
                 kitsu_project_id, record, task_types, task_statuses
