@@ -310,9 +310,8 @@ class KitsuProcessor:
         self, kitsu_project_id: str, ayon_project_name: str
     ):
         """add a new pair to the list"""
-        for pair in self.pairing_list:
-            if "kitsuProjectId" in pair:
-                return
+        if self.get_paired_ayon_project(kitsu_project_id):
+            return
         self.pairing_list.append(
             {
                 "kitsuProjectId": kitsu_project_id,
