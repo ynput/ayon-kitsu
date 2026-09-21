@@ -24,5 +24,6 @@ class CollectKitsuJobEnvVars(pyblish.api.ContextPlugin):
         ]:
             value = os.getenv(key)
             if value:
-                self.log.debug(f"Setting job env: {key}: {value}")
+                # KITSU_PWD is one of them, so the value stays out.
+                self.log.debug(f"Setting job env: {key}")
                 env[key] = value
