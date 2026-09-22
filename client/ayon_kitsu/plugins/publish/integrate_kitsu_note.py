@@ -53,12 +53,12 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
 
     def process(self, context):
         for instance in context:
-            # Check if instance is a review by checking its family
-            # Allow a match to primary family or any of families
+            # `families` is inert on a ContextPlugin, so the kitsu family
+            # collected by CollectKitsuFamily is checked by hand here.
             families = set(
                 [instance.data["family"]] + instance.data.get("families", [])
             )
-            if "review" not in families or "kitsu" not in families:
+            if "kitsu" not in families:
                 continue
 
             kitsu_task = instance.data.get("kitsuTask")
