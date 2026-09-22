@@ -25,13 +25,20 @@ class Kitsu:
                 )
         except httpx.HTTPError as e:
             raise KitsuLoginException(
-                "Could not login to Kitsu (server error)"
+                f"Could not reach Kitsu at {self.base_url}: {e}"
             ) from e
 
-        token = response.json().get("access_token")
+        try:
+            token = response.json().get("access_token")
+        except ValueError:
+            # A proxy or a crashing Kitsu answers html, not the expected json.
+            token = None
+
         if not token:
             raise KitsuLoginException(
-                "Could not login to Kitsu (invalid credentials)"
+                f"Could not login to Kitsu at {self.base_url} as"
+                f" {self.email} (status {response.status_code}):"
+                f" {response.text[:500]}"
             )
         self.token = token
 
@@ -47,29 +54,28 @@ class Kitsu:
     async def ensure_login(self):
         if not self.token:
             await self.login()
-        else:
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(
-                        f"{self.base_url}/api/auth/authenticated",
-                        headers={"Authorization": f"Bearer {self.token}"},
-                    )
-                    response.raise_for_status()
-            except httpx.HTTPError as e:
-                status_code = response.status_code
-                if status_code == 401:
-                    raise KitsuLoginException(
-                        "Could not login to Kitsu (invalid token)"
-                    ) from e
-                else:
-                    raise KitsuLoginException(
-                        "Could not login to Kitsu (server error)"
-                    ) from e
+            return
 
-            else:
-                return
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.base_url}/api/auth/authenticated",
+                    headers={"Authorization": f"Bearer {self.token}"},
+                )
+        except httpx.HTTPError as e:
+            raise KitsuLoginException(
+                f"Could not reach Kitsu at {self.base_url}: {e}"
+            ) from e
 
+        if response.status_code == 401:
             await self.login()
+        elif response.is_error:
+            # The body is whatever Kitsu chose to answer, so keep enough of
+            # it to diagnose and no more.
+            raise KitsuLoginException(
+                "Could not login to Kitsu (server error"
+                f" {response.status_code}): {response.text[:500]}"
+            )
 
     async def request(
         self,
