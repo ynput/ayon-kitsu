@@ -108,8 +108,9 @@ class SyncCasting(BaseSettingsModel):
         "breakdown",
         title="Casting link type",
         description=(
-            "AYON link type used for casting links. A plain name is"
-            " expanded to 'name|folder|folder'."
+            "Name of the AYON link type used for casting links. It is"
+            " expanded to 'name|folder|folder', as casting always links a"
+            " folder to a folder."
         ),
         regex=NAME_REGEX,
     )
