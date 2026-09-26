@@ -7,11 +7,13 @@ from nxtools import logging
 
 from ayon_server.auth.session import Session
 from ayon_server.entities import FolderEntity, ProjectEntity, UserEntity
+from ayon_server.exceptions import AyonException
 from ayon_server.helpers.deploy_project import anatomy_to_project_data
 from ayon_server.lib.postgres import Postgres
+from ayon_server.settings.anatomy.statuses import Status
 from ayon_server.types import Field, OPModel
 
-from .anatomy import get_kitsu_project_anatomy, parse_attrib
+from .anatomy import get_kitsu_project_anatomy, parse_attrib, parse_statuses
 from .constants import (
     CONSTANT_KITSU_MODELS,
 )
@@ -34,6 +36,7 @@ from .utils import (
 
 
 from .addon_helpers import to_username, required_values
+from .kitsu import KitsuLoginException
 
 if TYPE_CHECKING:
     from .. import KitsuAddon
@@ -480,9 +483,49 @@ async def ensure_task_type(
     return False
 
 
+async def get_new_task_status(
+    addon: "KitsuAddon | None",
+    project: "ProjectEntity",
+    task_status_name: str,
+) -> Status:
+    """Build the AYON status for a Kitsu task status missing from a project.
+
+    The status is parsed like the ones created at pairing, so it keeps the
+    Kitsu color and short name, and gets its icon and state from the sync
+    settings. A status stored without a color breaks the loader and the
+    browser, so fall back on the AYON defaults, color included, when the
+    status cannot be read from Kitsu.
+    """
+    if addon is not None:
+        try:
+            kitsu_statuses = await parse_statuses(
+                addon, project.data.get("kitsuProjectId")
+            )
+        except (AyonException, KitsuLoginException, httpx.HTTPError) as e:
+            logging.warning(
+                f"Could not get the Kitsu task statuses, creating "
+                f"'{task_status_name}' with default values: {e}"
+            )
+        else:
+            for kitsu_status in kitsu_statuses:
+                if kitsu_status.name == task_status_name:
+                    return kitsu_status
+            logging.warning(
+                f"Task status '{task_status_name}' not found in Kitsu, "
+                "creating it with default values"
+            )
+
+    return Status(
+        name=task_status_name,
+        shortName=task_status_name[:4],
+        icon="task_alt",
+    )
+
+
 async def ensure_task_status(
     project: "ProjectEntity",
     task_status_name: str,
+    addon: "KitsuAddon | None" = None,
 ) -> bool:
     """#TODO: kitsu listener for new task statuses would be preferable"""
 
@@ -493,13 +536,8 @@ async def ensure_task_status(
         logging.info(
             f"Creating task status {task_status_name} for '{project.name}'"
         )
-        project.statuses.append(
-            {
-                "name": task_status_name,
-                "icon": "task_alt",
-                "shortName": task_status_name[:4],
-            }
-        )
+        status = await get_new_task_status(addon, project, task_status_name)
+        project.statuses.append(status.dict())
         await project.save()
         return True
     return False
@@ -514,7 +552,9 @@ async def sync_task(
     entity_dict: "EntityDict",
 ):
     if "task_status_name" in entity_dict:
-        await ensure_task_status(project, entity_dict["task_status_name"])
+        await ensure_task_status(
+            project, entity_dict["task_status_name"], addon
+        )
 
     if "task_type_name" in entity_dict:
         await ensure_task_type(project, entity_dict["task_type_name"])
