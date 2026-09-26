@@ -17,9 +17,6 @@ RUN \
 # Create a group and user: ayonuser
 RUN addgroup -S ayonuser && adduser -SH ayonuser -G ayonuser
 
-# Copy the service code before setting ownership and permissions, so the
-# files it adds are covered too and not left to root, which would make the
-# processor fail to import as ayonuser
 COPY processor /service/processor
 
 RUN chown ayonuser:ayonuser -R /service
