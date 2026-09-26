@@ -199,9 +199,14 @@ def create_or_update_task(parent: "KitsuProcessor", data: dict[str, str]):
     entity = None
     project_id = data.get("project_id")
     if not project_id:
-        # Zou before 1.0.32 emits the task update of reset_task_data, which
-        # follows a comment removal, without the project id. Read it from
-        # the task instead.
+        # Zou before 1.0.32 emits the task update of reset_task_data without
+        # the project id. It runs after a comment is deleted, after a comment
+        # edit that changes the task status, and in `zou clean-tasks-data`.
+        # Read the project id from the task instead.
+        logging.debug(
+            f"create_or_update_task: no project id for task "
+            f"{data['task_id']}, reading it from the task"
+        )
         entity = gazu.task.get_task(data["task_id"])
         project_id = entity["project_id"]
 
