@@ -507,9 +507,23 @@ async def get_new_task_status(
             try:
                 # The push endpoint does not set up the Kitsu client.
                 await addon.ensure_kitsu(mock)
-                status_cache.statuses = await parse_statuses(
-                    addon, project.data.get("kitsuProjectId")
-                )
+                for attempt in range(2):
+                    try:
+                        status_cache.statuses = await parse_statuses(
+                            addon, project.data.get("kitsuProjectId")
+                        )
+                        break
+                    except KitsuLoginException as e:
+                        cause = e.__cause__
+                        retryable = isinstance(cause, httpx.RequestError) or (
+                            isinstance(cause, httpx.HTTPStatusError)
+                            and cause.response.status_code >= 500
+                        )
+                        if attempt or not retryable:
+                            raise
+                    except (AyonException, httpx.HTTPError):
+                        if attempt:
+                            raise
             except (
                 AyonException,
                 KitsuLoginException,
