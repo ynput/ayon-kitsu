@@ -489,17 +489,7 @@ async def get_new_task_status(
     task_status_name: str,
     mock: bool | None = False,
 ) -> Status:
-    """Build the AYON status for a Kitsu task status missing from a project.
-
-    The status is parsed like the ones created at pairing, so it keeps the
-    Kitsu color and short name, and gets its icon and state from the sync
-    settings. A status stored without a color breaks the loader and the
-    browser, so fall back on the AYON defaults, color included, when the
-    status cannot be read from Kitsu.
-
-    Only called for a status the project does not have yet, so Kitsu is
-    asked once per new status, the created status being saved either way.
-    """
+    """Build a missing AYON status from Kitsu or use AYON defaults."""
     if addon is not None:
         try:
             # The push endpoint does not set the Kitsu client up, it stays
@@ -513,6 +503,10 @@ async def get_new_task_status(
             KitsuLoginException,
             httpx.HTTPError,
             ValueError,
+            # parse_statuses can raise these for malformed 200 JSON.
+            AttributeError,
+            KeyError,
+            TypeError,
         ) as e:
             logging.warning(
                 f"Could not get the Kitsu task statuses, creating "
@@ -542,20 +536,16 @@ async def ensure_task_status(
 ) -> bool:
     """#TODO: kitsu listener for new task statuses would be preferable"""
 
-    if task_status_name not in [
-        status["name"]
-        for status in project.statuses
-    ]:
-        logging.info(
-            f"Creating task status {task_status_name} for '{project.name}'"
-        )
-        status = await get_new_task_status(
-            addon, project, task_status_name, mock
-        )
-        project.statuses.append(status.dict())
-        await project.save()
-        return True
-    return False
+    if any(status["name"] == task_status_name for status in project.statuses):
+        return False
+
+    logging.info(
+        f"Creating task status {task_status_name} for '{project.name}'"
+    )
+    status = await get_new_task_status(addon, project, task_status_name, mock)
+    project.statuses.append(status.dict())
+    await project.save()
+    return True
 
 
 async def sync_task(
