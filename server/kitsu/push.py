@@ -487,6 +487,7 @@ async def get_new_task_status(
     addon: "KitsuAddon | None",
     project: "ProjectEntity",
     task_status_name: str,
+    mock: bool | None = False,
 ) -> Status:
     """Build the AYON status for a Kitsu task status missing from a project.
 
@@ -495,13 +496,24 @@ async def get_new_task_status(
     settings. A status stored without a color breaks the loader and the
     browser, so fall back on the AYON defaults, color included, when the
     status cannot be read from Kitsu.
+
+    Only called for a status the project does not have yet, so Kitsu is
+    asked once per new status, the created status being saved either way.
     """
     if addon is not None:
         try:
+            # The push endpoint does not set the Kitsu client up, it stays
+            # unset in a server process where no pairing call ran yet
+            await addon.ensure_kitsu(mock)
             kitsu_statuses = await parse_statuses(
                 addon, project.data.get("kitsuProjectId")
             )
-        except (AyonException, KitsuLoginException, httpx.HTTPError) as e:
+        except (
+            AyonException,
+            KitsuLoginException,
+            httpx.HTTPError,
+            ValueError,
+        ) as e:
             logging.warning(
                 f"Could not get the Kitsu task statuses, creating "
                 f"'{task_status_name}' with default values: {e}"
@@ -526,6 +538,7 @@ async def ensure_task_status(
     project: "ProjectEntity",
     task_status_name: str,
     addon: "KitsuAddon | None" = None,
+    mock: bool | None = False,
 ) -> bool:
     """#TODO: kitsu listener for new task statuses would be preferable"""
 
@@ -536,7 +549,9 @@ async def ensure_task_status(
         logging.info(
             f"Creating task status {task_status_name} for '{project.name}'"
         )
-        status = await get_new_task_status(addon, project, task_status_name)
+        status = await get_new_task_status(
+            addon, project, task_status_name, mock
+        )
         project.statuses.append(status.dict())
         await project.save()
         return True
@@ -550,10 +565,11 @@ async def sync_task(
     existing_tasks: dict[str, Any],
     existing_folders: dict[str, Any],
     entity_dict: "EntityDict",
+    mock: bool | None = False,
 ):
     if "task_status_name" in entity_dict:
         await ensure_task_status(
-            project, entity_dict["task_status_name"], addon
+            project, entity_dict["task_status_name"], addon, mock
         )
 
     if "task_type_name" in entity_dict:
@@ -891,6 +907,7 @@ async def push_entities(
                 tasks,
                 folders,
                 entity_dict,
+                payload.mock,
             )
 
     logging.info(
