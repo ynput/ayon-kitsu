@@ -1,6 +1,7 @@
 include .env
 
-AYON_ADDON_VERSION=$(shell python -c "import os;import sys;content={};f=open('$(CURDIR)/../../package.py');exec(f.read(),content);f.close();print(content['version'])")
+AYON_ADDON_VERSION=$(shell python -c "import os;import sys;content={};f=open('$(CURDIR)/../../package.py');exec(f.read(),content);f.close();print(content['version'].replace('+', '-'))")
+AYON_WORKING_VERSION=$(shell python -c "import os;import sys;content={};f=open('$(CURDIR)/../../package.py');exec(f.read(),content);f.close();print(content['version'].split('-')[0].split('+')[0] + '+git')")
 AYON_ADDON_NAME=kitsu
 SERVICE_NAME=processor
 BASE_NAME := ayon-$(AYON_ADDON_NAME)-$(SERVICE_NAME)
@@ -46,5 +47,5 @@ dev: build
 		--env AYON_API_KEY=${AYON_API_KEY} \
 		--env AYON_SERVER_URL=${AYON_SERVER_URL} \
 		--env AYON_ADDON_NAME=${AYON_ADDON_NAME} \
-		--env AYON_ADDON_VERSION=$(AYON_ADDON_VERSION) \
+		--env AYON_ADDON_VERSION=$(AYON_WORKING_VERSION) \
 		$(IMAGE) python -m processor
