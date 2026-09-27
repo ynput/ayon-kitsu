@@ -66,6 +66,19 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
 
     def ensure_is_process_ready(self, process_context):
         """Block process launch if Kitsu credentials are missing or invalid."""
+        from ayon_core.settings import (
+            get_project_settings,
+            get_studio_settings,
+        )
+
+        # Skip when Kitsu is disabled for the project (or studio)
+        if process_context.project_name:
+            settings = get_project_settings(process_context.project_name)
+        else:
+            settings = get_studio_settings()
+        if not is_kitsu_enabled_in_settings(settings["kitsu"]):
+            return
+
         from ayon_core.addon import ProcessPreparationError
         from .credentials import (
             load_credentials,
@@ -80,9 +93,23 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
                 "Please fill them via the Kitsu Connect tray action."
             )
 
-        if not validate_credentials(
-            login, password, kitsu_url=self.server_url
-        ):
+        import gazu
+        import requests
+
+        try:
+            is_valid = validate_credentials(
+                login, password, kitsu_url=self.server_url
+            )
+        except (
+            gazu.exception.HostException,
+            requests.exceptions.ConnectionError,
+        ) as exc:
+            raise ProcessPreparationError(
+                f"Kitsu server '{self.server_url}' could not be reached. "
+                "Please check the server URL and your network connection."
+            ) from exc
+
+        if not is_valid:
             raise ProcessPreparationError(
                 "Kitsu credentials are invalid. "
                 "Please update them via the Kitsu Connect tray action."
