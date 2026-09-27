@@ -7,6 +7,7 @@ from ayon_core.addon import (
     IPluginPaths,
     ITrayAction,
 )
+from ayon_core.settings import get_project_settings, get_studio_settings
 from .version import __version__
 
 KITSU_ROOT = Path(__file__).parent
@@ -65,12 +66,18 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
         return {"KITSU_SERVER": self.server_url}
 
     def ensure_is_process_ready(self, process_context):
-        """Block process launch if Kitsu credentials are missing or invalid."""
-        from ayon_core.settings import (
-            get_project_settings,
-            get_studio_settings,
-        )
+        """Ensure Kitsu is ready for the process.
 
+        Skipped when Kitsu is disabled in project (or studio) settings.
+        On success, 'KITSU_LOGIN' and 'KITSU_PWD' env variables are set.
+
+        Args:
+            process_context (ProcessContext): Process context.
+
+        Raises:
+            ProcessPreparationError: Credentials are missing or invalid,
+                or the Kitsu server could not be reached.
+        """
         # Skip when Kitsu is disabled for the project (or studio)
         if process_context.project_name:
             settings = get_project_settings(process_context.project_name)
