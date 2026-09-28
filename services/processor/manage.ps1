@@ -68,6 +68,12 @@ function load-env {
       }
     }
   }
+
+  # Set AYON_ADDON_VERSION if not set in env file.
+  if (-not $env:AYON_ADDON_VERSION) {
+    $env:AYON_ADDON_VERSION = $AYON_ADDON_VERSION
+  }
+  
 }
 
 function RunDocker {
@@ -78,7 +84,7 @@ function RunDocker {
   	--env AYON_API_KEY=$env:AYON_API_KEY `
   	--env AYON_SERVER_URL=$env:AYON_SERVER_URL `
   	--env AYON_ADDON_NAME=$AYON_ADDON_NAME `
-  	--env AYON_ADDON_VERSION=$AYON_ADDON_VERSION `
+  	--env AYON_ADDON_VERSION=$env:AYON_ADDON_VERSION `
   	"$IMAGE" python -m processor
 }
 
