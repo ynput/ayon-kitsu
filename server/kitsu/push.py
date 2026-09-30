@@ -489,74 +489,32 @@ class TaskStatusCache:
     """Kitsu statuses fetched for one push request."""
 
     statuses: list[Status] | None = None
-    error: str | None = None
 
 
 async def get_new_task_status(
-    addon: "KitsuAddon | None",
+    addon: "KitsuAddon",
     project: "ProjectEntity",
     task_status_name: str,
     mock: bool | None = False,
     status_cache: TaskStatusCache | None = None,
 ) -> Status:
     """Build a missing AYON status from Kitsu or use AYON defaults."""
-    if addon is None:
-        return Status(
-            name=task_status_name,
-            shortName=task_status_name[:4],
-            icon="task_alt",
-        )
-
     if status_cache is None:
         status_cache = TaskStatusCache()
     if status_cache.statuses is None:
         try:
             # The push endpoint does not set up the Kitsu client.
             await addon.ensure_kitsu(mock)
-            for attempt in range(2):
-                try:
-                    status_cache.statuses = await parse_statuses(
-                        addon, project.data.get("kitsuProjectId")
-                    )
-                    break
-                except KitsuLoginException as e:
-                    cause = e.__cause__
-                    retryable = isinstance(cause, httpx.RequestError) or (
-                        isinstance(cause, httpx.HTTPStatusError)
-                        and cause.response.status_code >= 500
-                    )
-                    if attempt or not retryable:
-                        raise
-                except (AyonException, httpx.HTTPError):
-                    if attempt:
-                        raise
-        except (
-            AyonException,
-            KitsuLoginException,
-            httpx.HTTPError,
-            ValueError,
-            # parse_statuses can raise these for malformed 200 JSON.
-            AttributeError,
-            KeyError,
-            TypeError,
-        ) as e:
+            status_cache.statuses = await parse_statuses(
+                addon, project.data.get("kitsuProjectId")
+            )
+        except (AyonException, KitsuLoginException, httpx.HTTPError) as e:
+            logging.warning(f"Could not get Kitsu task statuses: {e}")
             status_cache.statuses = []
-            status_cache.error = str(e)
 
-    for kitsu_status in status_cache.statuses:
-        if kitsu_status.name == task_status_name:
-            return kitsu_status
-    if status_cache.error is not None:
-        logging.warning(
-            f"Could not get the Kitsu task statuses, creating "
-            f"'{task_status_name}' with default values: "
-            f"{status_cache.error}"
-        )
-    else:
-        logging.warning(
-            f"Task status '{task_status_name}' not found in Kitsu, "
-            "creating it with default values"
-        )
+    for status in status_cache.statuses:
+        if status.name == task_status_name:
+            return status
 
     return Status(
         name=task_status_name,
@@ -568,7 +526,7 @@ async def get_new_task_status(
 async def ensure_task_status(
     project: "ProjectEntity",
     task_status_name: str,
-    addon: "KitsuAddon | None" = None,
+    addon: "KitsuAddon",
     mock: bool | None = False,
     status_cache: TaskStatusCache | None = None,
 ) -> bool:
