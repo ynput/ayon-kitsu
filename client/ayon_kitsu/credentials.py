@@ -3,8 +3,13 @@
 import os
 from typing import Tuple, Optional, Union
 import gazu
+import requests
 
 from ayon_core.lib import AYONSecureRegistry, emit_event
+
+
+class KitsuServerError(Exception):
+    """Kitsu server could not be reached or is not a valid Kitsu API."""
 
 
 def validate_credentials(
@@ -21,6 +26,9 @@ def validate_credentials(
 
     Returns:
         bool: Are credentials valid?
+
+    Raises:
+        KitsuServerError: Kitsu server could not be reached.
     """
 
     if kitsu_url is None:
@@ -30,14 +38,20 @@ def validate_credentials(
         else:
             kitsu_url = str(os.environ.get("KITSU_SERVER"))
 
-    # Connect to server
-    validate_host(kitsu_url)
-
-    # Authenticate
     try:
+        # Connect to server
+        validate_host(kitsu_url)
+        # Authenticate
         gazu.log_in(login, password)
     except gazu.exception.AuthFailedException:
         return False
+    except (
+        gazu.exception.HostException,
+        requests.exceptions.ConnectionError,
+    ) as exc:
+        raise KitsuServerError(
+            f"Kitsu server '{kitsu_url}' could not be reached."
+        ) from exc
 
     # TODO remove this event trigger
     # - for what is this used?
