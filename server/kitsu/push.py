@@ -1,5 +1,6 @@
 import json
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, get_args
 
 import httpx
@@ -7,11 +8,13 @@ from nxtools import logging
 
 from ayon_server.auth.session import Session
 from ayon_server.entities import FolderEntity, ProjectEntity, UserEntity
+from ayon_server.exceptions import AyonException
 from ayon_server.helpers.deploy_project import anatomy_to_project_data
 from ayon_server.lib.postgres import Postgres
+from ayon_server.settings.anatomy.statuses import Status
 from ayon_server.types import Field, OPModel
 
-from .anatomy import get_kitsu_project_anatomy, parse_attrib
+from .anatomy import get_kitsu_project_anatomy, parse_attrib, parse_statuses
 from .constants import (
     CONSTANT_KITSU_MODELS,
 )
@@ -34,6 +37,7 @@ from .utils import (
 
 
 from .addon_helpers import to_username, required_values
+from .kitsu import KitsuLoginException
 
 if TYPE_CHECKING:
     from .. import KitsuAddon
@@ -480,29 +484,66 @@ async def ensure_task_type(
     return False
 
 
+@dataclass
+class TaskStatusCache:
+    """Kitsu statuses fetched for one push request."""
+
+    statuses: list[Status] | None = None
+
+
+async def get_new_task_status(
+    addon: "KitsuAddon",
+    project: "ProjectEntity",
+    task_status_name: str,
+    mock: bool | None = False,
+    status_cache: TaskStatusCache | None = None,
+) -> Status:
+    """Build a missing AYON status from Kitsu or use AYON defaults."""
+    if status_cache is None:
+        status_cache = TaskStatusCache()
+    if status_cache.statuses is None:
+        try:
+            # The push endpoint does not set up the Kitsu client.
+            await addon.ensure_kitsu(mock)
+            status_cache.statuses = await parse_statuses(
+                addon, project.data.get("kitsuProjectId")
+            )
+        except (AyonException, KitsuLoginException, httpx.HTTPError) as e:
+            logging.warning(f"Could not get Kitsu task statuses: {e}")
+            status_cache.statuses = []
+
+    for status in status_cache.statuses:
+        if status.name == task_status_name:
+            return status
+
+    return Status(
+        name=task_status_name,
+        shortName=task_status_name[:4],
+        icon="task_alt",
+    )
+
+
 async def ensure_task_status(
     project: "ProjectEntity",
     task_status_name: str,
+    addon: "KitsuAddon",
+    mock: bool | None = False,
+    status_cache: TaskStatusCache | None = None,
 ) -> bool:
     """#TODO: kitsu listener for new task statuses would be preferable"""
 
-    if task_status_name not in [
-        status["name"]
-        for status in project.statuses
-    ]:
-        logging.info(
-            f"Creating task status {task_status_name} for '{project.name}'"
-        )
-        project.statuses.append(
-            {
-                "name": task_status_name,
-                "icon": "task_alt",
-                "shortName": task_status_name[:4],
-            }
-        )
-        await project.save()
-        return True
-    return False
+    if any(status["name"] == task_status_name for status in project.statuses):
+        return False
+
+    logging.info(
+        f"Creating task status {task_status_name} for '{project.name}'"
+    )
+    status = await get_new_task_status(
+        addon, project, task_status_name, mock, status_cache=status_cache
+    )
+    project.statuses.append(status.dict())
+    await project.save()
+    return True
 
 
 async def sync_task(
@@ -512,9 +553,17 @@ async def sync_task(
     existing_tasks: dict[str, Any],
     existing_folders: dict[str, Any],
     entity_dict: "EntityDict",
+    mock: bool | None = False,
+    status_cache: TaskStatusCache | None = None,
 ):
     if "task_status_name" in entity_dict:
-        await ensure_task_status(project, entity_dict["task_status_name"])
+        await ensure_task_status(
+            project,
+            entity_dict["task_status_name"],
+            addon,
+            mock,
+            status_cache=status_cache,
+        )
 
     if "task_type_name" in entity_dict:
         await ensure_task_type(project, entity_dict["task_type_name"])
@@ -794,6 +843,7 @@ async def push_entities(
     folders = {}
     tasks = {}
     users = {}
+    status_cache = TaskStatusCache()
 
     settings = await addon.get_studio_settings()
     for entity_dict in payload.entities:
@@ -851,6 +901,8 @@ async def push_entities(
                 tasks,
                 folders,
                 entity_dict,
+                payload.mock,
+                status_cache=status_cache,
             )
 
     logging.info(
