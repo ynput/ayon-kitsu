@@ -91,6 +91,7 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
             load_credentials,
             validate_credentials,
             set_credentials_envs,
+            KitsuServerError,
         )
 
         login, password = load_credentials()
@@ -100,17 +101,11 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
                 "Please fill them via the Kitsu Connect tray action."
             )
 
-        import gazu
-        import requests
-
         try:
             is_valid = validate_credentials(
                 login, password, kitsu_url=self.server_url
             )
-        except (
-            gazu.exception.HostException,
-            requests.exceptions.ConnectionError,
-        ) as exc:
+        except KitsuServerError as exc:
             raise ProcessPreparationError(
                 f"Kitsu server '{self.server_url}' could not be reached. "
                 "Please check the server URL and your network connection."
