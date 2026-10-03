@@ -196,11 +196,26 @@ def delete_shot(parent: "KitsuProcessor", data: dict[str, str]):
 
 def create_or_update_task(parent: "KitsuProcessor", data: dict[str, str]):
     logging.info(f"create_or_update_task: {data}")
-    project_name = parent.get_paired_ayon_project(data["project_id"])
+    entity = None
+    project_id = data.get("project_id")
+    if not project_id:
+        # Zou before 1.0.32 emits the task update of reset_task_data without
+        # the project id. It runs after a comment is deleted, after a comment
+        # edit that changes the task status, and in `zou clean-tasks-data`.
+        # Read the project id from the task instead.
+        logging.debug(
+            f"create_or_update_task: no project id for task "
+            f"{data['task_id']}, reading it from the task"
+        )
+        entity = gazu.task.get_task(data["task_id"])
+        project_id = entity["project_id"]
+
+    project_name = parent.get_paired_ayon_project(project_id)
     if not project_name:
         return  # do nothing as this kitsu and ayon project are not paired
 
-    entity = gazu.task.get_task(data["task_id"])
+    if entity is None:
+        entity = gazu.task.get_task(data["task_id"])
     entity = utils.preprocess_task(entity["project_id"], entity)
 
     # Add ayon base url so we can use it in REST calls later on
