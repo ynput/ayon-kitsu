@@ -176,7 +176,7 @@ def test_full_sync(gazu, processor, monkeypatch, mocker):
     api_patch = mocker.patch.object(ayon_api, "post")
 
     processor.entrypoint = "/addons/kitsu/9.9.9"
-    res = fullsync.full_sync(processor, PROJECT_ID, "AYON_Project")
+    res = fullsync.project_full_sync(processor, PROJECT_ID, "AYON_Project")
 
     # assert logging
     log_calls = log_info.call_args_list
