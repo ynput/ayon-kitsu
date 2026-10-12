@@ -7,6 +7,7 @@ from ayon_core.addon import (
     IPluginPaths,
     ITrayAction,
 )
+from ayon_core.settings import get_project_settings, get_studio_settings
 from .version import __version__
 
 KITSU_ROOT = Path(__file__).parent
@@ -65,12 +66,32 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
         return {"KITSU_SERVER": self.server_url}
 
     def ensure_is_process_ready(self, process_context):
-        """Block process launch if Kitsu credentials are missing or invalid."""
+        """Ensure Kitsu is ready for the process.
+
+        Skipped when Kitsu is disabled in project (or studio) settings.
+        On success, 'KITSU_LOGIN' and 'KITSU_PWD' env variables are set.
+
+        Args:
+            process_context (ProcessContext): Process context.
+
+        Raises:
+            ProcessPreparationError: Credentials are missing or invalid,
+                or the Kitsu server could not be reached.
+        """
+        # Skip when Kitsu is disabled for the project (or studio)
+        if process_context.project_name:
+            settings = get_project_settings(process_context.project_name)
+        else:
+            settings = get_studio_settings()
+        if not is_kitsu_enabled_in_settings(settings["kitsu"]):
+            return
+
         from ayon_core.addon import ProcessPreparationError
         from .credentials import (
             load_credentials,
             validate_credentials,
             set_credentials_envs,
+            KitsuServerError,
         )
 
         login, password = load_credentials()
@@ -80,9 +101,17 @@ class KitsuAddon(AYONAddon, IPluginPaths, ITrayAction):
                 "Please fill them via the Kitsu Connect tray action."
             )
 
-        if not validate_credentials(
-            login, password, kitsu_url=self.server_url
-        ):
+        try:
+            is_valid = validate_credentials(
+                login, password, kitsu_url=self.server_url
+            )
+        except KitsuServerError as exc:
+            raise ProcessPreparationError(
+                f"Kitsu server '{self.server_url}' could not be reached. "
+                "Please check the server URL and your network connection."
+            ) from exc
+
+        if not is_valid:
             raise ProcessPreparationError(
                 "Kitsu credentials are invalid. "
                 "Please update them via the Kitsu Connect tray action."
