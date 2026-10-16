@@ -155,7 +155,7 @@ class KitsuProcessor:
         # python-socketio's own reconnection logic can get stuck
         # retrying forever using a stale auth header (captured once at
         # connect time), e.g. after the Kitsu server restarts or the
-        # access token expires. 
+        # access token expires.
         # This watchdog detects that and forces a clean reconnect.
         gazu_watchdog_thread = threading.Thread(
             target=self.watch_gazu_connection, daemon=True
@@ -166,7 +166,7 @@ class KitsuProcessor:
         """(Re)connect the Kitsu event client and listen for events.
 
         Runs forever in its own thread. Whenever the connection is lost,
-        dropped, or closed by the watchdog, this re-authenticates with Kitsu 
+        dropped, or closed by the watchdog, this re-authenticates with Kitsu
         (in case the access token has expired) and reconnects.
         """
         while True:
