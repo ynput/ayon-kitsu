@@ -137,6 +137,30 @@ class KitsuProcessor:
         except gazu.exception.AuthFailedException as e:
             raise KitsuServerError(f"Kitsu login failed: {e}") from e
 
+        # Zou access tokens expire after 7 days: re-login on 401 and let
+        # gazu replay the failed request.
+        self._relogging_in = False
+
+        def relogin(client, path):
+            if self._relogging_in:
+                return False
+            self._relogging_in = True
+            try:
+                gazu.log_in(
+                    self.kitsu_login_email,
+                    self.kitsu_login_password,
+                    client=client,
+                )
+                logging.info(f"Kitsu session renewed (on {path})")
+                return True
+            except Exception:
+                log_traceback("Kitsu re-login failed")
+                return False
+            finally:
+                self._relogging_in = False
+
+        gazu.client.default_client.callback_not_authenticated = relogin
+
         # init event client
         self.kitsu_events_url = self.kitsu_server_url.replace(
             "api", "socket.io"
