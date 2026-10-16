@@ -175,7 +175,7 @@ def project_full_sync(
     logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
     asset_types = get_asset_types(kitsu_project_id)
     task_statuses = get_statuses()
-    task_types = get_task_types(kitsu_project_id)
+    task_types = get_task_types(kitsu_project_id, ordered_list=True)
     persons_to_update = get_persons_to_update(parent.entrypoint)
 
     assets = get_assets(kitsu_project_id, asset_types)
