@@ -198,19 +198,14 @@ def get_task_types(
     raw_task_types = gazu.task.all_task_types_for_project(kitsu_project_id)
     kitsu_task_types = {}
 
+    if ordered_list:
+        raw_task_types = sorted(
+            raw_task_types,
+            key=lambda task_type: (task_type["for_entity"], task_type["priority"]),
+        )
+
     for task_type in raw_task_types:
         kitsu_task_types[task_type["id"]] = task_type["name"]
-
-    if ordered_list:
-        def get_sorting_keys(item):
-            return (item[1]["for_entity"], item[1]["priority"])
-
-        kitsu_task_types = dict(
-            sorted(
-                kitsu_task_types.items(),
-                key=lambda item: get_sorting_keys(item),
-            )
-        )
 
     return kitsu_task_types
 
