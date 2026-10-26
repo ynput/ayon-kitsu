@@ -17,11 +17,16 @@ if TYPE_CHECKING:
 
 
 async def parse_task_types(
-    addon: "KitsuAddon", kitsu_project_id: str
+    addon: "KitsuAddon",
+    kitsu_task_types: list[dict[str, Any]],
 ) -> list[TaskType]:
-    """
+    """Parse ordered Kitsu task types into AYON task types.
 
-    Kitsy structure:
+    Args:
+        addon: Kitsu addon instance.
+        kitsu_task_types: Kitsu task types in project order.
+
+    Kitsu structure:
 
     {
       "name": "Lookdev",
@@ -47,13 +52,8 @@ async def parse_task_types(
 
     """
 
-    task_status_response = await addon.kitsu.get(
-        f"data/projects/{kitsu_project_id}/task-types"
-    )
-    if task_status_response.status_code != 200:
-        raise AyonException("Could not get Kitsu task types")
     result: list[TaskType] = []
-    for kitsu_task_type in task_status_response.json():
+    for kitsu_task_type in kitsu_task_types:
         # Check if the task already exist
         # eg. Concept under Assets and the hardcoded Concept under Concepts
         if any(d.name == kitsu_task_type["name"] for d in result):
@@ -206,7 +206,21 @@ async def get_kitsu_project_anatomy(
     addon: "KitsuAddon",
     kitsu_project_id: str,
     ayon_project: ProjectEntity | None = None,
+    task_type_order: list[str] | None = None,
 ) -> Anatomy:
+    """Build the AYON anatomy of a Kitsu project.
+
+    Args:
+        addon: Kitsu addon instance.
+        kitsu_project_id: Kitsu project ID.
+        ayon_project: Existing AYON project used to keep its anatomy.
+        task_type_order: Ordered Kitsu task type IDs to apply. When not
+            given, the project's stored task type order is used; the first
+            processor sync sets the final order.
+    
+    Returns:
+        Anatomy
+    """
     kitsu_project_response = await addon.kitsu.get(
         f"data/projects/{kitsu_project_id}"
     )
@@ -217,7 +231,19 @@ async def get_kitsu_project_anatomy(
 
     attributes = parse_attrib(kitsu_project)
     statuses = await parse_statuses(addon, kitsu_project_id)
-    task_types = await parse_task_types(addon, kitsu_project_id)
+    task_type_response = await addon.kitsu.get("data/task-types")
+
+    task_types_by_id = {
+        task_type["id"]: task_type for task_type in task_type_response.json()
+    }
+    if task_type_order is None:
+        task_type_order = kitsu_project.get("task_types", [])
+    ordered_task_types = [
+        task_types_by_id[task_type_id]
+        for task_type_id in task_type_order
+        if task_type_id in task_types_by_id
+    ]
+    task_types = await parse_task_types(addon, ordered_task_types)
 
     if ayon_project:
         anatomy = extract_ayon_project_anatomy(ayon_project)

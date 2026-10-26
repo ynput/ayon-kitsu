@@ -13,6 +13,7 @@ from .utils import (
     get_ayon_users_by_email,
     get_persons_by_id,
     get_persons_to_update,
+    get_project_entity,
     get_statuses,
     get_task_persons,
     get_task_types,
@@ -219,10 +220,12 @@ def project_full_sync(
     for entity in entities:
         entity["ayon_server_url"] = ayon_api.get_base_url()
 
+    project_entity = get_project_entity(kitsu_project_id)
+    project_entity["ayon_server_url"] = ayon_api.get_base_url()
     ayon_api.post(
         f"{parent.entrypoint}/push",
         project_name=project_name,
-        entities=entities,
+        entities=[project_entity],
     )
 
     # Re-parent assets whose type changed while the processor was offline

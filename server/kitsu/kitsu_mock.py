@@ -44,6 +44,12 @@ class KitsuMock:
             "project_status_name": "Open",
             "default_preview_background_file_id": None,
             "id": "kitsu-project-id-1",
+            "task_types": ["task-type-id-1", "task-type-id-2", "task-type-id-3"],
+            "task_types_priority": {
+                "task-type-id-1": None,
+                "task-type-id-2": 1,
+                "task-type-id-3": 2,
+            },
             "created_at": "2024-01-01T00:00:00",
             "updated_at": "2024-01-01T00:00:00",
             "type": "Project",
@@ -74,6 +80,11 @@ class KitsuMock:
             "project_status_name": "Open",
             "default_preview_background_file_id": None,
             "id": "kitsu-project-id-2",
+            "task_types": ["task-type-id-1", "task-type-id-2"],
+            "task_types_priority": {
+                "task-type-id-1": None,
+                "task-type-id-2": None,
+            },
             "created_at": "2024-01-01T00:00:00",
             "updated_at": "2024-01-01T00:00:00",
             "type": "Project",
@@ -215,22 +226,22 @@ class KitsuMock:
         if method == "get" and endpoint == "data/projects":
             return KitsuResponse(self.api_data_projects)
 
+        if method == "get" and endpoint == "data/projects/open":
+            return KitsuResponse(self.api_data_projects)
+
+        if method == "get" and endpoint == "data/projects/all":
+            return KitsuResponse(self.api_data_projects)
+
+        if method == "get" and endpoint == "data/task-types":
+            return KitsuResponse(
+                self.api_data_task_types + self.updated_api_data_task_types[2:]
+            )
+
         if method == "get" and endpoint == "data/projects/kitsu-project-id-1":
             return KitsuResponse(self.api_data_projects[0])
 
         if method == "get" and endpoint == "data/projects/kitsu-project-id-2":
             return KitsuResponse(self.api_data_projects[1])
-
-        if (
-            method == "get"
-            and endpoint == "data/projects/kitsu-project-id-2/task-types"
-        ):
-            return KitsuResponse(self.api_data_task_types)
-        if (
-            method == "get"
-            and endpoint == "data/projects/kitsu-project-id-1/task-types"
-        ):
-            return KitsuResponse(self.updated_api_data_task_types)
 
         if method == "get" and endpoint == "data/task-status":
             return KitsuResponse(self.api_data_task_status)

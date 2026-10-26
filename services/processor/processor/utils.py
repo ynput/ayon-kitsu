@@ -192,22 +192,85 @@ def get_asset_types(kitsu_project_id: str) -> dict[str, str]:
     return kitsu_asset_types
 
 
+def get_ordered_task_types(kitsu_project_id: str) -> list[dict[str, Any]]:
+    """Get project task types grouped by entity and Kitsu priority.
+
+    Args:
+        kitsu_project_id: Kitsu project ID.
+
+    Returns:
+        list: Ordered task types.
+    """
+    task_types_by_id = {
+        task_type["id"]: task_type for task_type in gazu.task.all_task_types()
+    }
+    kitsu_project = next(
+        (
+            project
+            for project in gazu.project.all_open_projects()
+            if project["id"] == kitsu_project_id
+        ),
+        None,
+    )
+
+    priorities = kitsu_project.get("task_types_priority", {})
+    task_types_by_entity: dict[str, list[dict[str, Any]]] = {}
+    for task_type_id in kitsu_project["task_types"]:
+        if task_type := task_types_by_id.get(task_type_id):
+            entity_type = task_type.get("for_entity") or "Asset"
+            task_types_by_entity.setdefault(entity_type, []).append(task_type)
+
+    return [
+        task_type
+        for task_types in task_types_by_entity.values()
+        for task_type in sorted(
+            task_types,
+            key=lambda task_type: (
+                int(
+                    priorities[task_type["id"]]
+                    if priorities.get(task_type["id"]) is not None
+                    else task_type.get("priority", 0)
+                ),
+                task_type["name"],
+            ),
+        )
+    ]
+
+
 def get_task_types(
     kitsu_project_id: str, ordered_list: bool = False
 ) -> dict[str, str]:
-    raw_task_types = gazu.task.all_task_types_for_project(kitsu_project_id)
+    raw_task_types = (
+        get_ordered_task_types(kitsu_project_id)
+        if ordered_list
+        else gazu.task.all_task_types_for_project(kitsu_project_id)
+    )
     kitsu_task_types = {}
-
-    if ordered_list:
-        raw_task_types = sorted(
-            raw_task_types,
-            key=lambda task_type: (task_type["for_entity"], task_type["priority"]),
-        )
 
     for task_type in raw_task_types:
         kitsu_task_types[task_type["id"]] = task_type["name"]
 
     return kitsu_task_types
+
+
+def get_project_entity(kitsu_project_id: str) -> dict[str, Any]:
+    """Get a Kitsu project entity with processed fields.
+
+    The ``task_types`` field is replaced by the ordered Kitsu task type IDs so
+    the AYON server can apply that order when it syncs the project anatomy.
+
+    Args:
+        kitsu_project_id: Kitsu project ID.
+
+    Returns:
+        dict: Project entity.
+    """
+    project = gazu.project.get_project(kitsu_project_id)
+    project["task_types"] = [
+        task_type["id"]
+        for task_type in get_ordered_task_types(kitsu_project_id)
+    ]
+    return project
 
 
 def get_statuses() -> dict[str, str]:
