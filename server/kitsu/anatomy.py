@@ -217,7 +217,7 @@ async def get_kitsu_project_anatomy(
         task_type_order: Ordered Kitsu task type IDs to apply. When not
             given, the project's stored task type order is used; the first
             processor sync sets the final order.
-    
+
     Returns:
         Anatomy
     """

@@ -44,7 +44,9 @@ class KitsuMock:
             "project_status_name": "Open",
             "default_preview_background_file_id": None,
             "id": "kitsu-project-id-1",
-            "task_types": ["task-type-id-1", "task-type-id-2", "task-type-id-3"],
+            "task_types": [
+                "task-type-id-1", "task-type-id-2", "task-type-id-3"
+            ],
             "task_types_priority": {
                 "task-type-id-1": None,
                 "task-type-id-2": 1,
