@@ -194,14 +194,29 @@ def delete_shot(parent: "KitsuProcessor", data: dict[str, str]):
     )
 
 
-def create_or_update_task(parent: "KitsuProcessor", data: dict[str, str]):
+def create_or_update_task(
+    parent: "KitsuProcessor", data: dict[str, str]
+) -> Any:
+    """Preprocess and push a Kitsu task update to AYON.
+
+    Args:
+        parent: Processor handling the Kitsu event.
+        data: Event payload containing task and project IDs.
+    """
     logging.info(f"create_or_update_task: {data}")
     project_name = parent.get_paired_ayon_project(data["project_id"])
     if not project_name:
         return  # do nothing as this kitsu and ayon project are not paired
 
     entity = gazu.task.get_task(data["task_id"])
-    entity = utils.preprocess_task(entity["project_id"], entity)
+    persons_by_id = utils.get_persons_by_id()
+    entity["persons"] = utils.get_task_persons(entity, persons_by_id)
+    entity = utils.preprocess_task(
+        entity,
+        utils.get_task_types(entity["project_id"]),
+        utils.get_statuses(),
+        utils.get_ayon_users_by_email(),
+    )
 
     # Add ayon base url so we can use it in REST calls later on
     entity["ayon_server_url"] = ayon_api.get_base_url()
