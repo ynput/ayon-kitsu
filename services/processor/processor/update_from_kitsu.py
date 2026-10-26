@@ -201,7 +201,7 @@ def create_or_update_task(
 
     Args:
         parent: Processor handling the Kitsu event.
-        data: Event payload containing task and project IDs.
+        data: Event payload containing the task ID and optional project ID.
     """
     logging.info(f"create_or_update_task: {data}")
     entity = None
