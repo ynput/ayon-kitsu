@@ -46,3 +46,33 @@ cd ayon-docker
 
 docker compose exec server ./reload.sh
 ```
+
+### Project deletion unit tests
+
+The tests in `unit/` use mocked HTTP and database calls. They do not require
+live projects and do not delete anything. From the repository root, run
+the server tests in an AYON backend environment, with this repository on
+`PYTHONPATH`:
+
+```shell
+python -m unittest discover -s tests/unit -p test_project_remove.py -v
+```
+
+Run the event-handler tests with the processor dependencies installed:
+
+```shell
+PYTHONPATH=services/processor python -m unittest discover \
+    -s tests/unit -p test_project_delete_processor.py -v
+```
+
+### Project deletion integration tests
+
+`tests/test_project_deletion.py` runs in the normal pytest environment. It
+creates uniquely named projects, removes only those projects, and restores
+the selected addon's settings after each test. Run this against a test server;
+the deletion setting is changed temporarily. Set `AYON_KITSU_TEST_VERSION` to
+target an isolated addon version instead of the production version.
+
+```shell
+poetry run pytest tests/test_project_deletion.py -v
+```

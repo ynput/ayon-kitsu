@@ -34,15 +34,21 @@ def delete_project(parent: "KitsuProcessor", data: dict[str, str]):
     if not project_name:
         return  # do nothing as this kitsu and ayon project are not paired
 
-    # Add ayon base url so we can use it in REST calls later on
-    entity = {}
-    entity["ayon_server_url"] = ayon_api.get_base_url()
+    # The project has already been deleted in Kitsu, so construct the
+    # removal payload from the event instead of fetching the entity.
+    entity = {
+        "id": data["project_id"],
+        "type": "Project",
+        "ayon_server_url": ayon_api.get_base_url(),
+    }
 
-    return ayon_api.post(
-        f"{parent.entrypoint}/push",
+    response = ayon_api.post(
+        f"{parent.entrypoint}/remove",
         project_name=project_name,
         entities=[entity],
     )
+    response.raise_for_status()
+    return response
 
 
 def create_or_update_asset(parent: "KitsuProcessor", data: dict[str, str]):

@@ -7,6 +7,7 @@ from nxtools import logging
 
 from ayon_server.auth.session import Session
 from ayon_server.entities import FolderEntity, ProjectEntity, UserEntity
+from ayon_server.exceptions import NotFoundException
 from ayon_server.helpers.deploy_project import anatomy_to_project_data
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import Field, OPModel
@@ -330,20 +331,41 @@ async def sync_project(
 
 
 async def delete_project(
-    addon: "KitsuAddon",
     user: "UserEntity",
     project: "ProjectEntity",
     entity_dict: "EntityDict",
 ):
-    logging.info("delete_project")
+    """Delete a paired AYON project through its complete REST workflow.
+
+    Args:
+        user: User requesting the deletion.
+        project: AYON project to delete.
+        entity_dict: Deleted Kitsu project's ID and AYON server URL.
+    """
+    (entity_id,) = required_values(entity_dict, ["id"])
+    if project.data.get("kitsuProjectId") != entity_id:
+        logging.warning(
+            f"Skipping project deletion: {project.name} is not paired"
+            f" with Kitsu project {entity_id}"
+        )
+        return
+
     session = await Session.create(user)
     headers = {"Authorization": f"Bearer {session.token}"}
-    # Check if group already exists
     async with httpx.AsyncClient() as client:
-        await client.delete(
+        response = await client.delete(
             f"{entity_dict['ayon_server_url']}/api/projects/{project.name}",
             headers=headers,
         )
+        if response.status_code == 404:
+            # Another removal request may have deleted it after we loaded it.
+            try:
+                await ProjectEntity.load(project.name)
+            except NotFoundException:
+                logging.info(f"Project '{project.name}' is already removed")
+                return
+        response.raise_for_status()
+    logging.info(f"Deleted project '{project.name}'")
 
 
 async def sync_folder(
@@ -891,13 +913,22 @@ async def remove_entities(
             continue
 
         if entity_dict["type"] == "Project":
-            if settings.delete_ayon_projects.enabled:
-                await update_project(
-                    addon,
+            if settings.sync_settings.delete_projects:
+                try:
+                    target_project = await get_project()
+                except NotFoundException:
+                    logging.info(
+                        f"Project '{payload.project_name}' already removed"
+                    )
+                    continue
+                await delete_project(
                     user,
-                    await get_project(),
+                    target_project,
                     entity_dict,
                 )
+                # A repeated Project entry must reload instead of using
+                # an entity that may have just been deleted.
+                project = None
         elif entity_dict["type"] == "Person":
             target_user = await get_user_by_kitsu_id(entity_dict["id"])
             if not target_user:
@@ -938,7 +969,7 @@ async def remove_entities(
             folders[entity_dict["id"]] = folder.id
 
     logging.info(
-        f"Deleted {len(payload.entities)} entities"
+        f"Processed {len(payload.entities)} entity removal requests"
         f" in {time.time() - start_time}s"
     )
 
