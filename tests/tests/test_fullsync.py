@@ -211,7 +211,7 @@ def test_full_sync(gazu, processor, monkeypatch, mocker):
 
     processor.entrypoint = "/addons/kitsu/9.9.9"
     processor.settings = {}
-    fullsync.project_full_sync(processor, PROJECT_ID, "AYON_Project")
+    res = fullsync.project_full_sync(processor, PROJECT_ID, "AYON_Project")
 
     # assert logging
     log_calls = log_info.call_args_list
