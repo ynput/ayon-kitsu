@@ -82,30 +82,55 @@ def test_get_tasks(gazu, monkeypatch):
     monkeypatch.setattr(
         gazu.task,
         "all_tasks_for_project",
-        lambda x: mock_data.all_tasks_for_project,
+        lambda x: [dict(task) for task in mock_data.all_tasks_for_project],
     )
     monkeypatch.setattr(
-        gazu.person,
-        "get_person",
-        lambda x: mock_data.all_persons[0],
+        fullsync,
+        "get_ayon_users_by_email",
+        lambda: {
+            "user-id-1@temp.com": "user.one",
+            "user-id-3@temp.com": "user.three",
+        },
     )
+    persons = [
+        {**mock_data.all_persons[0], "id": "user-id-1"},
+        {**mock_data.all_persons[2], "id": "user-id-3"},
+    ]
     res = fullsync.get_tasks(
         PROJECT_ID,
         {"task-type-id-1": "Animation", "task-type-id-2": "Compositing"},
         {"task-status-id-1": "Todo", "task-status-id-2": "Approved"},
+        persons,
     )
-    # assert len(res) == 2
-    # assert res[0]['id'] == "task-id-1"
-    # assert res[0]['name'] == "animation"
-    # assert res[0]['task_type_name'] == 'Animation'
-    # assert res[0]['task_status_name'] == 'Approved'
+
+    assert len(res) == 2
+    assert res[0]["name"] == "animation"
+    assert res[0]["task_type_name"] == "Animation"
+    assert res[0]["task_status_name"] == "Approved"
+    assert set(res[0]["assignees"]) == {"user.one", "user.three"}
+    assert res[1]["name"] == "compositing"
+    assert res[1]["task_type_name"] == "Compositing"
+    assert res[1]["task_status_name"] == "Todo"
+    assert res[1]["assignees"] == []
 
 
-#
-# assert res[1]['id'] == "task-id-2"
-# assert res[1]['name'] == "compositing"
-# assert res[1]['task_type_name'] == 'Compositing'
-# assert res[1]['task_status_name'] == 'Todo'
+def test_get_tasks_ignores_unknown_assignees(gazu, monkeypatch):
+    task = {
+        **mock_data.all_tasks_for_project[0],
+        "assignees": ["missing-person"],
+    }
+    monkeypatch.setattr(gazu.task, "all_tasks_for_project", lambda x: [task])
+    monkeypatch.setattr(fullsync, "get_ayon_users_by_email", lambda: {})
+
+    res = fullsync.get_tasks(
+        PROJECT_ID,
+        {"task-type-id-1": "Animation"},
+        {"task-status-id-2": "Approved"},
+        mock_data.all_persons,
+    )
+
+    assert res[0]["persons"] == []
+    assert res[0]["assignees"] == []
 
 
 def test_full_sync(gazu, processor, monkeypatch, mocker):
@@ -148,12 +173,21 @@ def test_full_sync(gazu, processor, monkeypatch, mocker):
     monkeypatch.setattr(
         gazu.task,
         "all_tasks_for_project",
-        lambda x: mock_data.all_tasks_for_project,
+        lambda x: [dict(task) for task in mock_data.all_tasks_for_project],
     )
     monkeypatch.setattr(
         gazu.person,
         "all_persons",
         lambda: mock_data.all_persons,
+    )
+    monkeypatch.setattr(
+        fullsync,
+        "get_persons_to_update",
+        lambda entrypoint: mock_data.all_persons,
+    )
+    monkeypatch.setattr(fullsync, "get_ayon_users_by_email", lambda: {})
+    monkeypatch.setattr(
+        fullsync, "move_folders_by_asset_type", lambda *args: None
     )
     monkeypatch.setattr(
         gazu.person,
@@ -176,6 +210,7 @@ def test_full_sync(gazu, processor, monkeypatch, mocker):
     api_patch = mocker.patch.object(ayon_api, "post")
 
     processor.entrypoint = "/addons/kitsu/9.9.9"
+    processor.settings = {}
     res = fullsync.project_full_sync(processor, PROJECT_ID, "AYON_Project")
 
     # assert logging
