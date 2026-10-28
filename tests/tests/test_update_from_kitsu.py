@@ -1,4 +1,5 @@
 from pprint import pprint
+from types import SimpleNamespace
 
 import ayon_api
 import pytest
@@ -352,6 +353,7 @@ def test_delete_person_removes_user_without_paired_project(
 
     class UnpairedProcessor:
         entrypoint = processor.entrypoint
+        settings = processor.settings
 
         def get_paired_ayon_project(self, kitsu_project_id):
             return None
@@ -362,3 +364,176 @@ def test_delete_person_removes_user_without_paired_project(
     with pytest.raises(Exception) as exc_info:
         api.get_user("delete.person")
     assert str(exc_info.value).startswith("404 Client Error: Not Found for url:")
+
+
+def test_delete_events_are_ignored_when_sync_deletions_is_missing(monkeypatch):
+    """Old or unset settings must never forward delete events to AYON."""
+    parents = (
+        SimpleNamespace(
+            get_paired_ayon_project=lambda _project_id: "synthetic_project",
+        ),
+        SimpleNamespace(
+            settings={"sync_settings": {"sync_deletions": False}},
+            get_paired_ayon_project=lambda _project_id: "synthetic_project",
+        ),
+    )
+    monkeypatch.setattr(
+        update_from_kitsu.ayon_api,
+        "post",
+        lambda *args, **kwargs: pytest.fail("delete event reached AYON"),
+    )
+    handlers_and_payloads = (
+        (update_from_kitsu.delete_project, {"project_id": "synthetic"}),
+        (
+            update_from_kitsu.delete_asset,
+            {"project_id": "synthetic", "asset_id": "synthetic"},
+        ),
+        (
+            update_from_kitsu.delete_episode,
+            {"project_id": "synthetic", "episode_id": "synthetic"},
+        ),
+        (
+            update_from_kitsu.delete_sequence,
+            {"project_id": "synthetic", "sequence_id": "synthetic"},
+        ),
+        (
+            update_from_kitsu.delete_shot,
+            {"project_id": "synthetic", "shot_id": "synthetic"},
+        ),
+        (
+            update_from_kitsu.delete_task,
+            {"project_id": "synthetic", "task_id": "synthetic"},
+        ),
+        (
+            update_from_kitsu.delete_edit,
+            {"project_id": "synthetic", "edit_id": "synthetic"},
+        ),
+        (
+            update_from_kitsu.delete_concept,
+            {"project_id": "synthetic", "concept_id": "synthetic"},
+        ),
+        (
+            update_from_kitsu.delete_person,
+            {"project_id": "synthetic", "person_id": "synthetic"},
+        ),
+    )
+
+    for parent in parents:
+        for handler, payload in handlers_and_payloads:
+            assert handler(parent, payload) is None
+
+
+def test_delete_task_is_forwarded_only_when_sync_deletions_is_true(
+    monkeypatch,
+):
+    parent = SimpleNamespace(
+        settings={"sync_settings": {"sync_deletions": True}},
+        entrypoint="/addons/kitsu/1.2.7",
+        get_paired_ayon_project=lambda _project_id: "synthetic_project",
+    )
+    monkeypatch.setattr(
+        update_from_kitsu.ayon_api,
+        "get_base_url",
+        lambda: "https://ayon.invalid",
+    )
+    calls = []
+    monkeypatch.setattr(
+        update_from_kitsu.ayon_api,
+        "post",
+        lambda *args, **kwargs: (
+            calls.append((args, kwargs)) or "synthetic-response"
+        ),
+    )
+
+    result = update_from_kitsu.delete_task(
+        parent, {"project_id": "synthetic", "task_id": "synthetic-task"}
+    )
+
+    assert result == "synthetic-response"
+    assert len(calls) == 1
+    assert calls[0][0][0].endswith("/remove")
+    assert calls[0][1]["entities"] == [
+        {
+            "id": "synthetic-task",
+            "type": "Task",
+            "ayon_server_url": "https://ayon.invalid",
+        }
+    ]
+
+
+def test_delete_project_requires_both_delete_switches(monkeypatch):
+    parent = SimpleNamespace(
+        settings={"sync_settings": {"sync_deletions": True}},
+        get_paired_ayon_project=lambda _project_id: "synthetic_project",
+    )
+    monkeypatch.setattr(
+        update_from_kitsu.ayon_api,
+        "post",
+        lambda *args, **kwargs: pytest.fail(
+            "project delete bypassed its opt-in"
+        ),
+    )
+
+    assert (
+        update_from_kitsu.delete_project(parent, {"project_id": "synthetic"})
+        is None
+    )
+
+
+def test_delete_project_is_forwarded_when_both_delete_switches_are_true(
+    monkeypatch,
+):
+    parent = SimpleNamespace(
+        settings={
+            "sync_settings": {
+                "sync_deletions": True,
+                "delete_projects": True,
+            }
+        },
+        entrypoint="/addons/kitsu/1.2.7",
+        get_paired_ayon_project=lambda _project_id: "synthetic_project",
+    )
+    monkeypatch.setattr(
+        update_from_kitsu.ayon_api,
+        "get_base_url",
+        lambda: "https://ayon.invalid",
+    )
+    calls = []
+    monkeypatch.setattr(
+        update_from_kitsu.ayon_api,
+        "post",
+        lambda *args, **kwargs: (
+            calls.append((args, kwargs)) or "synthetic-response"
+        ),
+    )
+
+    result = update_from_kitsu.delete_project(
+        parent, {"project_id": "synthetic"}
+    )
+
+    assert result == "synthetic-response"
+    assert len(calls) == 1
+    assert calls[0][0][0].endswith("/push")
+
+
+def test_malformed_deletion_settings_fail_closed(monkeypatch):
+    monkeypatch.setattr(
+        update_from_kitsu.ayon_api,
+        "post",
+        lambda *args, **kwargs: pytest.fail(
+            "malformed settings enabled deletion"
+        ),
+    )
+    malformed_settings = (
+        None,
+        {"sync_settings": None},
+        {"sync_settings": {"sync_deletions": "true"}},
+    )
+    for settings in malformed_settings:
+        parent = SimpleNamespace(settings=settings)
+        assert (
+            update_from_kitsu.delete_task(
+                parent, {"project_id": "synthetic", "task_id": "synthetic"}
+            )
+            is None
+        )
