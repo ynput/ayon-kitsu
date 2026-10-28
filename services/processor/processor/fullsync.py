@@ -13,6 +13,7 @@ from .utils import (
     get_ayon_users_by_email,
     get_persons_by_id,
     get_persons_to_update,
+    get_project_entity,
     get_statuses,
     get_task_persons,
     get_task_types,
@@ -175,7 +176,7 @@ def project_full_sync(
     logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
     asset_types = get_asset_types(kitsu_project_id)
     task_statuses = get_statuses()
-    task_types = get_task_types(kitsu_project_id)
+    task_types = get_task_types(kitsu_project_id, ordered_list=True)
     persons_to_update = get_persons_to_update(parent.entrypoint)
 
     assets = get_assets(kitsu_project_id, asset_types)
@@ -213,6 +214,9 @@ def project_full_sync(
         + concepts
         + tasks
     )
+
+    entities.append(get_project_entity(kitsu_project_id))
+
     if casting_enabled:
         entities += get_casting_links(shots, assets)
 

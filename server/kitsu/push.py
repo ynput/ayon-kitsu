@@ -323,8 +323,16 @@ async def sync_project(
         return
 
     await addon.ensure_kitsu(mock)
-    anatomy = await get_kitsu_project_anatomy(addon, entity_id, project)
+    anatomy = await get_kitsu_project_anatomy(
+        addon,
+        entity_id,
+        project,
+        task_type_order=entity_dict.get("task_types"),
+    )
     anatomy_data = anatomy_to_project_data(anatomy)
+    anatomy_data["task_types"] = await retain_in_use_task_types(
+        project, anatomy_data["task_types"]
+    )
 
     await update_project(project.name, **anatomy_data)
 
@@ -454,6 +462,29 @@ async def sync_folder(
                 f"Updating {entity_dict['type']} '{entity_dict['name']}'"
             )
             existing_folders[entity_dict["id"]] = target_folder.id
+
+
+async def retain_in_use_task_types(
+    project: "ProjectEntity",
+    task_types: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Keep task types still used by AYON tasks but no longer listed in Kitsu.
+
+    Removing a task type referenced by existing tasks makes AYON reject the
+    project update.
+    """
+    used_names = {
+        row["task_type"]
+        for row in await Postgres.fetch(
+            f"SELECT DISTINCT task_type FROM project_{project.name}.tasks"
+        )
+    }
+    new_names = {task_type["name"] for task_type in task_types}
+    return task_types + [
+        task_type
+        for task_type in project.task_types
+        if task_type["name"] in used_names - new_names
+    ]
 
 
 async def ensure_task_type(
