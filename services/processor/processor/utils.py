@@ -210,7 +210,7 @@ def get_ordered_task_types(kitsu_project_id: str) -> list[dict[str, Any]]:
             for project in gazu.project.all_open_projects()
             if project["id"] == kitsu_project_id
         ),
-        None,
+        {},
     )
 
     priorities = kitsu_project.get("task_types_priority", {})

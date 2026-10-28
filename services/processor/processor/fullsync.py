@@ -214,18 +214,19 @@ def project_full_sync(
         + concepts
         + tasks
     )
+
+    entities.append(get_project_entity(kitsu_project_id))
+
     if casting_enabled:
         entities += get_casting_links(shots, assets)
 
     for entity in entities:
         entity["ayon_server_url"] = ayon_api.get_base_url()
 
-    project_entity = get_project_entity(kitsu_project_id)
-    project_entity["ayon_server_url"] = ayon_api.get_base_url()
     ayon_api.post(
         f"{parent.entrypoint}/push",
         project_name=project_name,
-        entities=[project_entity],
+        entities=entities,
     )
 
     # Re-parent assets whose type changed while the processor was offline
