@@ -15,29 +15,65 @@ from ayon_server.lib.postgres import Postgres
 from ayon_server.types import NAME_REGEX
 from ayon_server.auth.session import Session
 
+from .attrib_parsing import end_frame_from_kitsu
+from .constants import sync_event, sync_origin_headers
+
+try:
+    from ayon_server.api.context import get_request_context
+except ImportError:  # older AYON servers have no request context
+    get_request_context = None
+
+try:
+    from ayon_server.exceptions import NotFoundException
+except ImportError:
+    NotFoundException = None
+
+
+def is_not_found_exception(exc: Exception) -> bool:
+    """Return True if exception represents an entity not found in AYON."""
+    if (
+        NotFoundException is not None
+        and isinstance(NotFoundException, type)
+        and isinstance(exc, NotFoundException)
+    ):
+        return True
+    if getattr(exc, "status_code", None) == 404:
+        return True
+    exc_name = type(exc).__name__.lower()
+    return "notfound" in exc_name
+
+
+def request_sender() -> str | None:
+    """Return the ``X-Sender`` of the current request, if available."""
+    if get_request_context is None:
+        return None
+    try:
+        return get_request_context().sender
+    except Exception:
+        return None
+
 
 def calculate_end_frame(
-    entity_dict: dict[str, int], folder: FolderEntity
+    entity_dict: dict[str, Any], folder: FolderEntity
 ) -> int | None:
-    # for concepts data=None
-    if "data" not in entity_dict or not isinstance(entity_dict["data"], dict):
-        return
+    """Calculate the end frame using Kitsu data and folder attributes.
 
-    # return end-frame if set
-    if entity_dict["data"].get("frame_out"):
-        return entity_dict["data"].get("frame_out")
+    Delegates frame arithmetic to ``attrib_parsing.end_frame_from_kitsu``,
+    passing ``folder.attrib.frameStart`` as fallback start frame (Task 16.1).
 
-    # Calculate the end-frame
-    if (
-        entity_dict.get("nb_frames")
-        and not entity_dict["data"].get("frame_out")
-    ):
-        frame_start = entity_dict["data"].get("frame_in")
-        # If kitsu doesn't have a frame in, get it from the folder in Ayon
-        if frame_start is None and hasattr(folder.attrib, "frameStart"):
-            frame_start = folder.attrib.frameStart
-        if frame_start is not None:
-            return int(frame_start) + int(entity_dict["nb_frames"]) - 1
+    Args:
+        entity_dict: Kitsu entity dictionary.
+        folder: AYON folder entity whose attributes may supply a fallback.
+
+    Returns:
+        The end frame or None if not determinable.
+    """
+    fallback = (
+        folder.attrib.frameStart
+        if hasattr(folder, "attrib") and hasattr(folder.attrib, "frameStart")
+        else None
+    )
+    return end_frame_from_kitsu(entity_dict, fallback_frame_start=fallback)
 
 
 def create_name_and_label(kitsu_name: str) -> dict[str, str]:
@@ -56,8 +92,12 @@ async def get_user_by_kitsu_id(
     )
     if not res:
         return None
-    user = await UserEntity.load(res[0]["name"])
-    return user
+    try:
+        return await UserEntity.load(res[0]["name"])
+    except Exception as exc:
+        if is_not_found_exception(exc):
+            return None
+        raise
 
 
 async def get_folder_by_kitsu_id(
@@ -82,7 +122,12 @@ async def get_folder_by_kitsu_id(
             return None
         folder_id = res[0]["id"]
 
-    return await FolderEntity.load(project_name, folder_id)
+    try:
+        return await FolderEntity.load(project_name, folder_id)
+    except Exception as exc:
+        if is_not_found_exception(exc):
+            return None
+        raise
 
 
 async def get_task_by_kitsu_id(
@@ -107,7 +152,12 @@ async def get_task_by_kitsu_id(
             return None
         folder_id = res[0]["id"]
 
-    return await TaskEntity.load(project_name, folder_id)
+    try:
+        return await TaskEntity.load(project_name, folder_id)
+    except Exception as exc:
+        if is_not_found_exception(exc):
+            return None
+        raise
 
 
 async def create_folder(
@@ -134,7 +184,7 @@ async def create_folder(
         "project": project_name,
     }
 
-    await dispatch_event(**event)
+    await dispatch_event(**sync_event(**event))
     return folder
 
 
@@ -168,7 +218,7 @@ async def update_folder(
             "summary": {"entityId": folder.id, "parentId": folder.parent_id},
             "project": project_name,
         }
-        await dispatch_event(**event)
+        await dispatch_event(**sync_event(**event))
 
     return changed
 
@@ -179,7 +229,10 @@ async def delete_folder(
     user: "UserEntity",
     **kwargs,
 ) -> None:
-    folder = await FolderEntity.load(project_name, folder_id)
+    try:
+        folder = await FolderEntity.load(project_name, folder_id)
+    except Exception:
+        return
 
     # do we need this?
     await folder.ensure_delete_access(user)
@@ -191,7 +244,7 @@ async def delete_folder(
         "summary": {"entityId": folder.id, "parentId": folder.parent_id},
         "project": project_name,
     }
-    await dispatch_event(**event)
+    await dispatch_event(**sync_event(**event))
 
 
 async def create_task(
@@ -212,7 +265,7 @@ async def create_task(
         "summary": {"entityId": task.id, "parentId": task.parent_id},
         "project": project_name,
     }
-    await dispatch_event(**event)
+    await dispatch_event(**sync_event(**event))
     return task
 
 
@@ -247,7 +300,7 @@ async def update_task(
             "summary": {"entityId": task.id, "parentId": task.parent_id},
             "project": project_name,
         }
-        await dispatch_event(**event)
+        await dispatch_event(**sync_event(**event))
     return changed
 
 
@@ -257,7 +310,12 @@ async def delete_task(
     user: "UserEntity",
     **kwargs,
 ) -> None:
-    task = await TaskEntity.load(project_name, task_id)
+    try:
+        task = await TaskEntity.load(project_name, task_id)
+    except Exception as exc:
+        if is_not_found_exception(exc):
+            return
+        raise
 
     # do we need this?
     await task.ensure_delete_access(user)
@@ -269,7 +327,7 @@ async def delete_task(
         "summary": {"entityId": task.id, "parentId": task.parent_id},
         "project": project_name,
     }
-    await dispatch_event(**event)
+    await dispatch_event(**sync_event(**event))
 
 
 def _ensure_safe_project_name(project_name: str) -> None:
@@ -377,7 +435,7 @@ async def create_entity_link(
         on failure.
     """
     session = await Session.create(user)
-    headers = {"Authorization": f"Bearer {session.token}"}
+    headers = sync_origin_headers(session.token, request_sender())
     payload: dict = {
         "input": input_id,
         "output": output_id,
@@ -424,7 +482,7 @@ async def delete_entity_link(
         None. Warnings on failure.
     """
     session = await Session.create(user)
-    headers = {"Authorization": f"Bearer {session.token}"}
+    headers = sync_origin_headers(session.token, request_sender())
 
     async with httpx.AsyncClient() as client:
         res = await client.delete(
@@ -496,12 +554,12 @@ async def update_entity(
         if hasattr(entity, "name"):
             summary["name"] = entity.name
 
-        event = {
-            "topic": f"entity.{entity.entity_type}.updated",
-            "description": f"{entity.entity_type} {entity.name} updated",
-            "summary": summary,
-            "project": project_name,
-        }
+        event = sync_event(
+            topic=f"entity.{entity.entity_type}.updated",
+            description=f"{entity.entity_type} {entity.name} updated",
+            summary=summary,
+            project=project_name,
+        )
         logging.info(f"dispatch_event: {event}")
         await dispatch_event(**event)
     return changed
