@@ -19,83 +19,23 @@ from processor.outbound.constants import (
     TOPIC_TASK_DELETED,
     TOPIC_USER_DELETED,
 )
-from processor.outbound.identity import IdentityResolver
 from processor.outbound.kitsu_writer import KitsuWriterError
-from processor.outbound.runner import OutboundJobRunner
-from processor.outbound.settings_watch import GateHistory, SettingsWatcher
 
 from .offline import block_network  # noqa: F401
-from .outbound_fakes import FakeAyonStore, FakeClock, FakeKitsuWriter
+from .outbound_harness import (
+    KITSU_PROJECT,
+    SLICE3_CATEGORIES,
+    add_event as _add_event,
+    build_runner,
+)
 
 pytestmark = pytest.mark.usefixtures("block_network")
-
-PROJECT = "test-project"
-KITSU_PROJECT = "kitsu-proj-1"
-SLICE3_CATEGORIES = ("entity_creation", "entity_rename", "entity_deletion")
 
 
 def _setup(enabled=True):
     """Build a runner with every Slice 3 toggle set to ``enabled``."""
-    clock = FakeClock(1000.0)
-    store = FakeAyonStore(clock=clock)
-    writer = FakeKitsuWriter()
-
-    sync_cfg = store.studio_settings["sync_settings"]["two_way_sync"]
-    for cat in SLICE3_CATEGORIES:
-        sync_cfg[cat] = enabled
-
-    processor = MagicMock()
-    processor.sender = "kitsu-processor-test"
-    processor.pairing_list = {PROJECT: KITSU_PROJECT}
-
-    categories = {
-        "task_status": True,
-        "task_assignees": False,
-        "entity_attributes": False,
-    }
-    categories.update({cat: enabled for cat in SLICE3_CATEGORIES})
-    gate_history = GateHistory(store, clock=clock)
-    gate_history.record_observation(
-        PROJECT,
-        {
-            "valid": True,
-            "master": True,
-            "categories": categories,
-            "conflict_policy": "kitsu_wins",
-        },
-        now=clock(),
-    )
-    watcher = SettingsWatcher(
-        store,
-        pairing_list_getter=lambda: {PROJECT: KITSU_PROJECT},
-        gate_history=gate_history,
-        clock=clock,
-    )
-    watcher.refresh()
-
-    runner = OutboundJobRunner(
-        processor=processor,
-        clock=clock,
-        ayon_client=store,
-        writer=writer,
-        settings_watcher=watcher,
-        gate_history=gate_history,
-        identity_resolver=IdentityResolver(store, writer),
-        sender="kitsu-processor-test",
-    )
-    return clock, store, writer, runner
-
-
-def _add_event(store, event_id, topic, entity_id, **kwargs):
-    return store.add_source_event(
-        event_id=event_id,
-        topic=topic,
-        project_name=PROJECT,
-        created_at=kwargs.pop("created_at", 1010.0),
-        summary={"entityId": entity_id},
-        user="test-user",
-        **kwargs,
-    )
+    h = build_runner(SLICE3_CATEGORIES if enabled else ())
+    return h.clock, h.store, h.writer, h.runner
 
 
 def _only_job(store):

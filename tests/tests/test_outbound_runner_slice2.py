@@ -13,75 +13,26 @@ from processor.outbound.constants import (
     TOPIC_TASK_ASSIGNEES_CHANGED,
     TOPIC_TASK_ATTRIB_CHANGED,
 )
-from processor.outbound.identity import IdentityResolver
 from processor.outbound.kitsu_writer import (
     ERROR_SERVER_ERROR,
     KitsuWriterError,
 )
-from processor.outbound.runner import OutboundJobRunner
-from processor.outbound.settings_watch import GateHistory, SettingsWatcher
 
 from .offline import block_network  # noqa: F401
-from .outbound_fakes import FakeAyonStore, FakeClock, FakeKitsuWriter
+from .outbound_harness import SLICE2_CATEGORIES, build_runner
 
 pytestmark = pytest.mark.usefixtures("block_network")
 
 
 def _setup_slice2_runner(clock=None, store=None, writer=None, policy=None):
-    clock = clock or FakeClock(1000.0)
-    store = store or FakeAyonStore(clock=clock)
-    writer = writer or FakeKitsuWriter()
-    conflict_policy = policy or "kitsu_wins"
-
-    sync_cfg = store.studio_settings["sync_settings"]["two_way_sync"]
-    sync_cfg["task_assignees"] = True
-    sync_cfg["entity_attributes"] = True
-    sync_cfg["conflict_policy"] = conflict_policy
-
-    processor = MagicMock()
-    processor.sender = "kitsu-processor-test"
-    processor.pairing_list = {"test-project": "kitsu-proj-1"}
-
-    gate_history = GateHistory(store, clock=clock)
-    gate_history.record_observation(
-        "test-project",
-        {
-            "valid": True,
-            "master": True,
-            "categories": {
-                "task_status": True,
-                "task_assignees": True,
-                "entity_attributes": True,
-                "entity_creation": False,
-                "entity_rename": False,
-                "entity_deletion": False,
-            },
-            "conflict_policy": conflict_policy,
-        },
-        now=clock(),
-    )
-
-    watcher = SettingsWatcher(
-        store,
-        pairing_list_getter=lambda: {"test-project": "kitsu-proj-1"},
-        gate_history=gate_history,
+    h = build_runner(
+        SLICE2_CATEGORIES,
+        policy=policy or "kitsu_wins",
         clock=clock,
-    )
-    watcher.refresh()
-
-    identity_resolver = IdentityResolver(store, writer)
-
-    runner = OutboundJobRunner(
-        processor=processor,
-        clock=clock,
-        ayon_client=store,
+        store=store,
         writer=writer,
-        settings_watcher=watcher,
-        gate_history=gate_history,
-        identity_resolver=identity_resolver,
-        sender="kitsu-processor-test",
     )
-    return clock, store, writer, runner
+    return h.clock, h.store, h.writer, h.runner
 
 
 def test_enrolled_topics_includes_slice2():

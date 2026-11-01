@@ -11,68 +11,18 @@ from processor.outbound.constants import (
     FINAL_RETRIES_VALUE,
     TARGET_TOPIC,
 )
-from processor.outbound.identity import IdentityResolver
 from processor.outbound.kitsu_writer import KitsuWriterError
 from processor.outbound.runner import OutboundJobRunner
-from processor.outbound.settings_watch import GateHistory, SettingsWatcher
 
 from .offline import block_network  # noqa: F401
-from .outbound_fakes import FakeAyonStore, FakeClock, FakeKitsuWriter
+from .outbound_harness import build_runner
 
 pytestmark = pytest.mark.usefixtures("block_network")
 
 
 def _setup_runner(clock=None, store=None, writer=None):
-    clock = clock or FakeClock(1000.0)
-    store = store or FakeAyonStore(clock=clock)
-    writer = writer or FakeKitsuWriter()
-
-    # Default pairing
-    processor = MagicMock()
-    processor.sender = "kitsu-processor-test"
-    processor.pairing_list = {"test-project": "kitsu-proj-1"}
-
-    gate_history = GateHistory(store, clock=clock)
-    # Record initial observation so project is enabled
-    gate_history.record_observation(
-        "test-project",
-        {
-            "valid": True,
-            "master": True,
-            "categories": {
-                "task_status": True,
-                "task_assignees": False,
-                "entity_attributes": False,
-                "entity_creation": False,
-                "entity_rename": False,
-                "entity_deletion": False,
-            },
-            "conflict_policy": "kitsu_wins",
-        },
-        now=clock(),
-    )
-
-    watcher = SettingsWatcher(
-        store,
-        pairing_list_getter=lambda: {"test-project": "kitsu-proj-1"},
-        gate_history=gate_history,
-        clock=clock,
-    )
-    watcher.refresh()
-
-    identity_resolver = IdentityResolver(store, writer)
-
-    runner = OutboundJobRunner(
-        processor=processor,
-        clock=clock,
-        ayon_client=store,
-        writer=writer,
-        settings_watcher=watcher,
-        gate_history=gate_history,
-        identity_resolver=identity_resolver,
-        sender="kitsu-processor-test",
-    )
-    return clock, store, writer, runner, processor
+    h = build_runner(clock=clock, store=store, writer=writer)
+    return h.clock, h.store, h.writer, h.runner, h.processor
 
 
 def test_in_progress_before_kitsu_calls():
