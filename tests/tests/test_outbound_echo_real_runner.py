@@ -1,27 +1,30 @@
 """Bounded-echo checks that drive the real OutboundJobRunner.
 
-``EchoSimulator`` re-implements the outbound handlers. These tests run
-the production runner and handlers against the in-memory fakes. Only
-the addon server's inbound ``/push`` is simulated (see
-``outbound_echo_rig``). Disabling a production conflict pull or write
-makes these fail, which the simulator-based tests cannot detect.
+The outbound side is production code (runner and handlers) running
+against the in-memory fakes. Only the addon server's inbound ``/push``
+is simulated (see ``outbound_echo_rig``). Disabling a handler's
+conflict pull or Kitsu write makes these tests fail.
 """
 
+import re
 from typing import Any, Dict, List
 
 import pytest
 from hypothesis import given, settings
 
+from .echo_strategies import (
+    lossless_assignee_setup,
+    lossless_attrib_setup,
+    lossless_status_setup,
+    out_of_domain_assignee_setup,
+    out_of_domain_attrib_setup,
+    out_of_domain_setup,
+)
 from .offline import block_network  # noqa: F401
 from .outbound_echo_rig import (
     AssigneeEchoRig,
     AttribEchoRig,
     StatusEchoRig,
-)
-from .test_outbound_properties_echo import (
-    lossless_assignee_setup,
-    lossless_attrib_setup,
-    lossless_status_setup,
 )
 
 pytestmark = pytest.mark.usefixtures("block_network")
@@ -278,3 +281,183 @@ def test_attribute_echo_matrix(
     assert rig.ayon_state["attrib"]["fps"] == final_fps
     assert rig.kitsu_state["data"]["fps"] == final_fps
     _assert_settled(rig, expected_kw, expected_aw)
+
+
+# ---------------------------------------------------------------------
+# Inbound-originated writes must not echo back out
+# ---------------------------------------------------------------------
+
+
+def test_inbound_status_change_is_not_echoed_back():
+    """An addon-applied status is skipped as sync-originated."""
+    statuses = [
+        {"id": "stat-1", "name": "Todo", "archived": False},
+        {"id": "stat-2", "name": "Review", "archived": False},
+    ]
+    rig = StatusEchoRig(statuses, "Todo", "Review")
+
+    rig.inbound_pull()
+    rig.run_until_quiescent()
+
+    assert rig.ayon_state["status"] == "Review"
+    assert len(rig.sync_event_ids) == 1
+    rig.assert_sync_events_skipped()
+    _assert_settled(rig, 0, 1)
+
+
+def test_inbound_assignee_order_is_saved_once():
+    """A reordered Kitsu list updates AYON once; same order is a no-op."""
+    reordered = AssigneeEchoRig(
+        AYON_USERS[:2],
+        KITSU_PERSONS[:2],
+        ["alice", "bob"],
+        ["p-alice", "p-bob"],
+    )
+    reordered.kitsu_state["assignees"] = ["p-bob", "p-alice"]
+
+    reordered.inbound_pull()
+    reordered.run_until_quiescent()
+
+    assert reordered.ayon_state["assignees"] == ["bob", "alice"]
+    reordered.assert_sync_events_skipped()
+    _assert_settled(reordered, 0, 1)
+
+    matching = AssigneeEchoRig(
+        AYON_USERS[:2],
+        KITSU_PERSONS[:2],
+        ["bob", "alice"],
+        ["p-alice", "p-bob"],
+    )
+    matching.kitsu_state["assignees"] = ["p-bob", "p-alice"]
+    matching.inbound_pull()
+    matching.run_until_quiescent()
+    _assert_settled(matching, 0, 0)
+
+
+def test_mixed_attribute_conflict_writes_free_field_and_pulls_other():
+    """kitsu_wins writes the non-conflicting field, pulls the other."""
+    rig = AttribEchoRig(
+        {
+            "fps": 24.0,
+            "description": "Old AYON Desc",
+            "frameStart": 1001,
+            "frameEnd": 1100,
+        },
+        {
+            "data": {"fps": 24.0, "frame_in": 1001, "frame_out": 1100},
+            "nb_frames": 100,
+            "description": "Kitsu Desc",
+        },
+        "kitsu_wins",
+    )
+
+    rig.user_changes_attribs({"fps": 30.0, "description": "New AYON Desc"})
+    rig.run_until_quiescent()
+
+    assert rig.kitsu_state["data"]["fps"] == 30.0
+    assert rig.kitsu_state["description"] == "Kitsu Desc"
+    assert rig.ayon_state["attrib"]["description"] == "Kitsu Desc"
+    assert rig.ayon_state["attrib"]["fps"] == 30.0
+    rig.assert_sync_events_skipped()
+    _assert_settled(rig, 1, 1)
+
+
+# ---------------------------------------------------------------------
+# Out-of-domain values
+# ---------------------------------------------------------------------
+
+
+def test_unmatched_old_status_writes_without_previous_value():
+    """An old status Kitsu no longer has does not block the write."""
+    rig = StatusEchoRig(
+        [{"id": "stat-valid", "name": "Approved", "archived": False}],
+        "OldDeletedStatus",
+        "stat-initial",
+    )
+
+    rig.user_changes_status("Approved")
+    rig.run_until_quiescent()
+
+    assert rig.kitsu_state["task_status_id"] == "stat-valid"
+    assert "no previous value" in rig.jobs_text()
+    _assert_settled(rig, 1, 0)
+
+
+@settings(max_examples=100, deadline=None)
+@given(setup=out_of_domain_setup())
+def test_out_of_domain_status_property(setup: Dict[str, Any]) -> None:
+    """Unmatched or ambiguous statuses fail without any write."""
+    initial = setup["initial_name"]
+    rig = StatusEchoRig(setup["statuses"], initial, initial)
+
+    assert rig.user_changes_status(setup["target_name"])
+    assert rig.run_until_quiescent() > 0
+
+    jobs = list(rig.store.jobs.values())
+    assert [j["status"] for j in jobs] == ["failed"]
+    text = rig.jobs_text()
+    assert f"is {setup['condition']} in Kitsu" in text
+    assert setup["target_name"] in text
+    if setup["condition"] == "ambiguous":
+        count = int(re.search(r"matches: (\d+)", text).group(1))
+        assert count >= setup["expected_count"]
+    _assert_settled(rig, 0, 0)
+
+
+UNRESOLVED_CASES = ("empty_email", "missing_kitsu_id", "ambiguous_email")
+
+
+@settings(max_examples=100, deadline=None)
+@given(setup=out_of_domain_assignee_setup())
+def test_out_of_domain_assignee_property(setup: Dict[str, Any]) -> None:
+    """Out-of-domain users stay bounded and never echo unboundedly.
+
+    Users that cannot be resolved are reported and cause no writes.
+    Duplicate-email and mismatched-kitsuId users are written once and
+    echoed once, then the echo is skipped as sync-originated.
+    """
+    assert setup["outside_count"] >= 1
+    target = setup["target_assignees"]
+    rig = AssigneeEchoRig(
+        setup["ayon_users"], setup["kitsu_persons"], [], []
+    )
+
+    assert rig.user_changes_assignees(target)
+    assert rig.run_until_quiescent() > 0
+
+    assert rig.kitsu_writes <= 1
+    assert rig.ayon_writes <= 1
+    rig.assert_sync_events_skipped()
+    if setup["case"] in UNRESOLVED_CASES:
+        assert f"unresolved assignees: {target[0]}" in rig.jobs_text()
+        _assert_settled(rig, 0, 0)
+    else:
+        _assert_settled(rig, rig.kitsu_writes, rig.ayon_writes)
+
+
+@settings(max_examples=100, deadline=None)
+@given(setup=out_of_domain_attrib_setup())
+def test_out_of_domain_attribute_property(setup: Dict[str, Any]) -> None:
+    """Invalid ranges fail unwritten; empty descriptions don't echo."""
+    attribs = {
+        "frameStart": 1001,
+        "frameEnd": 1100,
+        "fps": 24.0,
+        "resolutionWidth": 1920,
+        "resolutionHeight": 1080,
+        "description": "Initial text",
+    }
+    rig = AttribEchoRig(attribs, _kitsu_entity_for(attribs))
+
+    assert rig.user_changes_attribs(setup["changed_attribs"])
+    assert rig.run_until_quiescent() > 0
+
+    rig.assert_sync_events_skipped()
+    if setup["case"] == "invalid_frame_range":
+        assert [j["status"] for j in rig.store.jobs.values()] == ["failed"]
+        assert "invalid frame range" in rig.jobs_text()
+        _assert_settled(rig, 0, 0)
+    else:
+        # Empty description is written to Kitsu, but inbound does not
+        # echo it back to AYON (Requirement 8.10 asymmetry).
+        _assert_settled(rig, 1, 0)

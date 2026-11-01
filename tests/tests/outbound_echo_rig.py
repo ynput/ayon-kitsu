@@ -4,9 +4,8 @@ Each rig wires the production runner and handlers to the in-memory
 fakes and simulates only the addon server's inbound ``/push`` (which
 cannot run offline). The simulated inbound emits events carrying the
 real sync markers, so the runner's origin classification is exercised.
-
-``EchoSimulator`` re-implements the outbound handlers instead, so it
-cannot detect bugs in the production handlers.
+Because the outbound side is production code, a bug in a handler's
+conflict pull or Kitsu write makes the echo tests fail.
 """
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -23,7 +22,20 @@ from processor.outbound.mapping import (
 )
 
 from .outbound_harness import KITSU_PROJECT, PROJECT, build_runner
-from .outbound_sim import sync_event
+
+try:
+    from server.kitsu.constants import sync_event
+except ImportError:  # pragma: no cover - addon package not importable
+
+    def sync_event(**event: Any) -> Dict[str, Any]:
+        """Mark ``event`` as originating from the Kitsu sync."""
+        marked = dict(event)
+        summary = dict(marked.get("summary") or {})
+        summary["kitsuSyncOrigin"] = True
+        marked["summary"] = summary
+        marked["sender_type"] = "kitsu_sync"
+        return marked
+
 
 TASK_ID = "task-1"
 FOLDER_ID = "fold-1"
@@ -47,6 +59,7 @@ class EchoRig:
         self.policy = policy
         self.kitsu_writes = 0
         self.ayon_writes = 0
+        self.sync_event_ids: List[str] = []
         self._seq = 0
         self.processor.pull_kitsu_task = self.inbound_pull
         self.processor.pull_kitsu_entity = self.inbound_pull
@@ -109,6 +122,7 @@ class EchoRig:
             summary={"entityId": self.entity_id},
             payload={"oldValue": old, "newValue": new},
         )
+        self.sync_event_ids.append(marked["id"])
         self.store.add_source_event(
             event_id=marked["id"],
             topic=marked["topic"],
@@ -135,6 +149,34 @@ class EchoRig:
                 self.inbound_pull()
         return steps
 
+    def job_for_event(self, event_id: str) -> Optional[Dict[str, Any]]:
+        """Return the outbound job created for a source event."""
+        return next(
+            (
+                j
+                for j in self.store.jobs.values()
+                if j.get("dependsOn") == event_id
+            ),
+            None,
+        )
+
+    def jobs_text(self) -> str:
+        """Return all job descriptions joined, for diagnostics."""
+        return "\n".join(
+            str(j.get("description", "")) for j in self.store.jobs.values()
+        )
+
+    def assert_sync_events_skipped(self) -> None:
+        """Every AYON write the inbound made was origin-skipped.
+
+        Processing the marked event must not add Kitsu writes.
+        """
+        for event_id in self.sync_event_ids:
+            job = self.job_for_event(event_id)
+            assert job is not None, "sync event was never processed"
+            assert job["status"] == "finished", job
+            assert "sync originated" in str(job["description"]), job
+
     def _next(self) -> int:
         self._seq += 1
         return self._seq
@@ -160,8 +202,11 @@ class StatusEchoRig(EchoRig):
     def setup(self) -> None:
         statuses, ayon_status, kitsu_status = self._init
         self.writer.statuses = [dict(s) for s in statuses]
+        # ``kitsu_status`` is a status name, or a raw id for statuses
+        # that Kitsu no longer lists.
         kitsu_id = next(
-            s["id"] for s in statuses if s["name"] == kitsu_status
+            (s["id"] for s in statuses if s["name"] == kitsu_status),
+            kitsu_status,
         )
         self.store.entities[("task", TASK_ID)] = {
             "id": TASK_ID,
