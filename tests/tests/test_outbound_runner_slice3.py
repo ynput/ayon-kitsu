@@ -28,6 +28,14 @@ from .outbound_harness import (
     add_event as _add_event,
     build_runner,
 )
+from .outbound_fakes import FakeKitsuWriter
+from .outbound_harness import PROJECT, add_event, setup_runner
+from processor.outbound.constants import (
+    DECISION_APPLIED,
+    DECISION_FAILED,
+    ERROR_UNREACHABLE,
+)
+from processor.outbound.handlers.deletion import handle_deletion
 
 pytestmark = pytest.mark.usefixtures("block_network")
 
@@ -614,3 +622,252 @@ def test_creation_raw_patch_failure_fails_safely():
     # Ensure created Kitsu entity is preserved for remediation (11.6)
     assert len(writer.created) == 1
     assert writer.removed == []
+
+
+def test_deletion_skipped_when_surviving_owner_exists():
+    """Deletion must be skipped if another AYON entity owns the kitsuId."""
+    _, store, writer, runner, _ = setup_runner()
+
+    writer.tasks["kt-shot-1"] = {
+        "id": "kt-shot-1",
+        "type": "Shot",
+        "name": "SH010",
+        "project_id": KITSU_PROJECT,
+    }
+    writer.deletion_counts["kt-shot-1"] = {
+        "comments": 0,
+        "previews": 0,
+        "children": 0,
+    }
+
+    # Add a surviving entity in AYON store that shares the same kitsuId
+    store.entities[("folder", "fold-surviving")] = {
+        "id": "fold-surviving",
+        "name": "sh010_alt",
+        "folderType": "Shot",
+        "data": {"kitsuId": "kt-shot-1"},
+    }
+
+    add_event(
+        store,
+        "evt-del",
+        TOPIC_FOLDER_DELETED,
+        "fold-deleted",
+        payload={
+            "entityData": {
+                "id": "fold-deleted",
+                "name": "sh010",
+                "folderType": "Shot",
+                "data": {"kitsuId": "kt-shot-1"},
+            }
+        },
+    )
+
+    runner.poll_once()
+    assert len(store.jobs) == 1
+    job = next(iter(store.jobs.values()))
+    desc = job["description"]
+    assert desc.startswith("Skipped:")
+    assert "still owned by surviving AYON entity(ies)" in desc
+    assert "fold-surviving" in desc
+    # Writer delete must NOT have been called
+    assert writer.removed == []
+
+
+def test_deletion_proceeds_when_only_deleted_entity_owned_kitsu_id():
+    """Deletion proceeds normally if no other surviving entities exist."""
+    _, store, writer, runner, _ = setup_runner()
+
+    writer.tasks["kt-shot-1"] = {
+        "id": "kt-shot-1",
+        "type": "Shot",
+        "name": "SH010",
+        "project_id": KITSU_PROJECT,
+    }
+    writer.deletion_counts["kt-shot-1"] = {
+        "comments": 0,
+        "previews": 0,
+        "children": 0,
+    }
+
+    # store.entities does not have any other owner
+    add_event(
+        store,
+        "evt-del-ok",
+        TOPIC_FOLDER_DELETED,
+        "fold-deleted",
+        payload={
+            "entityData": {
+                "id": "fold-deleted",
+                "name": "sh010",
+                "folderType": "Shot",
+                "data": {"kitsuId": "kt-shot-1"},
+            }
+        },
+    )
+
+    runner.poll_once()
+    assert len(store.jobs) == 1
+    job = next(iter(store.jobs.values()))
+    assert job["status"] == "finished"
+    assert "Applied:" in job["description"]
+    assert writer.removed == [
+        {"kitsu_id": "kt-shot-1", "type": "Shot", "force": False}
+    ]
+
+
+def test_deletion_handler_retries_on_kitsu_owners_failure():
+    """Failure querying kitsu-owners in deletion handler must be retryable."""
+    writer = FakeKitsuWriter()
+    writer.tasks["kt-shot-1"] = {
+        "id": "kt-shot-1",
+        "type": "Shot",
+        "name": "SH010",
+        "project_id": KITSU_PROJECT,
+    }
+
+    resolver = MagicMock()
+    resolver.get_kitsu_owners.side_effect = RuntimeError("503 Server Error")
+
+    ctx = MagicMock()
+    ctx.event = {
+        "topic": TOPIC_FOLDER_DELETED,
+        "payload": {
+            "entityData": {
+                "id": "fold-1",
+                "name": "sh010",
+                "folderType": "Shot",
+                "data": {"kitsuId": "kt-shot-1"},
+            }
+        },
+    }
+    ctx.entity_id = "fold-1"
+    ctx.project_name = PROJECT
+    ctx.kitsu_project_id = KITSU_PROJECT
+    ctx.identity_resolver = resolver
+    ctx.writer = writer
+    ctx.attempt = 1
+
+    res = handle_deletion(ctx)
+    assert res.decision == DECISION_FAILED
+    assert res.retryable is True
+    assert res.error_kind == ERROR_UNREACHABLE
+    assert "failed to query kitsu-owners" in res.description
+
+
+def test_rename_preserves_requested_value_across_inbound_echo():
+    """Queued label_changed or renamed preserves newValue across echo."""
+    from processor.outbound.handlers.rename import handle_rename
+
+    writer = FakeKitsuWriter()
+    writer.tasks["kt-shot-1"] = {
+        "id": "kt-shot-1",
+        "type": "Shot",
+        "name": "Old Name",
+        "project_id": KITSU_PROJECT,
+    }
+
+    # 1. label_changed event where inbound echo restored label='Old Name'
+    resolver = MagicMock()
+    resolver.resolve.return_value = {
+        "ok": True,
+        "kitsu": writer.tasks["kt-shot-1"],
+        "ayon": {
+            "id": "fold-1",
+            "name": "old_name",
+            "label": "Old Name",
+        },
+    }
+    ctx = MagicMock()
+    ctx.event = {
+        "topic": "entity.folder.label_changed",
+        "user": "artist",
+        "payload": {"oldValue": "Old Name", "newValue": "New Name"},
+    }
+    ctx.entity_id = "fold-1"
+    ctx.project_name = PROJECT
+    ctx.kitsu_project_id = KITSU_PROJECT
+    ctx.identity_resolver = resolver
+    ctx.writer = writer
+    ctx.loop_guard_check.return_value = {"allowed": True}
+    ctx.attempt = 1
+
+    res = handle_rename(ctx)
+    assert res.decision == DECISION_APPLIED
+    assert writer.renamed[-1]["payload"]["name"] == "New Name"
+
+    # 2. renamed event where inbound echo restored name='old_name',
+    # label=None
+    writer.tasks["kt-shot-1"]["name"] = "old_name"
+    resolver.resolve.return_value["ayon"] = {
+        "id": "fold-1",
+        "name": "old_name",
+        "label": None,
+    }
+    ctx.event = {
+        "topic": "entity.folder.renamed",
+        "user": "artist",
+        "payload": {"oldValue": "old_name", "newValue": "new_shot_slug"},
+    }
+    res2 = handle_rename(ctx)
+    assert res2.decision == DECISION_APPLIED
+    assert writer.renamed[-1]["payload"]["name"] == "new_shot_slug"
+
+
+def test_rename_applies_conflict_policy_kitsu_wins_and_ayon_wins():
+    """handle_rename enforces kitsu_wins and ayon_wins on concurrent rename."""
+    from processor.outbound.constants import DECISION_CONFLICT
+    from processor.outbound.handlers.rename import handle_rename
+
+    writer = FakeKitsuWriter()
+    writer.tasks["kt-shot-1"] = {
+        "id": "kt-shot-1",
+        "type": "Shot",
+        "name": "Kitsu Newer Name",
+        "project_id": KITSU_PROJECT,
+    }
+
+    resolver = MagicMock()
+    resolver.resolve.return_value = {
+        "ok": True,
+        "kitsu": writer.tasks["kt-shot-1"],
+        "ayon": {
+            "id": "fold-1",
+            "name": "ayon_new_name",
+            "label": "AYON New Name",
+            "folderType": "Shot",
+        },
+    }
+
+    ctx = MagicMock()
+    ctx.event = {
+        "topic": "entity.folder.label_changed",
+        "user": "artist",
+        "payload": {
+            "oldValue": "Original Name",
+            "newValue": "AYON New Name",
+        },
+    }
+    ctx.entity_id = "fold-1"
+    ctx.project_name = PROJECT
+    ctx.kitsu_project_id = KITSU_PROJECT
+    ctx.identity_resolver = resolver
+    ctx.writer = writer
+    ctx.processor = MagicMock()
+    ctx.loop_guard_check.return_value = {"allowed": True}
+    ctx.attempt = 1
+
+    # 1. Under kitsu_wins: do NOT overwrite Kitsu; pull Kitsu back into AYON
+    ctx.conflict_policy = "kitsu_wins"
+    res_kw = handle_rename(ctx)
+    assert res_kw.decision == DECISION_CONFLICT
+    assert writer.renamed == []
+    ctx.processor.pull_kitsu_entity.assert_called_once()
+
+    # 2. Under ayon_wins: overwrite Kitsu with AYON's target name and return
+    # DECISION_CONFLICT
+    ctx.conflict_policy = "ayon_wins"
+    res_aw = handle_rename(ctx)
+    assert res_aw.decision == DECISION_CONFLICT
+    assert len(writer.renamed) == 1
+    assert writer.renamed[0]["payload"]["name"] == "AYON New Name"

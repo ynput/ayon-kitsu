@@ -11,6 +11,9 @@ from processor.outbound.constants import GATE_TOPIC
 from processor.outbound.settings_watch import GateHistory, SettingsWatcher
 
 from .offline import block_network  # noqa: F401
+from .outbound_fakes import FakeAyonStore
+from .outbound_harness import KITSU_PROJECT, PROJECT
+from unittest.mock import patch
 
 pytestmark = pytest.mark.usefixtures("block_network")
 
@@ -313,3 +316,184 @@ def test_invalid_settings_logged(caplog):
         "Invalid Two_Way_Sync_Settings for project proj1" in r.message
         for r in caplog.records
     )
+
+
+def test_gate_history_retries_unpersisted_snapshots():
+    """GateHistory retries failed snapshots on subsequent observation."""
+    store = FakeAyonStore()
+    clock = FakeClock(1000.0)
+    gh = GateHistory(store, clock=clock)
+
+    # First call: dispatch_event raises an exception
+    with patch.object(
+        store, "dispatch_event", side_effect=RuntimeError("Network error")
+    ):
+        res = gh.record_observation(
+            PROJECT, {"valid": True, "master": True}, now=1000.0
+        )
+        assert res is None
+        assert PROJECT in gh.unpersisted_snapshots
+
+    # Second call with same toggles: dispatch succeeds
+    res2 = gh.record_observation(
+        PROJECT, {"valid": True, "master": True}, now=1010.0
+    )
+    assert res2 is not None
+    assert PROJECT not in gh.unpersisted_snapshots
+
+
+def test_settings_watcher_project_aware_api_signature():
+    """SettingsWatcher must use project-aware API without raising TypeError."""
+    mock_client = MagicMock()
+
+    def mock_get_service():
+        return {
+            "sync_settings": {
+                "two_way_sync": {
+                    "enabled": True,
+                    "task_status": True,
+                    "task_assignees": False,
+                    "entity_attributes": False,
+                    "entity_creation": False,
+                    "entity_rename": False,
+                    "entity_deletion": False,
+                    "conflict_policy": "kitsu_wins",
+                }
+            }
+        }
+
+    mock_client.get_service_addon_settings.side_effect = (
+        lambda *args, **kwargs: (
+            mock_get_service()
+            if not args and not kwargs
+            else (_ for _ in ()).throw(
+                TypeError("get_service_addon_settings() takes 0 arguments")
+            )
+        )
+    )
+    mock_client.get_service_addon_name.return_value = "kitsu"
+    mock_client.get_service_addon_version.return_value = "1.2.4"
+    mock_client.get_addon_project_settings.return_value = {}
+
+    watcher = SettingsWatcher(
+        mock_client,
+        pairing_list_getter=lambda: {PROJECT: KITSU_PROJECT},
+    )
+    effective = watcher.refresh()
+    assert PROJECT in effective
+    assert effective[PROJECT]["valid"] is True
+    assert effective[PROJECT]["master"] is True
+    mock_client.get_addon_project_settings.assert_called_with(
+        "kitsu", "1.2.4", PROJECT
+    )
+
+
+def test_gate_history_newest_first_preserves_latest_snapshot():
+    """Gate events loaded newest-first must not suppress changes."""
+    store = FakeAyonStore()
+    clock = FakeClock(1000.0)
+    gh = GateHistory(store, clock=clock)
+
+    newer_event = {
+        "id": "gate-evt-2",
+        "topic": "kitsu.gate",
+        "createdAt": 1020.0,
+        "summary": {
+            "project": PROJECT,
+            "toggles": {"valid": True, "master": True},
+            "observedAt": 1020.0,
+        },
+    }
+    older_event = {
+        "id": "gate-evt-1",
+        "topic": "kitsu.gate",
+        "createdAt": 1010.0,
+        "summary": {
+            "project": PROJECT,
+            "toggles": {"valid": True, "master": False},
+            "observedAt": 1010.0,
+        },
+    }
+    store.other_events = [newer_event, older_event]
+    gh.load(started_at=1030.0)
+
+    ev_id = gh.record_observation(
+        PROJECT, {"valid": True, "master": False}, now=1040.0
+    )
+    assert ev_id is not None
+    latest = max(
+        gh.history[PROJECT],
+        key=lambda s: s.get("observedAt", 0.0),
+    )
+    assert latest["toggles"]["master"] is False
+    assert latest["observedAt"] == 1040.0
+
+
+def test_gate_history_load_failure_raises_runtime_error():
+    """GateHistory.load() raises RuntimeError when get_events fails."""
+    mock_client = MagicMock()
+    mock_client.get_events.side_effect = RuntimeError("AYON connection failed")
+    clock = FakeClock(100.0)
+    gh = GateHistory(mock_client, clock=clock)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        gh.load(started_at=100.0)
+    assert "Could not load gate events" in str(exc_info.value)
+
+
+def test_heartbeat_kept_behind_unpersisted_toggle_snapshot():
+    """Heartbeat does not advance lastObservedAt past unpersisted snapshot."""
+    clock = FakeClock(1000.0)
+    store = FakeAyonStore(clock=clock)
+    gh = GateHistory(store, clock=clock)
+
+    # 1. Initial enabled=True snapshot persisted at t=1000
+    ev1 = gh.record_observation(
+        PROJECT, {"valid": True, "master": True}, now=1000.0
+    )
+    assert ev1 is not None
+    assert gh.last_observed_at == 1000.0
+
+    # 2. At t=1050 settings.changed occurs; at t=1060 dispatch_event fails
+    store.other_events.append(
+        {
+            "id": "sc-1",
+            "topic": "settings.changed",
+            "createdAt": 1050.0,
+            "summary": {"addon_name": "kitsu"},
+        }
+    )
+    orig_dispatch = store.dispatch_event
+
+    def fail_dispatch(*args, **kwargs):
+        raise RuntimeError("Transient AYON dispatch failure")
+
+    store.dispatch_event = fail_dispatch
+
+    ev2 = gh.record_observation(
+        PROJECT, {"valid": True, "master": False}, now=1060.0
+    )
+    assert ev2 is None
+    assert PROJECT in gh.unpersisted_snapshots
+    assert gh.last_observed_at == 1000.0
+
+    # 3. Heartbeat at t=1060 also fails to dispatch and must NOT advance
+    # lastObservedAt on ev1
+    gh.heartbeat(now=1060.0)
+    assert gh.last_observed_at == 1000.0
+    persisted_ev1 = [e for e in store.other_events if e.get("id") == ev1][0]
+    assert persisted_ev1["summary"]["lastObservedAt"] == 1000.0
+
+    # 4. Simulate restart at t=1100: gap [1000, 1100] includes sc-1 at 1050
+    gh_restarted = GateHistory(store, clock=clock)
+    gap = gh_restarted.load(started_at=1100.0)
+    assert gap is not None
+    assert gap["unknown"] is True
+    state = gh_restarted.toggles_at(PROJECT, 1070.0)
+    assert state["state"] == "unknown_gap"
+
+    # 5. If dispatch recovers on original instance, heartbeat flushes snapshot
+    store.dispatch_event = orig_dispatch
+    gh.heartbeat(now=1080.0)
+    assert PROJECT not in gh.unpersisted_snapshots
+    assert gh.last_observed_at == 1080.0

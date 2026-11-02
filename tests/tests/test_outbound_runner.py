@@ -16,6 +16,9 @@ from processor.outbound.runner import OutboundJobRunner
 
 from .offline import block_network  # noqa: F401
 from .outbound_harness import build_runner
+from .outbound_fakes import FakeAyonStore, FakeClock, FakeKitsuWriter
+from .outbound_harness import KITSU_PROJECT, PROJECT, setup_runner
+from processor.outbound.settings_watch import GateHistory
 
 pytestmark = pytest.mark.usefixtures("block_network")
 
@@ -706,3 +709,414 @@ def test_drain_exceptions_redact_secrets_and_suppress_cause():
         msg = str(exc_info.value)
         assert secret not in msg
         assert exc_info.value.__cause__ is None
+
+
+def test_poll_inbound_sync_request_deferred_during_drain():
+    """Requirement: defer inbound full syncs until drain completes."""
+    _, _, _, runner, processor = setup_runner()
+    processor.poll_sync_request = MagicMock(return_value=True)
+
+    # When in_drain is True, inbound sync polling is deferred
+    runner.in_drain = True
+    assert runner.poll_inbound_sync_request() is False
+    assert processor.poll_sync_request.call_count == 0
+
+    # When in_drain is False, inbound sync polling proceeds normally
+    runner.in_drain = False
+    assert runner.poll_inbound_sync_request() is True
+    assert processor.poll_sync_request.call_count == 1
+
+
+def test_drain_sets_and_clears_in_drain_flag():
+    """drain() must set in_drain=True during drain and restore it to False."""
+    _, store, _, runner, _ = setup_runner()
+
+    assert runner.in_drain is False
+    observed_in_drain = []
+
+    orig_enroll = runner._enroll
+
+    def mock_enroll():
+        observed_in_drain.append(runner.in_drain)
+        return orig_enroll()
+
+    with patch.object(runner, "_enroll", side_effect=mock_enroll):
+        runner.drain()
+
+    assert observed_in_drain == [True]
+    assert runner.in_drain is False
+
+
+def test_drain_clears_in_drain_on_exception():
+    """drain() must reset in_drain to False even if an exception occurs."""
+    _, _, _, runner, _ = setup_runner()
+
+    with patch.object(
+        runner, "reap_stale", side_effect=RuntimeError("Simulated error")
+    ):
+        with pytest.raises(RuntimeError):
+            runner.drain()
+
+    assert runner.in_drain is False
+
+
+def test_runner_holds_job_on_transient_source_event_fetch_error():
+    """Transient source-event fetch errors are retryable, id preserved."""
+    _, store, _, runner, _ = setup_runner()
+
+    store.add_source_event(
+        event_id="evt-source",
+        topic="entity.task.status_changed",
+        project_name=PROJECT,
+        created_at=1010.0,
+        summary={"taskId": "task-1"},
+        user="test-user",
+    )
+
+    with patch.object(
+        store, "get_event", side_effect=RuntimeError("AYON 503 error")
+    ):
+        runner.poll_once()
+
+    assert len(store.jobs) == 1
+    stored_job = next(iter(store.jobs.values()))
+    assert stored_job["status"] == "pending"
+    assert stored_job["summary"]["attempt"] == 1
+    desc = stored_job["description"]
+    assert "Transient error fetching source event" in desc
+
+    # The held job keeps the source event id for the retry.
+    assert runner.held_job is not None
+    assert runner.held_job["job"]["dependsOn"] == "evt-source"
+    assert runner.held_job["job"]["summary"]["sourceEventId"] == (
+        "evt-source"
+    )
+
+
+def test_get_events_explicit_fields_with_summary():
+    """Ensure get_events queries pass explicit fields with summary."""
+    mock_client = MagicMock()
+    mock_client.get_events.return_value = []
+    clock = FakeClock(1000.0)
+
+    # 1. GateHistory.load() queries gate events and settings.changed
+    gh = GateHistory(mock_client, clock=clock)
+    gh.load(started_at=1000.0)
+    assert mock_client.get_events.call_count == 2
+    call_gate = mock_client.get_events.call_args_list[0]
+    call_ch = mock_client.get_events.call_args_list[1]
+    assert "summary" in call_gate.kwargs.get("fields", [])
+    assert "summary" in call_ch.kwargs.get("fields", [])
+
+    # 2. OutboundJobRunner queries
+    _, _, _, runner, _ = setup_runner(enabled=True)
+    runner.ayon_client = mock_client
+    mock_client.get_events.reset_mock()
+
+    runner.recover_interrupted()
+    assert mock_client.get_events.called
+    assert "summary" in mock_client.get_events.call_args.kwargs.get(
+        "fields", []
+    )
+
+    mock_client.get_events.reset_mock()
+    runner.reap_stale()
+    assert mock_client.get_events.called
+    assert "summary" in mock_client.get_events.call_args.kwargs.get(
+        "fields", []
+    )
+
+
+def test_retried_fields_for_job_by_category():
+    """Supersession derives the written fields from the category."""
+    from processor.outbound.runner import _retried_fields_for_job
+
+    assert _retried_fields_for_job("task_status", None) == ["task_status_id"]
+    assert _retried_fields_for_job("task_assignees", None) == ["assignees"]
+    assert _retried_fields_for_job("entity_rename", None) == ["name"]
+    assert _retried_fields_for_job("entity_deletion", None) == [
+        "deleted", "deletion"
+    ]
+    assert _retried_fields_for_job("entity_creation", None) == [
+        "kitsuId", "creation"
+    ]
+
+    ev = {
+        "payload": {
+            "changed": {"fps": 24.0, "description": "new shot desc"}
+        }
+    }
+    attrib_fields = _retried_fields_for_job("entity_attributes", ev)
+    assert "data.fps" in attrib_fields
+    assert "description" in attrib_fields
+
+
+def test_drain_aborts_on_enroll_server_error():
+    """Server errors (HTTP >= 500) during enroll must abort drain."""
+    clock, store, writer, runner, _ = setup_runner(enabled=True)
+    resp = MagicMock()
+    resp.status_code = 503
+    resp.data = None
+    store.post = MagicMock(return_value=resp)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        runner.drain()
+
+    assert "Enroll failed during drain" in str(exc_info.value)
+    assert runner.last_enroll_error is not None
+    assert "HTTP 503" in str(runner.last_enroll_error)
+
+
+def test_enroll_filter_rejected_retries_without_filter_on_400():
+    """HTTP 400 rejection on events_filter retries without filter."""
+    clock, store, writer, runner, _ = setup_runner(enabled=True)
+    runner.enroll_filter_supported = True
+
+    resp_400 = MagicMock()
+    resp_400.status_code = 400
+    resp_400.data = None
+
+    resp_204 = MagicMock()
+    resp_204.status_code = 204
+    resp_204.data = None
+
+    store.post = MagicMock(side_effect=[resp_400, resp_204])
+
+    res = runner.poll_once()
+    assert res is False
+    assert runner.enroll_filter_supported is False
+    assert runner.last_enroll_error is None
+    assert store.post.call_count == 2
+    # First call had filter, second call omitted filter
+    first_call_kwargs = store.post.call_args_list[0][1]
+    second_call_kwargs = store.post.call_args_list[1][1]
+    assert "filter" in first_call_kwargs
+    assert "filter" not in second_call_kwargs
+
+
+def test_poll_once_fetches_full_job_metadata_preserving_retry():
+    """Re-enrolling minimal job fetches full metadata and preserves retry."""
+    clock, store, writer, runner, _ = setup_runner(enabled=True)
+
+    # Minimal enroll response
+    resp_enroll = MagicMock()
+    resp_enroll.status_code = 200
+    resp_enroll.data = {
+        "id": "job-retried",
+        "dependsOn": "src-1",
+        "status": "pending",
+    }
+    store.post = MagicMock(return_value=resp_enroll)
+
+    # Full event returned by get_event
+    store.get_event = MagicMock(
+        return_value={
+            "id": "job-retried",
+            "depends_on": "src-1",
+            "status": "pending",
+            "sender": runner.sender,
+            "project": PROJECT,
+            "summary": {
+                "attempt": 2,
+                "lastFailedAt": 995.0,
+                "writes": ["shot"],
+            },
+        }
+    )
+
+    # At now=1000.0, lastFailedAt=995.0; retry not due yet (< 10s delay)
+    res = runner.poll_once()
+    assert res is False
+    assert runner.held_job is not None
+    assert runner.held_job["attempt"] == 3
+    assert runner.held_job["last_failed_at"] == 995.0
+    held_summary = runner.held_job["job"]["summary"]
+    assert held_summary.get("writes") == ["shot"]
+
+
+def test_transient_source_fetch_failure_allows_attempt_4():
+    """Attempt 3 transient source fetch failure holds for attempt 4."""
+    clock, store, writer, runner, _ = setup_runner(enabled=True)
+    # Add a job that has attempt=3
+    store.jobs["job-att3"] = {
+        "id": "job-att3",
+        "dependsOn": "src-missing",
+        "topic": runner.TARGET_TOPIC,
+        "sender": runner.sender,
+        "status": "pending",
+        "summary": {"attempt": 3},
+        "createdAt": 1000.0,
+    }
+    # Simulate transient error fetching source event
+    store.get_event = MagicMock(
+        side_effect=RuntimeError("Transient DB timeout")
+    )
+    res = runner._process_job(store.jobs["job-att3"], attempt=3)
+    # Must hold for attempt 4 instead of finishing as final failure
+    assert res is True
+    assert runner.held_job is not None
+    assert runner.held_job["attempt"] == 4
+    assert runner.held_job["job"]["id"] == "job-att3"
+
+
+def test_drain_backs_off_on_pending_ayon_update(monkeypatch):
+    """Pending AYON update during drain backs off instead of busy-spinning."""
+    clock, store, writer, runner, _ = setup_runner(enabled=True)
+    runner.pending_ayon_update = {"job_id": "job-1", "status": "finished"}
+
+    sleep_calls = []
+    monkeypatch.setattr(
+        "processor.outbound.runner.time.sleep",
+        lambda s: sleep_calls.append(s),
+    )
+
+    # Fail the update 3 times, then succeed on 4th
+    attempts = 0
+
+    def mock_update(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 4:
+            raise RuntimeError("AYON server 503")
+        return None
+
+    store.update_event = mock_update
+
+    runner.drain()
+    assert len(sleep_calls) >= 3
+    assert sleep_calls[0] == 0.1  # 0.05 * 2^1
+    assert sleep_calls[1] == 0.2  # 0.05 * 2^2
+    assert runner.pending_ayon_update is None
+
+
+def test_retry_pending_ayon_update_preserves_terminal_retries():
+    """Pending AYON update retains terminal retries count upon replay."""
+    from processor.outbound.constants import FINAL_RETRIES_VALUE
+
+    clock, store, writer, runner, _ = setup_runner(enabled=True)
+    update_calls = []
+
+    def mock_update(job_id, **kwargs):
+        update_calls.append(dict(kwargs))
+        if len(update_calls) < 3:
+            raise RuntimeError("Transient AYON 503")
+        return None
+
+    runner.ayon_client.update_event = mock_update
+
+    # Initial safe update fails and enters pending_ayon_update
+    runner._update_event_safe(
+        "job-term",
+        status="failed",
+        description="Non-retryable failure",
+        retries=FINAL_RETRIES_VALUE,
+        project_name=PROJECT,
+    )
+
+    assert runner.pending_ayon_update is not None
+    assert runner.pending_ayon_update["_delivery_retries"] == 0
+    assert (
+        runner.pending_ayon_update["kwargs"]["retries"] == FINAL_RETRIES_VALUE
+    )
+
+    # First retry fails
+    success = runner.retry_pending_ayon_update()
+    assert success is False
+    assert runner.pending_ayon_update is not None
+    assert runner.pending_ayon_update["_delivery_retries"] == 1
+    assert (
+        runner.pending_ayon_update["kwargs"]["retries"] == FINAL_RETRIES_VALUE
+    )
+    assert update_calls[0]["retries"] == FINAL_RETRIES_VALUE
+    assert update_calls[1]["retries"] == FINAL_RETRIES_VALUE
+
+    # Second retry succeeds, still passing FINAL_RETRIES_VALUE
+    success = runner.retry_pending_ayon_update()
+    assert success is True
+    assert runner.pending_ayon_update is None
+    assert len(update_calls) == 3
+    assert update_calls[2]["retries"] == FINAL_RETRIES_VALUE
+
+
+def test_reaped_abandoned_job_transfers_ownership_and_unblocks_enroll():
+    """Reaped foreign abandoned job transfers sender and unblocks enrollment.
+    """
+    clock = FakeClock(1000.0)
+    store = FakeAyonStore(clock=clock)
+    writer = FakeKitsuWriter()
+    processor = MagicMock()
+    processor.sender = "processor-B"
+    processor.pairing_list = {PROJECT: KITSU_PROJECT}
+
+    runner = OutboundJobRunner(
+        processor=processor,
+        clock=clock,
+        ayon_client=store,
+        writer=writer,
+        sender="processor-B",
+    )
+
+    # 1. Add source event
+    store.add_source_event(
+        event_id="src-reap-1",
+        topic="entity.task.status_changed",
+        project_name=PROJECT,
+        created_at=500.0,
+    )
+
+    # 2. Foreign processor-A enrolls it, goes in_progress, then dies
+    job_a = store.enroll_event_job(
+        source_topic="entity.task.status_changed",
+        target_topic="kitsu.outbound_sync",
+        sender="processor-A",
+        sequential=True,
+    )
+    assert job_a is not None
+    store.update_event(
+        job_a["id"], status="in_progress", sender="processor-A"
+    )
+
+    # 3. Time advances > 300s (stale threshold)
+    clock.advance(350.0)
+
+    # 4. Processor B reaps stale jobs
+    runner.reap_stale()
+
+    reaped_job = store.jobs[job_a["id"]]
+    assert reaped_job["status"] == "failed"
+    # Ownership transferred to processor-B
+    assert reaped_job["sender"] == "processor-B"
+
+    # 5. Processor B calls _enroll() and successfully reclaims the job
+    enrolled = runner._enroll()
+    assert enrolled is not None
+    assert enrolled["id"] == job_a["id"]
+    assert enrolled["sender"] == "processor-B"
+    assert enrolled["status"] == "pending"
+
+
+def test_transient_ayon_entity_read_failure_holds_for_retry():
+    """Transient error reading AYON entity in resolve() holds job for retry."""
+    clock, store, writer, runner, _ = setup_runner(enabled=True)
+    store.add_source_event(
+        event_id="transient-read",
+        topic="entity.task.status_changed",
+        project_name=PROJECT,
+        created_at=1010.0,
+        summary={"entityId": "t1"},
+        user="artist",
+        payload={"oldValue": "Todo", "newValue": "Done"},
+    )
+
+    def temporary_failure(*args, **kwargs):
+        raise ConnectionError("temporary read outage")
+
+    store.get_task_by_id = temporary_failure
+
+    runner.poll_once()
+
+    assert runner.held_job is not None
+    assert runner.held_job["attempt"] == 2
+    job = list(store.jobs.values())[0]
+    assert job["status"] == "pending"
+    assert job["retries"] == 0

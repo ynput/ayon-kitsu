@@ -9,6 +9,11 @@ from processor.processor import KitsuProcessor
 
 from .offline import block_network  # noqa: F401
 from .outbound_fakes import FakeAyonStore, FakeClock, FakeKitsuWriter
+from .outbound_harness import KITSU_PROJECT, PROJECT
+from processor.outbound.constants import DECISION_APPLIED
+from processor.outbound.identity import IdentityResolver
+from processor.outbound.runner import OutboundJobRunner
+from processor.outbound.settings_watch import GateHistory, SettingsWatcher
 
 pytestmark = pytest.mark.usefixtures("block_network")
 
@@ -29,10 +34,6 @@ def _setup_processor_harness(clock=None, store=None, writer=None):
     proc.entrypoint = "/addons/kitsu/1.2.4"
     proc.pairing_list = {"kitsu-p1": "proj1"}
     proc.outbound = None
-
-    from processor.outbound.identity import IdentityResolver
-    from processor.outbound.runner import OutboundJobRunner
-    from processor.outbound.settings_watch import GateHistory, SettingsWatcher
 
     gate_history = GateHistory(store, clock=clock)
     gate_history.record_observation(
@@ -491,3 +492,281 @@ def test_loop_exception_isolation(monkeypatch):
         proc.start_processing()
 
     assert loop_count[0] == 2
+
+
+def test_startup_full_sync_blocked_when_toggle_state_unknown(monkeypatch):
+    """Full sync is blocked if gate_history.load fails and toggles unknown.
+    """
+    proc, store, writer, clock = _setup_processor_harness()
+    proc.pairing_list = {"kitsu-p1": "proj1"}
+
+    # Simulate gate_history.load failure
+    def fake_load(*args, **kwargs):
+        raise RuntimeError("Events endpoint unavailable")
+
+    monkeypatch.setattr(proc.outbound.gate_history, "load", fake_load)
+
+    # Clear effective toggles so state is unknown
+    proc.outbound.settings_watcher.effective_by_project.clear()
+
+    def fake_refresh(*args, **kwargs):
+        raise RuntimeError("Settings endpoint unavailable")
+
+    monkeypatch.setattr(
+        proc.outbound.settings_watcher, "refresh", fake_refresh
+    )
+
+    full_sync_calls = []
+
+    def fake_full_sync(processor, project_id, project_name):
+        full_sync_calls.append((project_id, project_name))
+
+    def fake_sleep(secs):
+        raise StopLoop()
+
+    monkeypatch.setattr(
+        "processor.processor.project_full_sync", fake_full_sync
+    )
+    monkeypatch.setattr("time.sleep", fake_sleep)
+    monkeypatch.setattr("time.time", clock)
+
+    with pytest.raises(StopLoop):
+        proc.start_processing()
+
+    # Full sync should have been blocked because toggle state is unknown
+    assert full_sync_calls == []
+
+
+def test_startup_full_sync_blocked_when_settings_invalid(monkeypatch):
+    """Full sync is blocked if refresh succeeds but effective toggles invalid.
+    """
+    proc, store, writer, clock = _setup_processor_harness()
+    proc.pairing_list = {"kitsu-p1": "proj1"}
+
+    # Mock refresh to populate invalid toggles (e.g. read_failed=True)
+    def fake_refresh(*args, **kwargs):
+        proc.outbound.settings_watcher.effective_by_project["proj1"] = {
+            "valid": False,
+            "error": "Failed to read project settings",
+            "master": False,
+        }
+        return proc.outbound.settings_watcher.effective_by_project
+
+    monkeypatch.setattr(
+        proc.outbound.settings_watcher, "refresh", fake_refresh
+    )
+
+    full_sync_calls = []
+
+    def fake_full_sync(processor, project_id, project_name):
+        full_sync_calls.append((project_id, project_name))
+
+    def fake_sleep(secs):
+        raise StopLoop()
+
+    monkeypatch.setattr(
+        "processor.processor.project_full_sync", fake_full_sync
+    )
+    monkeypatch.setattr("time.sleep", fake_sleep)
+    monkeypatch.setattr("time.time", clock)
+
+    with pytest.raises(StopLoop):
+        proc.start_processing()
+
+    # Full sync blocked because effective settings are invalid
+    assert full_sync_calls == []
+
+
+def test_outbound_init_failure_blocks_startup_full_sync(monkeypatch):
+    """Outbound init failure blocks full sync unless master known False."""
+    from processor.processor import KitsuProcessor
+
+    class StopLoop(Exception):
+        pass
+
+    clock = FakeClock(1000.0)
+    store = FakeAyonStore(clock=clock)
+    # Project A has outbound enabled (master=True); Project B has master=False
+    store.project_settings["proj_enabled"] = {
+        "sync_settings": {
+            "two_way_sync": {"enabled": True, "task_status": True}
+        }
+    }
+    store.project_settings["proj_disabled"] = {
+        "sync_settings": {
+            "two_way_sync": {"enabled": False, "task_status": False}
+        }
+    }
+
+    proc = KitsuProcessor.__new__(KitsuProcessor)
+    proc.pairing_list = {
+        "kp-en": "proj_enabled",
+        "kp-dis": "proj_disabled",
+    }
+    proc.ayon_api = store
+    proc.addon_name = "kitsu"
+    proc.addon_version = "0.0.0"
+    proc.kitsu_server_url = "http://kitsu.local/api"
+    proc.kitsu_login_email = "admin@example.com"
+    proc.kitsu_login_password = "secret"
+    proc.outbound = None
+
+    def fail_writer(*args, **kwargs):
+        raise RuntimeError("Kitsu unreachable during outbound init")
+
+    monkeypatch.setattr(
+        "processor.outbound.kitsu_writer.KitsuWriter.__init__",
+        fail_writer,
+    )
+
+    full_sync_calls = []
+
+    def fake_full_sync(processor, project_id, project_name):
+        full_sync_calls.append((project_id, project_name))
+
+    def fake_sleep(secs):
+        raise StopLoop()
+
+    monkeypatch.setattr(
+        "processor.processor.project_full_sync", fake_full_sync
+    )
+    monkeypatch.setattr("time.sleep", fake_sleep)
+    monkeypatch.setattr("time.time", clock)
+
+    with pytest.raises(StopLoop):
+        proc.start_processing()
+
+    # proj_enabled blocked because outbound is None / drain could not run;
+    # proj_disabled allowed because settings watcher confirmed master=False.
+    assert full_sync_calls == [("kp-dis", "proj_disabled")]
+
+
+def test_transient_gate_history_load_failure_recovers_before_enrolling(
+    monkeypatch,
+):
+    """Startup gate_history.load failure recovers before enrolling jobs."""
+    from processor.processor import KitsuProcessor
+
+    class StopLoop(Exception):
+        pass
+
+    clock = FakeClock(1000.0)
+    store = FakeAyonStore(clock=clock)
+    writer = FakeKitsuWriter()
+    writer.tasks["kt-1"] = {
+        "id": "kt-1",
+        "type": "Task",
+        "name": "anim",
+        "project_id": KITSU_PROJECT,
+        "task_status_id": "st-todo",
+    }
+    writer.statuses = [
+        {"id": "st-todo", "name": "Todo", "short_name": "todo"},
+        {"id": "st-done", "name": "Done", "short_name": "done"},
+    ]
+    store.entities[("task", "t1")] = {
+        "id": "t1",
+        "name": "anim",
+        "status": "Done",
+        "data": {"kitsuId": "kt-1"},
+    }
+
+    # Persisted gate snapshot at t=500 enabling task_status
+    store.other_events.append(
+        {
+            "id": "gate-1",
+            "topic": "kitsu.outbound_gate",
+            "project": PROJECT,
+            "createdAt": 500.0,
+            "summary": {
+                "project": PROJECT,
+                "toggles": {
+                    "valid": True,
+                    "master": True,
+                    "categories": {
+                        "task_status": True,
+                        "task_assignees": False,
+                        "entity_attributes": False,
+                        "entity_creation": False,
+                        "entity_rename": False,
+                        "entity_deletion": False,
+                    },
+                    "conflict_policy": "kitsu_wins",
+                },
+                "observedAt": 500.0,
+                "lastObservedAt": 995.0,
+            },
+        }
+    )
+
+    # Source event created at t=800 (before startup at t=1000)
+    store.add_source_event(
+        event_id="src-old-1",
+        topic="entity.task.status_changed",
+        project_name=PROJECT,
+        created_at=800.0,
+        summary={"entityId": "t1"},
+        user="artist",
+        payload={"oldValue": "Todo", "newValue": "Done"},
+    )
+
+    proc = KitsuProcessor.__new__(KitsuProcessor)
+    proc.clock = clock
+    proc.ayon_api = store
+    proc.entrypoint = "/addons/kitsu/1.2.4"
+    proc.pairing_list = {KITSU_PROJECT: PROJECT}
+    proc.outbound = None
+
+    gate_history = GateHistory(store, clock=clock)
+    gate_history.loaded = False
+    watcher = SettingsWatcher(
+        store,
+        pairing_list_getter=proc.get_outbound_pairings,
+        gate_history=gate_history,
+        clock=clock,
+    )
+    identity = IdentityResolver(store, writer, entrypoint=proc.entrypoint)
+    proc.outbound = OutboundJobRunner(
+        processor=proc,
+        clock=clock,
+        ayon_client=store,
+        writer=writer,
+        settings_watcher=watcher,
+        gate_history=gate_history,
+        identity_resolver=identity,
+        sender="proc-test",
+    )
+
+    orig_load = gate_history.load
+    load_attempts = [0]
+
+    def flaky_load(*args, **kwargs):
+        load_attempts[0] += 1
+        if load_attempts[0] == 1:
+            gate_history.loaded = False
+            raise RuntimeError("Transient AYON event query failure")
+        return orig_load(*args, **kwargs)
+
+    monkeypatch.setattr(gate_history, "load", flaky_load)
+    monkeypatch.setattr(
+        "processor.processor.project_full_sync", lambda *a, **k: None
+    )
+    monkeypatch.setattr(proc, "_poll_sync_request_once", lambda: False)
+    monkeypatch.setattr("time.time", clock)
+
+    def stop_on_sleep(secs):
+        raise StopLoop()
+
+    monkeypatch.setattr("time.sleep", stop_on_sleep)
+
+    with pytest.raises(StopLoop):
+        proc.start_processing()
+
+    # Load failed on startup (attempt 1) and recovered in main loop (attempt 2)
+    assert load_attempts[0] >= 2
+    assert gate_history.loaded is True
+    # Job created at t=800 was applied rather than skipped as no_history
+    assert len(store.jobs) == 1
+    job = list(store.jobs.values())[0]
+    assert job["status"] == "finished"
+    assert job["summary"]["decision"] == DECISION_APPLIED

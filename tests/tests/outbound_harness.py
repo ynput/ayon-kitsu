@@ -113,6 +113,16 @@ def build_runner(
     )
 
 
+def setup_runner(enabled: bool = True) -> tuple:
+    """Return ``(clock, store, writer, runner, processor)``.
+
+    Args:
+        enabled: Enable the ``entity_deletion`` category when true.
+    """
+    h = build_runner(("entity_deletion",) if enabled else ())
+    return h.clock, h.store, h.writer, h.runner, h.processor
+
+
 def add_event(
     store: FakeAyonStore,
     event_id: str,

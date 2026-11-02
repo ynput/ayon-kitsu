@@ -14,6 +14,9 @@ from processor.outbound.identity import IdentityResolver
 from processor.outbound.kitsu_writer import KitsuWriterError
 
 from .offline import block_network  # noqa: F401
+from .outbound_fakes import FakeAyonStore, FakeKitsuWriter
+from .outbound_harness import PROJECT
+from unittest.mock import patch
 
 pytestmark = pytest.mark.usefixtures("block_network")
 
@@ -293,3 +296,49 @@ def test_identity_success():
     assert res["ok"] is True
     assert res["ayon"] == task_entity
     assert res["kitsu"] == kitsu_task
+
+
+def test_kitsu_owners_http_error_raises_runtime_error():
+    """HTTP status >= 400 from /kitsu-owners must raise RuntimeError."""
+    store = FakeAyonStore()
+    writer = FakeKitsuWriter()
+    resolver = IdentityResolver(store, writer)
+
+    error_resp = MagicMock()
+    error_resp.status_code = 503
+    error_resp.data = {"detail": "Service Unavailable"}
+
+    with patch.object(store, "get", return_value=error_resp):
+        with pytest.raises(RuntimeError, match="HTTP 503"):
+            resolver.get_kitsu_owners("test-project", "kt-123")
+
+
+def test_kitsu_owners_error_detail_raises_runtime_error():
+    """Response dict containing 'detail' without 'folders' raises error."""
+    store = FakeAyonStore()
+    writer = FakeKitsuWriter()
+    resolver = IdentityResolver(store, writer)
+
+    error_dict = {"detail": "Internal server error during lookup"}
+    with patch.object(store, "get", return_value=error_dict):
+        with pytest.raises(RuntimeError, match="Internal server error"):
+            resolver.get_kitsu_owners("test-project", "kt-123")
+
+
+def test_get_ayon_entity_task_explicitly_requests_own_attrib_fields():
+    """IdentityResolver.get_ayon_entity passes fields with ownAttrib."""
+    from processor.outbound.identity import IdentityResolver
+
+    client = MagicMock()
+    client.get_default_fields_for_type.return_value = {"id", "name", "data"}
+    client.get_task_by_id.return_value = {"id": "t1", "name": "anim"}
+    writer = FakeKitsuWriter()
+    resolver = IdentityResolver(client, writer)
+
+    ent = resolver.get_ayon_entity(PROJECT, "task", "t1")
+    assert ent == {"id": "t1", "name": "anim"}
+    client.get_task_by_id.assert_called_once()
+    kwargs = client.get_task_by_id.call_args.kwargs
+    assert kwargs.get("own_attributes") is True
+    assert "ownAttrib" in kwargs.get("fields", set())
+    assert "attrib" in kwargs.get("fields", set())

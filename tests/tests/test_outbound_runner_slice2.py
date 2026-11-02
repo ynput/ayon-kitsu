@@ -20,6 +20,9 @@ from processor.outbound.kitsu_writer import (
 
 from .offline import block_network  # noqa: F401
 from .outbound_harness import SLICE2_CATEGORIES, build_runner
+from .outbound_fakes import FakeKitsuWriter
+from .outbound_harness import KITSU_PROJECT, PROJECT
+from processor.outbound.constants import DECISION_APPLIED
 
 pytestmark = pytest.mark.usefixtures("block_network")
 
@@ -1933,3 +1936,65 @@ def test_unmanaged_assignee_preserved_across_retries_with_snapshots():
     assert writes[1]["sent"] == ["Alice", "Bob", "External"]
     assert "p-unmanaged" in writer.tasks["kt-task-um"]["assignees"]
 
+
+def test_task_assignees_preserves_assignments_for_unresolved_requested_users():
+    """Unresolved requested users are not unassigned from Kitsu tasks."""
+    from processor.outbound.handlers.task_assignees import (
+        handle_task_assignees,
+    )
+
+    writer = FakeKitsuWriter()
+    writer.tasks["kt-task-1"] = {
+        "id": "kt-task-1",
+        "type": "Task",
+        "name": "anim",
+        "project_id": KITSU_PROJECT,
+        "assignees": ["p1", "p2"],
+    }
+    writer.persons = [
+        {"id": "p1", "email": "alice@studio.com", "full_name": "Alice"},
+        {"id": "p2", "email": "bob@studio.com", "full_name": "Bob"},
+        {"id": "p3", "email": "bob@studio.com", "full_name": "Bob Dup"},
+    ]
+
+    # alice has a stale kitsu_id; bob has duplicate email in Kitsu.
+    # Both fail forward resolution, while kitsu_person_owner maps p1->alice
+    # and p2/p3->bob.
+    ayon_users = [
+        {"name": "alice", "kitsu_id": "stale-id", "email": "alice@studio.com"},
+        {"name": "bob", "kitsu_id": None, "email": "bob@studio.com"},
+    ]
+
+    resolver = MagicMock()
+    resolver.resolve.return_value = {
+        "ok": True,
+        "kitsu": writer.tasks["kt-task-1"],
+        "ayon": {"id": "task-1", "name": "anim"},
+    }
+    from types import SimpleNamespace
+
+    resolver.ayon_client = SimpleNamespace(users=ayon_users)
+
+    ctx = SimpleNamespace(
+        event={
+            "topic": "entity.task.assignees_changed",
+            "user": "artist",
+            "payload": {"newValue": ["alice", "bob"]},
+        },
+        entity_id="task-1",
+        project_name=PROJECT,
+        kitsu_project_id=KITSU_PROJECT,
+        identity_resolver=resolver,
+        writer=writer,
+        conflict_policy="ayon_wins",
+        processor=MagicMock(),
+        loop_guard_check=lambda *args: {"allowed": True},
+        attempt=1,
+        prior_writes=[],
+        prior_not_written=None,
+    )
+
+    res = handle_task_assignees(ctx)
+    assert res.decision == DECISION_APPLIED
+    assert writer.unassigned == []
+    assert writer.tasks["kt-task-1"]["assignees"] == ["p1", "p2"]
