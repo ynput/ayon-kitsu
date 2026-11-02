@@ -15,11 +15,13 @@ from ..constants import (
     DECISION_SKIPPED,
     ERROR_REJECTED,
     ERROR_UNREACHABLE,
+    SKIP_ALREADY_PAIRED,
     SKIP_ENTITY_GONE,
+    STRUCTURAL_KITSU_IDS,
 )
 from ..describe import describe_job
 from ..kitsu_writer import KitsuWriterError
-from ..planning import plan_creation
+from ..planning import CREATION_FOLDER_TYPES, plan_creation
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +149,24 @@ def handle_creation(ctx: Any) -> Any:
             or "Folder"
         )
 
-    # 2. Read parent AYON folder if referenced
+    def _skip(reason: str) -> Any:
+        return JobResult(
+            decision=DECISION_SKIPPED,
+            description=describe_job(
+                DECISION_SKIPPED,
+                {"reason": reason, "entity_id": entity_id},
+            ),
+            entity_type=default_entity_type,
+        )
+
+    # 2. Skip if already paired (Requirement 11.7)
+    kitsu_id = str(
+        (ayon_entity.get("data") or {}).get("kitsuId") or ""
+    ).strip()
+    if kitsu_id:
+        return _skip(SKIP_ALREADY_PAIRED)
+
+    # 3. Read parent AYON folder if referenced
     parent_folder_id: Optional[str] = (
         (ayon_entity.get("folderId") or ayon_entity.get("folder_id"))
         if is_task
@@ -180,14 +199,74 @@ def handle_creation(ctx: Any) -> Any:
     # Normalized parent: only Kitsu-relevant keys (never the AYON id)
     parent_info: Optional[Dict[str, Any]] = None
     if isinstance(parent, dict):
+        p_type = parent.get("folderType") or parent.get("folder_type")
+        p_kitsu_id = str(
+            (parent.get("data") or {}).get("kitsuId") or ""
+        ).strip()
+        p_name = str(parent.get("name") or "")
+
+        # Validate paired entity parent identity through IdentityResolver
+        # (Requirements 11.2, 11.3, 3.5, 3.7, 3.8). Structural parents (e.g.
+        # asset types or sequence roots) are validated by plan_creation.
+        if (
+            p_type in CREATION_FOLDER_TYPES
+            and p_kitsu_id
+            and p_kitsu_id not in STRUCTURAL_KITSU_IDS
+        ):
+            parent_res = ctx.identity_resolver.resolve(
+                project_name=project_name,
+                entity_type="folder",
+                entity_id=str(parent_folder_id),
+                expected_kind="folder",
+                kitsu_project_id=ctx.kitsu_project_id,
+            )
+            if isinstance(parent_res, dict) and not parent_res.get("ok"):
+                outcome = parent_res.get("outcome")
+                reason = (
+                    parent_res.get("reason")
+                    or "parent folder identity is invalid"
+                )
+                if outcome == "fail":
+                    details = {
+                        "reason": f"Parent folder identity invalid: {reason}",
+                        "error": str(parent_res.get("error") or reason),
+                        "retryable": parent_res.get("retryable", False),
+                        "error_kind": parent_res.get(
+                            "error_kind", ERROR_REJECTED
+                        ),
+                        "attempt": ctx.attempt,
+                        "entity_id": entity_id,
+                        "category": "entity_creation",
+                        "http_status": parent_res.get("http_status"),
+                    }
+                    return JobResult(
+                        decision=DECISION_FAILED,
+                        description=describe_job(DECISION_FAILED, details),
+                        retryable=parent_res.get("retryable", False),
+                        error_kind=parent_res.get(
+                            "error_kind", ERROR_REJECTED
+                        ),
+                        http_status=parent_res.get("http_status"),
+                        entity_type=default_entity_type,
+                    )
+                return JobResult(
+                    decision=DECISION_SKIPPED,
+                    description=describe_job(
+                        DECISION_SKIPPED,
+                        {
+                            "reason": f"Parent folder skipped: {reason}",
+                            "entity_id": entity_id,
+                            "category": "entity_creation",
+                        },
+                    ),
+                    retryable=False,
+                    entity_type=default_entity_type,
+                )
+
         parent_info = {
-            "folder_type": (
-                parent.get("folderType") or parent.get("folder_type")
-            ),
-            "kitsu_id": str(
-                (parent.get("data") or {}).get("kitsuId") or ""
-            ).strip(),
-            "name": str(parent.get("name") or ""),
+            "folder_type": p_type,
+            "kitsu_id": p_kitsu_id,
+            "name": p_name,
         }
 
     name = str(ayon_entity.get("name") or "")
@@ -216,17 +295,7 @@ def handle_creation(ctx: Any) -> Any:
             kitsu_task_types=tts,
         )
 
-    def _skip(reason: str) -> Any:
-        return JobResult(
-            decision=DECISION_SKIPPED,
-            description=describe_job(
-                DECISION_SKIPPED,
-                {"reason": reason, "entity_id": entity_id},
-            ),
-            entity_type=default_entity_type,
-        )
-
-    # 3. Preliminary plan without Kitsu reads (already paired, type,
+    # 4. Preliminary plan without Kitsu reads (already paired, type,
     # parent rule). Tasks need task types, so only check pairing first.
     if kitsu_id or not is_task:
         prelim = _plan([], [])

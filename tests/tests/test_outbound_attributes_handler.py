@@ -511,3 +511,119 @@ def test_inbound_empty_description_parsed():
     assert data["description"] == ""
     parsed = parse_attrib(data)
     assert parsed.get("description") == ""
+
+def test_attributes_frame_end_edit_derives_kitsu_end_via_fallback_start():
+    """Frame-range comparison uses fallback start to derive Kitsu end frame.
+
+    When Kitsu has nb_frames but no data.frame_in/frame_out, inbound sync
+    derives end frame using the AYON fallback start. Outbound conflict check
+    must supply the pre-change fallback start so an ordinary end-frame edit
+    is not falsely rejected as a conflict under kitsu_wins.
+    """
+    writer = FakeKitsuWriter()
+    kitsu_shot = {
+        "id": "kt-shot-1",
+        "type": "Shot",
+        "name": "sh010",
+        "project_id": KITSU_PROJECT,
+        "nb_frames": 100,
+        "data": {},
+    }
+    writer.tasks["kt-shot-1"] = kitsu_shot
+
+    resolver = MagicMock()
+    resolver.resolve.return_value = {
+        "ok": True,
+        "kitsu": kitsu_shot,
+        "ayon": {
+            "id": "fold-1",
+            "name": "sh010",
+            "folderType": "Shot",
+            "attrib": {"frameStart": 1001, "frameEnd": 1101},
+            "own_attributes": ["frameStart", "frameEnd"],
+        },
+    }
+
+    ctx = MagicMock()
+    ctx.event = {
+        "topic": "entity.folder.attrib_changed",
+        "payload": {
+            "changed": {"frameEnd": 1101},
+            "oldValue": {"frameEnd": 1100},
+        },
+    }
+    ctx.entity_id = "fold-1"
+    ctx.project_name = PROJECT
+    ctx.kitsu_project_id = KITSU_PROJECT
+    ctx.identity_resolver = resolver
+    ctx.writer = writer
+    ctx.conflict_policy = "kitsu_wins"
+    ctx.processor = MagicMock()
+    ctx.loop_guard_check.return_value = {"allowed": True}
+    ctx.attempt = 1
+    ctx.prior_writes = []
+    ctx.omitted_fields = []
+
+    res = handle_attributes(ctx)
+    assert res.decision == DECISION_APPLIED
+    assert len(writer.updated_fields) == 1
+    updated = writer.updated_fields[0]["fields"]
+    assert updated.get("data.frame_out") == 1101
+    assert updated.get("nb_frames") == 101
+
+def test_retry_omits_frame_range_fields_atomically():
+    """Superseding any frame field atomically omits all frame-range fields.
+
+    When nb_frames was superseded by a newer applied job, retrying an older
+    frame-start edit must not send partial data.frame_in to Kitsu without
+    nb_frames, which would corrupt the derived end frame.
+    """
+    writer = FakeKitsuWriter()
+    kitsu_shot = {
+        "id": "kt-shot-1",
+        "type": "Shot",
+        "name": "sh010",
+        "project_id": KITSU_PROJECT,
+        "nb_frames": 200,
+        "data": {"frame_in": 1001, "frame_out": 1200},
+    }
+    writer.tasks["kt-shot-1"] = kitsu_shot
+
+    resolver = MagicMock()
+    resolver.resolve.return_value = {
+        "ok": True,
+        "kitsu": kitsu_shot,
+        "ayon": {
+            "id": "fold-1",
+            "name": "sh010",
+            "folderType": "Shot",
+            "attrib": {"frameStart": 1010, "frameEnd": 1200},
+            "own_attributes": ["frameStart", "frameEnd"],
+        },
+    }
+
+    ctx = MagicMock()
+    ctx.event = {
+        "topic": "entity.folder.attrib_changed",
+        "payload": {
+            "changed": {"frameStart": 1010},
+            "oldValue": {"frameStart": 1001},
+        },
+    }
+    ctx.entity_id = "fold-1"
+    ctx.project_name = PROJECT
+    ctx.kitsu_project_id = KITSU_PROJECT
+    ctx.identity_resolver = resolver
+    ctx.writer = writer
+    ctx.conflict_policy = "ayon_wins"
+    ctx.processor = MagicMock()
+    ctx.loop_guard_check.return_value = {"allowed": True}
+    ctx.attempt = 2
+    ctx.prior_writes = []
+    # nb_frames was superseded by newer applied frame-end job
+    ctx.omitted_fields = ["nb_frames"]
+
+    res = handle_attributes(ctx)
+    assert res.decision == DECISION_SKIPPED
+    assert len(writer.updated_fields) == 0
+

@@ -200,7 +200,14 @@ def handle_attributes(ctx: Any) -> Any:
     errors = list(plan["errors"])
 
     # 6. Conflict checks per changed attribute
-    current_view = kitsu_attrib_view(current_kitsu)
+    fallback_start = (
+        old_values.get("frameStart")
+        if old_values and "frameStart" in old_values
+        else effective_attrib.get("frameStart")
+    )
+    current_view = kitsu_attrib_view(
+        current_kitsu, fallback_frame_start=fallback_start
+    )
 
     decisions: Dict[str, Any] = {}
     conflicts: Dict[str, Any] = {}
@@ -330,6 +337,14 @@ def handle_attributes(ctx: Any) -> Any:
         if isinstance(omitted_raw, (list, tuple, set))
         else []
     )
+    # Paired frame fields must be omitted atomically so supersession of one
+    # field (e.g. nb_frames) cannot leave Kitsu endpoints out of sync.
+    frame_fields = ("data.frame_in", "data.frame_out", "nb_frames")
+    if any(f in omitted for f in frame_fields):
+        for f in frame_fields:
+            if f not in omitted:
+                omitted.append(f)
+
     for fld in omitted:
         if fld in fields_to_write:
             del fields_to_write[fld]

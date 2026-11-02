@@ -43,6 +43,12 @@ pytestmark = pytest.mark.usefixtures("block_network")
 def _setup(enabled=True):
     """Build a runner with every Slice 3 toggle set to ``enabled``."""
     h = build_runner(SLICE3_CATEGORIES if enabled else ())
+    h.writer.tasks["kt-seq-1"] = {
+        "id": "kt-seq-1",
+        "type": "Sequence",
+        "name": "sq010",
+        "project_id": KITSU_PROJECT,
+    }
     return h.clock, h.store, h.writer, h.runner
 
 
@@ -235,6 +241,12 @@ def test_create_task_under_paired_shot():
         "folderType": "Shot",
         "data": {"kitsuId": "kt-shot-1"},
     }
+    writer.tasks["kt-shot-1"] = {
+        "id": "kt-shot-1",
+        "type": "Shot",
+        "name": "sh010",
+        "project_id": KITSU_PROJECT,
+    }
     store.entities[("task", "task-1")] = {
         "id": "task-1",
         "name": "animation",
@@ -262,6 +274,12 @@ def test_create_task_duplicate_type_skips():
         "name": "sh010",
         "folderType": "Shot",
         "data": {"kitsuId": "kt-shot-1"},
+    }
+    writer.tasks["kt-shot-1"] = {
+        "id": "kt-shot-1",
+        "type": "Shot",
+        "name": "sh010",
+        "project_id": KITSU_PROJECT,
     }
     store.entities[("task", "task-1")] = {
         "id": "task-1",
@@ -871,3 +889,42 @@ def test_rename_applies_conflict_policy_kitsu_wins_and_ayon_wins():
     assert res_aw.decision == DECISION_CONFLICT
     assert len(writer.renamed) == 1
     assert writer.renamed[0]["payload"]["name"] == "AYON New Name"
+
+def test_create_task_under_parent_with_duplicate_owners_fails():
+    """Task creation beneath an ambiguous parent kitsuId fails safely."""
+    _, store, writer, runner = _setup()
+    store.entities[("folder", "fold-shot-1")] = {
+        "id": "fold-shot-1",
+        "name": "sh010",
+        "folderType": "Shot",
+        "data": {"kitsuId": "kt-shot-dup"},
+    }
+    # Second folder carrying the same kitsuId (duplicate owner)
+    store.entities[("folder", "fold-shot-2")] = {
+        "id": "fold-shot-2",
+        "name": "sh010_copy",
+        "folderType": "Shot",
+        "data": {"kitsuId": "kt-shot-dup"},
+    }
+    writer.tasks["kt-shot-dup"] = {
+        "id": "kt-shot-dup",
+        "type": "Shot",
+        "name": "sh010",
+        "project_id": KITSU_PROJECT,
+    }
+    store.entities[("task", "task-1")] = {
+        "id": "task-1",
+        "name": "animation",
+        "taskType": "Animation",
+        "folderId": "fold-shot-1",
+        "data": {},
+    }
+    _add_event(store, "evt-t", TOPIC_TASK_CREATED, "task-1")
+
+    runner.poll_once()
+    job = _only_job(store)
+    assert job["status"] == "failed"
+    assert "Parent folder identity invalid" in job["description"]
+    assert "carried by 2 AYON entities" in job["description"]
+    assert writer.created == []
+

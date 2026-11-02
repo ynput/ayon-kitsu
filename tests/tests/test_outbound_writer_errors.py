@@ -231,3 +231,30 @@ def test_writer_comment_status_args():
         )
     finally:
         gazu.task.add_comment = orig_comment
+
+def test_writer_unassign_passes_task_collection_to_gazu():
+    """unassign passes a task list to gazu.task.clear_assignations."""
+    fake_client = MagicMock()
+    writer = KitsuWriter(client=fake_client)
+
+    import gazu.task
+
+    captured_args = []
+
+    def fake_clear_assignations(*args, **kwargs):
+        captured_args.append((args, kwargs))
+        return []
+
+    orig_clear = gazu.task.clear_assignations
+    try:
+        gazu.task.clear_assignations = fake_clear_assignations
+        writer.unassign("task-100", "person-200")
+        assert len(captured_args) == 1
+        args, kwargs = captured_args[0]
+        # Must pass a list of task IDs, not a bare string
+        assert args[0] == ["task-100"]
+        assert args[1] == "person-200"
+        assert kwargs.get("client") == fake_client
+    finally:
+        gazu.task.clear_assignations = orig_clear
+

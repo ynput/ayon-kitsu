@@ -329,7 +329,7 @@ class KitsuWriter:
     ) -> None:
         """Unassign a person from a Kitsu task (Requirement 7.4, 7.7)."""
         task_id = task.get("id") if isinstance(task, dict) else task
-        self._call(gazu.task.clear_assignations, task_id, person_id)
+        self._call(gazu.task.clear_assignations, [task_id], person_id)
 
     def update_entity_fields(
         self,
