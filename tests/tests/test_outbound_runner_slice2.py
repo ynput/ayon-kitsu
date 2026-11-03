@@ -1976,6 +1976,7 @@ def test_task_assignees_preserves_assignments_for_unresolved_requested_users():
     resolver.ayon_client = SimpleNamespace(users=ayon_users)
 
     ctx = SimpleNamespace(
+        category="task_assignees",
         event={
             "topic": "entity.task.assignees_changed",
             "user": "artist",

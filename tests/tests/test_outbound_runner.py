@@ -320,9 +320,12 @@ def test_stale_job_reaped():
     assert "Abandoned by kitsu-processor-other-host" in job["description"]
 
 
-def test_kitsu_wins_inbound_pull():
+@pytest.mark.parametrize("pull_fails", [False, True])
+def test_kitsu_wins_inbound_pull(pull_fails):
     """Conflict with kitsu_wins policy triggers inbound task pull (Req 9.4)."""
     clock, store, writer, runner, processor = _setup_runner()
+    if pull_fails:
+        processor.pull_kitsu_task.side_effect = RuntimeError("AYON unavailable")
 
     store.entities[("task", "task-1")] = {
         "id": "task-1",
@@ -347,11 +350,88 @@ def test_kitsu_wins_inbound_pull():
     runner.poll_once()
 
     job = store.jobs["job-1"]
-    assert job["status"] == "finished"
-    assert "Conflict:" in job["description"]
+    processor.pull_kitsu_task.assert_called_once_with(
+        "kt-task-1", {**writer.tasks["kt-task-1"], "type": "Task"}
+    )
+    if pull_fails:
+        assert job["status"] == "pending"
+        assert "Inbound pull on conflict failed" in job["description"]
+        assert "AYON unavailable" in job["description"]
+    else:
+        assert job["status"] == "finished"
+        assert "Conflict:" in job["description"]
     assert "no kitsu field was written" in job["description"].lower()
     # Zero Kitsu writes sent
     assert len(writer.comments) == 0
+
+
+def test_terminal_failure_keeps_description_delimiters_in_error_text():
+    """Error text containing description clauses survives final formatting."""
+    _, store, writer, runner, _ = _setup_runner()
+    message = (
+        "Invalid value. Written fields: artist note, additional detail. "
+        "No Kitsu field was written. Keep this trailing explanation."
+    )
+    store.entities[("task", "task-1")] = {
+        "id": "task-1",
+        "data": {"kitsuId": "kt-task-1"},
+    }
+    writer.tasks["kt-task-1"] = {
+        "id": "kt-task-1",
+        "project_id": KITSU_PROJECT,
+        "task_status_id": "st-wip",
+    }
+    writer.comment_status = MagicMock(
+        side_effect=KitsuWriterError(
+            "rejected", message, http_status=422, retryable=False
+        )
+    )
+    store.add_source_event(
+        event_id="src-delimiters",
+        topic="entity.task.status_changed",
+        project_name=PROJECT,
+        created_at=1010.0,
+        payload={"oldValue": "WIP", "newValue": "Done"},
+        summary={"entityId": "task-1"},
+    )
+
+    runner._process_job(runner._enroll(), attempt=4)
+
+    job = store.jobs["job-1"]
+    assert job["status"] == "failed"
+    assert message in job["description"]
+    assert job["description"].count("attempt 4/4") == 1
+    assert job["summary"]["notWritten"] == {"task_status_id": "Done"}
+
+
+def test_legacy_unwritten_records_survive_source_lookup_failure():
+    """A restarted job can report unwritten values saved as legacy records."""
+    _, store, _, runner, _ = _setup_runner()
+    store.jobs["legacy-job"] = {
+        "id": "legacy-job",
+        "dependsOn": "missing-source",
+        "project_name": PROJECT,
+        "summary": {
+            "attempt": 4,
+            "writes": [{"field": "data.fps", "before": 24, "sent": 25}],
+            "notWritten": [
+                {"field": "description", "ayonValue": "Artist's edit"},
+                {"field": "data.frame_out", "ayonValue": 120},
+            ],
+        },
+    }
+
+    runner._process_job(store.jobs["legacy-job"], attempt=4)
+
+    job = store.jobs["legacy-job"]
+    assert job["status"] == "failed"
+    assert job["summary"]["notWritten"] == {
+        "description": "Artist's edit", "data.frame_out": 120,
+    }
+    assert "Source event missing-source not found" in job["description"]
+    assert "description=Artist's edit" in job["description"]
+    assert "data.frame_out=120" in job["description"]
+    assert "field 'data.fps'" in job["description"]
 
 
 def test_drain_order_and_failed_job_list():
@@ -657,7 +737,7 @@ def test_kitsu_writer_init_redacts_secrets_in_logs(caplog):
     proc.sender = "kitsu-processor-test"
     proc.kitsu_host = "https://kitsu.example.com"
     proc.kitsu_login_password = secret
-    proc.pairing_list = {"test-project": "kitsu-proj-1"}
+    proc.get_outbound_pairings.return_value = {"test-project": "kitsu-proj-1"}
 
     with caplog.at_level(logging.WARNING):
         with patch(
@@ -1046,7 +1126,7 @@ def test_reaped_abandoned_job_transfers_ownership_and_unblocks_enroll():
     writer = FakeKitsuWriter()
     processor = MagicMock()
     processor.sender = "processor-B"
-    processor.pairing_list = {PROJECT: KITSU_PROJECT}
+    processor.get_outbound_pairings.return_value = {PROJECT: KITSU_PROJECT}
 
     runner = OutboundJobRunner(
         processor=processor,

@@ -42,6 +42,7 @@ def test_attributes_inherited_fps_reset_skipped():
     }
 
     ctx = MagicMock()
+    ctx.category = "entity_attributes"
     ctx.event = {
         "topic": "entity.folder.attrib_changed",
         "payload": {
@@ -89,6 +90,7 @@ def test_attributes_unchanged_counterpart_preserved():
     }
 
     ctx = MagicMock()
+    ctx.category = "entity_attributes"
     ctx.event = {
         "topic": "entity.folder.attrib_changed",
         "payload": {
@@ -142,6 +144,7 @@ def test_task_attribute_conflict_restored_under_kitsu_wins():
     }
 
     ctx = MagicMock()
+    ctx.category = "entity_attributes"
     ctx.event = {
         "topic": "entity.task.attrib_changed",
         "payload": {
@@ -194,6 +197,7 @@ def test_attributes_loop_guard_atomic_frame_range_suppression():
     }
 
     ctx = MagicMock()
+    ctx.category = "entity_attributes"
     ctx.event = {
         "topic": "entity.folder.attrib_changed",
         "payload": {
@@ -259,6 +263,7 @@ def test_attributes_preserves_source_event_changed_values_over_echo():
     }
 
     ctx = MagicMock()
+    ctx.category = "entity_attributes"
     ctx.event = {
         "topic": "entity.task.attrib_changed",
         "payload": {
@@ -316,6 +321,7 @@ def test_unrelated_attribute_change_ignores_existing_invalid_frame_range():
     }
 
     ctx = MagicMock()
+    ctx.category = "entity_attributes"
     ctx.event = {
         "topic": "entity.folder.attrib_changed",
         "payload": {
@@ -346,7 +352,7 @@ def test_attributes_discards_guard_reservations_for_suppressed_frame_fields():
     writer = FakeKitsuWriter()
     processor = MagicMock()
     processor.sender = "proc-1"
-    processor.pairing_list = {PROJECT: KITSU_PROJECT}
+    processor.get_outbound_pairings.return_value = {PROJECT: KITSU_PROJECT}
 
     runner = OutboundJobRunner(
         processor=processor,
@@ -391,6 +397,7 @@ def test_attributes_discards_guard_reservations_for_suppressed_frame_fields():
     from types import SimpleNamespace
 
     ctx = SimpleNamespace(
+        category="entity_attributes",
         event={
             "topic": "entity.folder.attrib_changed",
             "payload": {
@@ -455,6 +462,7 @@ def test_retry_omits_fields_superseded_by_newer_job():
     }
 
     ctx = MagicMock()
+    ctx.category = "entity_attributes"
     ctx.event = {
         "topic": "entity.folder.attrib_changed",
         "payload": {
@@ -545,6 +553,7 @@ def test_attributes_frame_end_edit_derives_kitsu_end_via_fallback_start():
     }
 
     ctx = MagicMock()
+    ctx.category = "entity_attributes"
     ctx.event = {
         "topic": "entity.folder.attrib_changed",
         "payload": {
@@ -603,6 +612,7 @@ def test_retry_omits_frame_range_fields_atomically():
     }
 
     ctx = MagicMock()
+    ctx.category = "entity_attributes"
     ctx.event = {
         "topic": "entity.folder.attrib_changed",
         "payload": {

@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional
 
 from ..constants import (
     DECISION_APPLIED,
-    DECISION_FAILED,
     DECISION_SKIPPED,
     ERROR_REJECTED,
     ERROR_UNREACHABLE,
@@ -19,8 +18,8 @@ from ..constants import (
     SKIP_ENTITY_GONE,
     STRUCTURAL_KITSU_IDS,
 )
-from ..describe import describe_job
 from ..kitsu_writer import KitsuWriterError
+from ..models import JobContext, JobResult, failed_result
 from ..planning import CREATION_FOLDER_TYPES, plan_creation
 
 logger = logging.getLogger(__name__)
@@ -46,9 +45,7 @@ def _store_kitsu_id_on_ayon(
 
     if is_task:
         if callable(getattr(ayon_client, "update_task", None)):
-            ayon_client.update_task(
-                project_name, entity_id, data=new_data
-            )
+            ayon_client.update_task(project_name, entity_id, data=new_data)
             return
         if hasattr(ayon_client, "patch"):
             resp = ayon_client.patch(
@@ -58,17 +55,13 @@ def _store_kitsu_id_on_ayon(
             if resp is not None:
                 if hasattr(resp, "raise_for_status"):
                     resp.raise_for_status()
-                elif (
-                    hasattr(resp, "status_code") and resp.status_code >= 400
-                ):
+                elif hasattr(resp, "status_code") and resp.status_code >= 400:
                     raise RuntimeError(f"HTTP {resp.status_code}")
             return
         raise RuntimeError("AYON client does not support update_task")
 
     if callable(getattr(ayon_client, "update_folder", None)):
-        ayon_client.update_folder(
-            project_name, entity_id, data=new_data
-        )
+        ayon_client.update_folder(project_name, entity_id, data=new_data)
         return
     if hasattr(ayon_client, "patch"):
         resp = ayon_client.patch(
@@ -78,15 +71,13 @@ def _store_kitsu_id_on_ayon(
         if resp is not None:
             if hasattr(resp, "raise_for_status"):
                 resp.raise_for_status()
-            elif (
-                hasattr(resp, "status_code") and resp.status_code >= 400
-            ):
+            elif hasattr(resp, "status_code") and resp.status_code >= 400:
                 raise RuntimeError(f"HTTP {resp.status_code}")
         return
     raise RuntimeError("AYON client does not support update_folder")
 
 
-def handle_creation(ctx: Any) -> Any:
+def handle_creation(ctx: JobContext) -> JobResult:
     """Apply entity.folder.created or entity.task.created to Kitsu.
 
     Args:
@@ -95,7 +86,6 @@ def handle_creation(ctx: Any) -> Any:
     Returns:
         JobResult instance.
     """
-    from ..runner import JobResult
 
     event = ctx.event
     topic = event.get("topic", "")
@@ -114,31 +104,20 @@ def handle_creation(ctx: Any) -> Any:
             project_name, expected_kind, entity_id
         )
     except Exception as exc:
-        details = {
-            "reason": f"Failed to read AYON {expected_kind}: {exc}",
-            "error": str(exc),
-            "retryable": True,
-            "error_kind": ERROR_UNREACHABLE,
-            "attempt": ctx.attempt,
-            "entity_id": entity_id,
-            "category": "entity_creation",
-        }
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            f"Failed to read AYON {expected_kind}: {exc}",
             retryable=True,
             error_kind=ERROR_UNREACHABLE,
             entity_type=default_entity_type,
+            error=str(exc),
         )
 
     if not ayon_entity:
         reason = SKIP_ENTITY_GONE.format(entity_id=entity_id)
         return JobResult(
             decision=DECISION_SKIPPED,
-            description=describe_job(
-                DECISION_SKIPPED,
-                {"reason": reason, "entity_id": entity_id},
-            ),
+            details={"reason": reason, "entity_id": entity_id},
             entity_type=default_entity_type,
         )
 
@@ -149,13 +128,10 @@ def handle_creation(ctx: Any) -> Any:
             or "Folder"
         )
 
-    def _skip(reason: str) -> Any:
+    def _skip(reason: str) -> JobResult:
         return JobResult(
             decision=DECISION_SKIPPED,
-            description=describe_job(
-                DECISION_SKIPPED,
-                {"reason": reason, "entity_id": entity_id},
-            ),
+            details={"reason": reason, "entity_id": entity_id},
             entity_type=default_entity_type,
         )
 
@@ -179,21 +155,13 @@ def handle_creation(ctx: Any) -> Any:
                 project_name, "folder", str(parent_folder_id)
             )
         except Exception as exc:
-            details = {
-                "reason": f"Failed to read parent AYON folder: {exc}",
-                "error": str(exc),
-                "retryable": True,
-                "error_kind": ERROR_UNREACHABLE,
-                "attempt": ctx.attempt,
-                "entity_id": entity_id,
-                "category": "entity_creation",
-            }
-            return JobResult(
-                decision=DECISION_FAILED,
-                description=describe_job(DECISION_FAILED, details),
+            return failed_result(
+                ctx,
+                f"Failed to read parent AYON folder: {exc}",
                 retryable=True,
                 error_kind=ERROR_UNREACHABLE,
                 entity_type=default_entity_type,
+                error=str(exc),
             )
 
     # Normalized parent: only Kitsu-relevant keys (never the AYON id)
@@ -227,38 +195,24 @@ def handle_creation(ctx: Any) -> Any:
                     or "parent folder identity is invalid"
                 )
                 if outcome == "fail":
-                    details = {
-                        "reason": f"Parent folder identity invalid: {reason}",
-                        "error": str(parent_res.get("error") or reason),
-                        "retryable": parent_res.get("retryable", False),
-                        "error_kind": parent_res.get(
-                            "error_kind", ERROR_REJECTED
-                        ),
-                        "attempt": ctx.attempt,
-                        "entity_id": entity_id,
-                        "category": "entity_creation",
-                        "http_status": parent_res.get("http_status"),
-                    }
-                    return JobResult(
-                        decision=DECISION_FAILED,
-                        description=describe_job(DECISION_FAILED, details),
+                    return failed_result(
+                        ctx,
+                        f"Parent folder identity invalid: {reason}",
                         retryable=parent_res.get("retryable", False),
                         error_kind=parent_res.get(
                             "error_kind", ERROR_REJECTED
                         ),
                         http_status=parent_res.get("http_status"),
                         entity_type=default_entity_type,
+                        error=str(parent_res.get("error") or reason),
                     )
                 return JobResult(
                     decision=DECISION_SKIPPED,
-                    description=describe_job(
-                        DECISION_SKIPPED,
-                        {
-                            "reason": f"Parent folder skipped: {reason}",
-                            "entity_id": entity_id,
-                            "category": "entity_creation",
-                        },
-                    ),
+                    details={
+                        "reason": f"Parent folder skipped: {reason}",
+                        "entity_id": entity_id,
+                        "category": "entity_creation",
+                    },
                     retryable=False,
                     entity_type=default_entity_type,
                 )
@@ -274,11 +228,7 @@ def handle_creation(ctx: Any) -> Any:
         (ayon_entity.get("data") or {}).get("kitsuId") or ""
     ).strip()
     task_type: Optional[str] = (
-        str(
-            ayon_entity.get("taskType")
-            or ayon_entity.get("task_type")
-            or ""
-        )
+        str(ayon_entity.get("taskType") or ayon_entity.get("task_type") or "")
         if is_task
         else None
     )
@@ -324,19 +274,9 @@ def handle_creation(ctx: Any) -> Any:
             )
             plan = _plan(siblings or [], [])
     except KitsuWriterError as exc:
-        details = {
-            "reason": str(exc),
-            "error": str(exc),
-            "retryable": exc.retryable,
-            "error_kind": exc.kind,
-            "http_status": exc.http_status,
-            "attempt": ctx.attempt,
-            "entity_id": entity_id,
-            "category": "entity_creation",
-        }
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            str(exc),
             retryable=exc.retryable,
             error_kind=exc.kind,
             http_status=exc.http_status,
@@ -354,14 +294,11 @@ def handle_creation(ctx: Any) -> Any:
     if not guard["allowed"]:
         return JobResult(
             decision=DECISION_SKIPPED,
-            description=describe_job(
-                DECISION_SKIPPED,
-                {
-                    "reason": "loop suspected",
-                    "entity_id": entity_id,
-                    "category": "entity_creation",
-                },
-            ),
+            details={
+                "reason": "loop suspected",
+                "entity_id": entity_id,
+                "category": "entity_creation",
+            },
             entity_type=target_type,
         )
 
@@ -397,21 +334,10 @@ def handle_creation(ctx: Any) -> Any:
             if callable(commit_fn):
                 commit_fn()
         except KitsuWriterError as exc:
-            unwritten = [{"field": "name", "ayonValue": target_name}]
-            details = {
-                "reason": str(exc),
-                "error": str(exc),
-                "retryable": exc.retryable,
-                "error_kind": exc.kind,
-                "http_status": exc.http_status,
-                "attempt": ctx.attempt,
-                "entity_id": entity_id,
-                "category": "entity_creation",
-                "unwritten": unwritten,
-            }
-            return JobResult(
-                decision=DECISION_FAILED,
-                description=describe_job(DECISION_FAILED, details),
+            unwritten = {"name": target_name}
+            return failed_result(
+                ctx,
+                str(exc),
                 retryable=exc.retryable,
                 error_kind=exc.kind,
                 http_status=exc.http_status,
@@ -448,29 +374,15 @@ def handle_creation(ctx: Any) -> Any:
                 f"created Kitsu {target_type} {new_kitsu_id} for AYON entity "
                 f"{entity_id}, but storing data.kitsuId failed: {exc}"
             )
-            details = {
-                "reason": err_msg,
-                "error": err_msg,
-                "retryable": False,
-                "error_kind": ERROR_REJECTED,
-                "attempt": ctx.attempt,
-                "kitsu_id": new_kitsu_id,
-                "entity_id": entity_id,
-                "category": "entity_creation",
-                "writes": writes,
-                "unwritten": {"data.kitsuId": new_kitsu_id},
-            }
-            return JobResult(
-                decision=DECISION_FAILED,
-                description=describe_job(DECISION_FAILED, details),
+            return failed_result(
+                ctx,
+                err_msg,
                 retryable=False,
                 error_kind=ERROR_REJECTED,
                 kitsu_id=new_kitsu_id,
                 entity_type=target_type,
                 writes=writes,
-                not_written=[
-                    {"field": "data.kitsuId", "ayonValue": new_kitsu_id}
-                ],
+                not_written={"data.kitsuId": new_kitsu_id},
             )
     finally:
         if proc and hasattr(proc, "finish_in_flight_creation"):
@@ -488,7 +400,7 @@ def handle_creation(ctx: Any) -> Any:
 
     return JobResult(
         decision=DECISION_APPLIED,
-        description=describe_job(DECISION_APPLIED, applied_details),
+        details=applied_details,
         writes=writes,
         kitsu_id=new_kitsu_id,
         entity_type=target_type,

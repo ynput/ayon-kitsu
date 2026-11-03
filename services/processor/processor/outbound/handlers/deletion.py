@@ -10,18 +10,17 @@ from typing import Any, Dict, List, Optional
 
 from ..constants import (
     DECISION_APPLIED,
-    DECISION_FAILED,
     DECISION_SKIPPED,
     ERROR_REJECTED,
     ERROR_UNREACHABLE,
 )
-from ..describe import describe_job
 from ..identity_rules import (
     KITSU_ID_OK,
     KITSU_ID_STRUCTURAL,
     validate_kitsu_id,
 )
 from ..kitsu_writer import KitsuWriterError
+from ..models import JobContext, JobResult, failed_result
 from ..planning import plan_deletion
 
 logger = logging.getLogger(__name__)
@@ -53,7 +52,7 @@ def _extract_kitsu_id_from_event(event: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def handle_deletion(ctx: Any) -> Any:
+def handle_deletion(ctx: JobContext) -> JobResult:
     """Apply entity.folder.deleted or entity.task.deleted to Kitsu.
 
     Args:
@@ -62,7 +61,6 @@ def handle_deletion(ctx: Any) -> Any:
     Returns:
         JobResult instance.
     """
-    from ..runner import JobResult
 
     event = ctx.event
     topic = event.get("topic", "")
@@ -75,13 +73,10 @@ def handle_deletion(ctx: Any) -> Any:
     if topic in ("entity.project.deleted", "entity.user.deleted"):
         return JobResult(
             decision=DECISION_SKIPPED,
-            description=describe_job(
-                DECISION_SKIPPED,
-                {
-                    "reason": "project and person deletion is out of scope",
-                    "entity_id": entity_id,
-                },
-            ),
+            details={
+                "reason": "project and person deletion is out of scope",
+                "entity_id": entity_id,
+            },
         )
 
     is_task = "task" in topic
@@ -101,21 +96,13 @@ def handle_deletion(ctx: Any) -> Any:
                     (ayon_entity.get("data") or {}).get("kitsuId") or ""
                 ).strip()
         except Exception as exc:
-            details = {
-                "reason": f"Failed to read AYON {expected_kind}: {exc}",
-                "error": str(exc),
-                "retryable": True,
-                "error_kind": ERROR_UNREACHABLE,
-                "attempt": ctx.attempt,
-                "entity_id": entity_id,
-                "category": "entity_deletion",
-            }
-            return JobResult(
-                decision=DECISION_FAILED,
-                description=describe_job(DECISION_FAILED, details),
+            return failed_result(
+                ctx,
+                f"Failed to read AYON {expected_kind}: {exc}",
                 retryable=True,
                 error_kind=ERROR_UNREACHABLE,
                 entity_type=default_entity_type,
+                error=str(exc),
             )
 
     if not raw_kitsu_id:
@@ -123,18 +110,9 @@ def handle_deletion(ctx: Any) -> Any:
             f"kitsuId could not be determined for deleted AYON entity "
             f"{entity_id}"
         )
-        details = {
-            "reason": reason_msg,
-            "error": reason_msg,
-            "retryable": False,
-            "error_kind": ERROR_REJECTED,
-            "attempt": ctx.attempt,
-            "entity_id": entity_id,
-            "category": "entity_deletion",
-        }
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            reason_msg,
             retryable=False,
             error_kind=ERROR_REJECTED,
             entity_type=default_entity_type,
@@ -144,10 +122,7 @@ def handle_deletion(ctx: Any) -> Any:
     if val_res["result"] == KITSU_ID_STRUCTURAL:
         return JobResult(
             decision=DECISION_SKIPPED,
-            description=describe_job(
-                DECISION_SKIPPED,
-                {"reason": val_res["reason"], "entity_id": entity_id},
-            ),
+            details={"reason": val_res["reason"], "entity_id": entity_id},
             entity_type=default_entity_type,
         )
     if val_res["result"] != KITSU_ID_OK:
@@ -155,18 +130,9 @@ def handle_deletion(ctx: Any) -> Any:
             f"kitsuId could not be determined for deleted AYON entity "
             f"{entity_id}"
         )
-        details = {
-            "reason": reason_msg,
-            "error": reason_msg,
-            "retryable": False,
-            "error_kind": ERROR_REJECTED,
-            "attempt": ctx.attempt,
-            "entity_id": entity_id,
-            "category": "entity_deletion",
-        }
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            reason_msg,
             retryable=False,
             error_kind=ERROR_REJECTED,
             entity_type=default_entity_type,
@@ -213,23 +179,14 @@ def handle_deletion(ctx: Any) -> Any:
                 f"belongs to Kitsu project {k_proj or 'unknown'}, expected "
                 f"{ctx.kitsu_project_id}"
             )
-            details = {
-                "reason": reason_msg,
-                "error": "project_mismatch",
-                "retryable": False,
-                "error_kind": ERROR_REJECTED,
-                "attempt": ctx.attempt,
-                "kitsu_id": kitsu_id,
-                "entity_id": entity_id,
-                "category": "entity_deletion",
-            }
-            return JobResult(
-                decision=DECISION_FAILED,
-                description=describe_job(DECISION_FAILED, details),
+            return failed_result(
+                ctx,
+                reason_msg,
                 retryable=False,
                 error_kind=ERROR_REJECTED,
                 kitsu_id=kitsu_id,
                 entity_type=fallback_type,
+                error="project_mismatch",
             )
 
         k_type = (kitsu_entity or {}).get("type")
@@ -238,48 +195,29 @@ def handle_deletion(ctx: Any) -> Any:
                 f"Kitsu entity {kitsu_id} of AYON entity {entity_id} is a "
                 f"{k_type or 'unknown entity'}, expected a Task"
             )
-            details = {
-                "reason": reason_msg,
-                "error": "kind_mismatch",
-                "retryable": False,
-                "error_kind": ERROR_REJECTED,
-                "attempt": ctx.attempt,
-                "kitsu_id": kitsu_id,
-                "entity_id": entity_id,
-                "category": "entity_deletion",
-            }
-            return JobResult(
-                decision=DECISION_FAILED,
-                description=describe_job(DECISION_FAILED, details),
+            return failed_result(
+                ctx,
+                reason_msg,
                 retryable=False,
                 error_kind=ERROR_REJECTED,
                 kitsu_id=kitsu_id,
                 entity_type=fallback_type,
+                error="kind_mismatch",
             )
     except KitsuWriterError as exc:
         reason_msg = (
             f"operation delete on kitsu_id {kitsu_id} for AYON entity "
             f"{entity_id} failed: {exc}"
         )
-        details = {
-            "reason": reason_msg,
-            "error": str(exc),
-            "retryable": exc.retryable,
-            "error_kind": exc.kind,
-            "http_status": exc.http_status,
-            "attempt": ctx.attempt,
-            "kitsu_id": kitsu_id,
-            "entity_id": entity_id,
-            "category": "entity_deletion",
-        }
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            reason_msg,
             retryable=exc.retryable,
             error_kind=exc.kind,
             http_status=exc.http_status,
             kitsu_id=kitsu_id,
             entity_type=fallback_type,
+            error=str(exc),
         )
 
     kitsu_name = str(
@@ -299,9 +237,7 @@ def handle_deletion(ctx: Any) -> Any:
             )
             surviving = [
                 fid for fid in owners.get("folders", []) if fid != entity_id
-            ] + [
-                tid for tid in owners.get("tasks", []) if tid != entity_id
-            ]
+            ] + [tid for tid in owners.get("tasks", []) if tid != entity_id]
             if surviving:
                 reason_msg = (
                     f"Kitsu entity {kitsu_id} cannot be deleted: still owned "
@@ -315,30 +251,21 @@ def handle_deletion(ctx: Any) -> Any:
                 }
                 return JobResult(
                     decision=DECISION_SKIPPED,
-                    description=describe_job(DECISION_SKIPPED, details),
+                    details=details,
                     retryable=False,
                     kitsu_id=kitsu_id,
                     entity_type=fallback_type,
                 )
         except Exception as exc:
             reason_msg = f"failed to query kitsu-owners for {kitsu_id}: {exc}"
-            details = {
-                "reason": reason_msg,
-                "error": str(exc),
-                "retryable": True,
-                "error_kind": ERROR_UNREACHABLE,
-                "attempt": ctx.attempt,
-                "kitsu_id": kitsu_id,
-                "entity_id": entity_id,
-                "category": "entity_deletion",
-            }
-            return JobResult(
-                decision=DECISION_FAILED,
-                description=describe_job(DECISION_FAILED, details),
+            return failed_result(
+                ctx,
+                reason_msg,
                 retryable=True,
                 error_kind=ERROR_UNREACHABLE,
                 kitsu_id=kitsu_id,
                 entity_type=fallback_type,
+                error=str(exc),
             )
 
     try:
@@ -348,25 +275,15 @@ def handle_deletion(ctx: Any) -> Any:
             f"operation delete on kitsu_id {kitsu_id} for AYON entity "
             f"{entity_id} failed: {exc}"
         )
-        details = {
-            "reason": reason_msg,
-            "error": str(exc),
-            "retryable": exc.retryable,
-            "error_kind": exc.kind,
-            "http_status": exc.http_status,
-            "attempt": ctx.attempt,
-            "kitsu_id": kitsu_id,
-            "entity_id": entity_id,
-            "category": "entity_deletion",
-        }
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            reason_msg,
             retryable=exc.retryable,
             error_kind=exc.kind,
             http_status=exc.http_status,
             kitsu_id=kitsu_id,
             entity_type=fallback_type,
+            error=str(exc),
         )
 
     # 3. Evaluate deletion guard (Requirement 12.2, 12.3)
@@ -374,14 +291,11 @@ def handle_deletion(ctx: Any) -> Any:
     if not plan["allowed"]:
         return JobResult(
             decision=DECISION_SKIPPED,
-            description=describe_job(
-                DECISION_SKIPPED,
-                {
-                    "reason": plan["reason"],
-                    "entity_id": entity_id,
-                    "kitsu_id": kitsu_id,
-                },
-            ),
+            details={
+                "reason": plan["reason"],
+                "entity_id": entity_id,
+                "kitsu_id": kitsu_id,
+            },
             kitsu_id=kitsu_id,
             entity_type=kitsu_type,
         )
@@ -391,15 +305,12 @@ def handle_deletion(ctx: Any) -> Any:
     if not guard["allowed"]:
         return JobResult(
             decision=DECISION_SKIPPED,
-            description=describe_job(
-                DECISION_SKIPPED,
-                {
-                    "reason": "loop suspected",
-                    "entity_id": entity_id,
-                    "kitsu_id": kitsu_id,
-                    "category": "entity_deletion",
-                },
-            ),
+            details={
+                "reason": "loop suspected",
+                "entity_id": entity_id,
+                "kitsu_id": kitsu_id,
+                "category": "entity_deletion",
+            },
             kitsu_id=kitsu_id,
             entity_type=kitsu_type,
         )
@@ -415,25 +326,15 @@ def handle_deletion(ctx: Any) -> Any:
             f"operation delete on kitsu_id {kitsu_id} for AYON entity "
             f"{entity_id} failed: {exc}"
         )
-        details = {
-            "reason": reason_msg,
-            "error": str(exc),
-            "retryable": exc.retryable,
-            "error_kind": exc.kind,
-            "http_status": exc.http_status,
-            "attempt": ctx.attempt,
-            "kitsu_id": kitsu_id,
-            "entity_id": entity_id,
-            "category": "entity_deletion",
-        }
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            reason_msg,
             retryable=exc.retryable,
             error_kind=exc.kind,
             http_status=exc.http_status,
             kitsu_id=kitsu_id,
             entity_type=kitsu_type,
+            error=str(exc),
         )
 
     writes: List[Dict[str, Any]] = [
@@ -456,7 +357,7 @@ def handle_deletion(ctx: Any) -> Any:
 
     return JobResult(
         decision=DECISION_APPLIED,
-        description=describe_job(DECISION_APPLIED, applied_details),
+        details=applied_details,
         writes=writes,
         kitsu_id=kitsu_id,
         entity_type=kitsu_type,

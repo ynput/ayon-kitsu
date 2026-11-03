@@ -12,20 +12,19 @@ from typing import Any, Dict, List
 from ..constants import (
     DECISION_APPLIED,
     DECISION_CONFLICT,
-    DECISION_FAILED,
     DECISION_SKIPPED,
     ERROR_REJECTED,
 )
 from ..conflict import decide_field
-from ..describe import describe_job
 from ..kitsu_writer import KitsuWriterError
+from ..models import JobContext, JobResult, failed_result
 from ..mapping import kitsu_attrib_view
 from ..planning import plan_attribute_write
 
 logger = logging.getLogger(__name__)
 
 
-def handle_attributes(ctx: Any) -> Any:
+def handle_attributes(ctx: JobContext) -> JobResult:
     """Apply entity.folder.attrib_changed or entity.task.attrib_changed.
 
     Args:
@@ -34,7 +33,6 @@ def handle_attributes(ctx: Any) -> Any:
     Returns:
         JobResult instance.
     """
-    from ..runner import JobResult
 
     event = ctx.event
     prior_writes: List[Dict[str, Any]] = list(
@@ -65,13 +63,9 @@ def handle_attributes(ctx: Any) -> Any:
             }
             if prior_writes:
                 skip_details["writes"] = prior_writes
-            desc = describe_job(
-                DECISION_SKIPPED,
-                skip_details,
-            )
             return JobResult(
                 decision=DECISION_SKIPPED,
-                description=desc,
+                details=skip_details,
                 writes=prior_writes,
                 kitsu_id=id_res.get("kitsu_id"),
                 entity_type="Task" if expected_kind == "task" else "Folder",
@@ -79,24 +73,9 @@ def handle_attributes(ctx: Any) -> Any:
         retryable = bool(id_res.get("retryable"))
         err_kind = id_res.get("error_kind")
         http_st = id_res.get("http_status")
-        details = {
-            "reason": id_res["reason"],
-            "error": id_res["reason"],
-            "retryable": retryable,
-            "error_kind": err_kind,
-            "http_status": http_st,
-            "attempt": ctx.attempt,
-            "kitsu_id": id_res.get("kitsu_id"),
-            "entity_id": entity_id,
-            "category": "entity_attributes",
-        }
-        if prior_writes:
-            details["writes"] = prior_writes
-        if getattr(ctx, "prior_not_written", None):
-            details["unwritten"] = ctx.prior_not_written
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            id_res["reason"],
             writes=prior_writes,
             not_written=getattr(ctx, "prior_not_written", None),
             retryable=retryable,
@@ -117,24 +96,9 @@ def handle_attributes(ctx: Any) -> Any:
             else ctx.writer.get_entity(kitsu_id)
         )
     except KitsuWriterError as exc:
-        details = {
-            "reason": str(exc),
-            "error": str(exc),
-            "retryable": exc.retryable,
-            "error_kind": exc.kind,
-            "http_status": exc.http_status,
-            "attempt": ctx.attempt,
-            "kitsu_id": kitsu_id,
-            "entity_id": entity_id,
-            "category": "entity_attributes",
-        }
-        if prior_writes:
-            details["writes"] = prior_writes
-        if getattr(ctx, "prior_not_written", None):
-            details["unwritten"] = ctx.prior_not_written
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            str(exc),
             writes=prior_writes,
             not_written=getattr(ctx, "prior_not_written", None),
             retryable=exc.retryable,
@@ -175,19 +139,18 @@ def handle_attributes(ctx: Any) -> Any:
         # Fallback if own_attributes metadata is missing:
         # Attributes explicitly reset to None in changed are not owned
         own_attrib = [
-            k for k in effective_attrib.keys()
-            if changed.get(k) is not None
+            k for k in effective_attrib.keys() if changed.get(k) is not None
         ]
     elif isinstance(own_raw, (list, set, tuple)):
         own_attrib = [
-            k for k in own_raw
-            if k is not None and changed.get(k) is not None
+            k for k in own_raw if k is not None and changed.get(k) is not None
         ]
     elif isinstance(own_raw, dict):
         # In ayon_api, own_attributes maps attribute names to explicit values;
         # inherited attributes have None values.
         own_attrib = [
-            k for k, v in own_raw.items()
+            k
+            for k, v in own_raw.items()
             if v is not None and changed.get(k) is not None
         ]
     else:
@@ -274,14 +237,18 @@ def handle_attributes(ctx: Any) -> Any:
 
     fps_dec = decisions.get("fps")
     if fps_dec and fps_dec["action"] in (
-        "write", "write_no_previous", "conflict_overwrite"
+        "write",
+        "write_no_previous",
+        "conflict_overwrite",
     ):
         if "data.fps" in planned_fields:
             fields_to_write["data.fps"] = planned_fields["data.fps"]
 
     desc_dec = decisions.get("description")
     if desc_dec and desc_dec["action"] in (
-        "write", "write_no_previous", "conflict_overwrite"
+        "write",
+        "write_no_previous",
+        "conflict_overwrite",
     ):
         if "description" in planned_fields:
             fields_to_write["description"] = planned_fields["description"]
@@ -302,13 +269,10 @@ def handle_attributes(ctx: Any) -> Any:
     # Frame range
     target_in = planned_fields.get("data.frame_in")
     target_out = planned_fields.get("data.frame_out")
-    has_frame_conflict = (
-        "frameStart" in conflicts or "frameEnd" in conflicts
-    )
+    has_frame_conflict = "frameStart" in conflicts or "frameEnd" in conflicts
     if (
-        (target_in is not None or target_out is not None)
-        and not has_frame_conflict
-    ):
+        target_in is not None or target_out is not None
+    ) and not has_frame_conflict:
         curr_in = current_view.get("frameStart")
         curr_out = current_view.get("frameEnd")
         added_frame = False
@@ -428,13 +392,9 @@ def handle_attributes(ctx: Any) -> Any:
         }
         if prior_writes:
             skip_details["writes"] = prior_writes
-        desc = describe_job(
-            DECISION_SKIPPED,
-            skip_details,
-        )
         return JobResult(
             decision=DECISION_SKIPPED,
-            description=desc,
+            details=skip_details,
             writes=prior_writes,
             kitsu_id=kitsu_id,
             entity_type="Task" if is_task else "Folder",
@@ -458,11 +418,13 @@ def handle_attributes(ctx: Any) -> Any:
                     if isinstance(current_kitsu, dict)
                     else None
                 )
-            planned_writes.append({
-                "field": fld,
-                "before": before_val,
-                "sent": val,
-            })
+            planned_writes.append(
+                {
+                    "field": fld,
+                    "before": before_val,
+                    "sent": val,
+                }
+            )
         try:
             ctx.writer.update_entity_fields(current_kitsu, allowed_fields)
             commit_fn = getattr(ctx, "loop_guard_commit", None)
@@ -474,27 +436,13 @@ def handle_attributes(ctx: Any) -> Any:
             writes.extend(planned_writes)
         except KitsuWriterError as exc:
             not_written = dict(allowed_fields)
-            if (
-                getattr(ctx, "prior_not_written", None)
-                and isinstance(ctx.prior_not_written, dict)
+            if getattr(ctx, "prior_not_written", None) and isinstance(
+                ctx.prior_not_written, dict
             ):
                 not_written = {**ctx.prior_not_written, **not_written}
-            details = {
-                "reason": str(exc),
-                "error": str(exc),
-                "retryable": exc.retryable,
-                "error_kind": exc.kind,
-                "http_status": exc.http_status,
-                "attempt": ctx.attempt,
-                "kitsu_id": kitsu_id,
-                "entity_id": entity_id,
-                "category": "entity_attributes",
-                "writes": writes,
-                "unwritten": not_written,
-            }
-            return JobResult(
-                decision=DECISION_FAILED,
-                description=describe_job(DECISION_FAILED, details),
+            return failed_result(
+                ctx,
+                str(exc),
                 retryable=exc.retryable,
                 error_kind=exc.kind,
                 http_status=exc.http_status,
@@ -508,30 +456,15 @@ def handle_attributes(ctx: Any) -> Any:
     if errors:
         err_msg = errors[0]
         not_written = {
-            k: changed[k]
-            for k in ("frameStart", "frameEnd")
-            if k in changed
+            k: changed[k] for k in ("frameStart", "frameEnd") if k in changed
         }
-        if (
-            getattr(ctx, "prior_not_written", None)
-            and isinstance(ctx.prior_not_written, dict)
+        if getattr(ctx, "prior_not_written", None) and isinstance(
+            ctx.prior_not_written, dict
         ):
             not_written = {**ctx.prior_not_written, **not_written}
-        details = {
-            "reason": err_msg,
-            "error": err_msg,
-            "retryable": False,
-            "error_kind": ERROR_REJECTED,
-            "attempt": ctx.attempt,
-            "kitsu_id": kitsu_id,
-            "entity_id": entity_id,
-            "category": "entity_attributes",
-            "writes": writes,
-            "unwritten": not_written,
-        }
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            err_msg,
             retryable=False,
             error_kind=ERROR_REJECTED,
             kitsu_id=kitsu_id,
@@ -550,13 +483,9 @@ def handle_attributes(ctx: Any) -> Any:
             }
             if prior_writes:
                 skip_details["writes"] = prior_writes
-            desc = describe_job(
-                DECISION_SKIPPED,
-                skip_details,
-            )
             return JobResult(
                 decision=DECISION_SKIPPED,
-                description=desc,
+                details=skip_details,
                 writes=prior_writes,
                 kitsu_id=kitsu_id,
                 entity_type="Task" if is_task else "Folder",
@@ -569,13 +498,9 @@ def handle_attributes(ctx: Any) -> Any:
             }
             if prior_writes:
                 skip_details["writes"] = prior_writes
-            desc = describe_job(
-                DECISION_SKIPPED,
-                skip_details,
-            )
             return JobResult(
                 decision=DECISION_SKIPPED,
-                description=desc,
+                details=skip_details,
                 writes=prior_writes,
                 kitsu_id=kitsu_id,
                 entity_type="Task" if is_task else "Folder",
@@ -589,17 +514,13 @@ def handle_attributes(ctx: Any) -> Any:
                 reason = f"skipped because inherited: {', '.join(inh)}"
             else:
                 reason = f"skipped attributes: {', '.join(skp + inh)}"
-            desc = describe_job(
-                DECISION_SKIPPED,
-                {
+            return JobResult(
+                decision=DECISION_SKIPPED,
+                details={
                     "reason": reason,
                     "kitsu_id": kitsu_id,
                     "entity_type": "Task" if is_task else "Folder",
                 },
-            )
-            return JobResult(
-                decision=DECISION_SKIPPED,
-                description=desc,
                 kitsu_id=kitsu_id,
                 entity_type="Task" if is_task else "Folder",
             )
@@ -608,21 +529,8 @@ def handle_attributes(ctx: Any) -> Any:
     if conflicts and ctx.conflict_policy != "ayon_wins":
         if ctx.processor is not None:
             try:
-                res = None
-                proj_id = ""
-                if isinstance(current_kitsu, dict):
-                    proj_id = current_kitsu.get("project_id", "")
                 if is_task:
-                    pull_fn = getattr(ctx.processor, "pull_kitsu_task", None)
-                    if callable(pull_fn):
-                        res = pull_fn(kitsu_id, current_kitsu)
-                    else:
-                        from ...update_from_kitsu import create_or_update_task
-
-                        res = create_or_update_task(
-                            ctx.processor,
-                            {"task_id": kitsu_id, "project_id": proj_id},
-                        )
+                    ctx.processor.pull_kitsu_task(kitsu_id, current_kitsu)
 
                     # Restore conflicting task attributes on AYON task entity
                     task_attrib_updates = {}
@@ -652,90 +560,16 @@ def handle_attributes(ctx: Any) -> Any:
                         current_kitsu.get("type")
                         or id_res["kitsu"].get("type", "")
                     ).lower()
-                    pull_fn = getattr(ctx.processor, "pull_kitsu_entity", None)
-                    if callable(pull_fn):
-                        res = pull_fn(kitsu_id, k_type, current_kitsu)
-                    else:
-                        from ... import update_from_kitsu as ufk
-
-                        if k_type == "shot":
-                            res = ufk.create_or_update_shot(
-                                ctx.processor,
-                                {"shot_id": kitsu_id, "project_id": proj_id},
-                            )
-                        elif k_type == "asset":
-                            res = ufk.create_or_update_asset(
-                                ctx.processor,
-                                {"asset_id": kitsu_id, "project_id": proj_id},
-                            )
-                        elif k_type == "sequence":
-                            res = ufk.create_or_update_sequence(
-                                ctx.processor,
-                                {
-                                    "sequence_id": kitsu_id,
-                                    "project_id": proj_id,
-                                },
-                            )
-                        elif k_type == "episode":
-                            res = ufk.create_or_update_episode(
-                                ctx.processor,
-                                {
-                                    "episode_id": kitsu_id,
-                                    "project_id": proj_id,
-                                },
-                            )
-                        elif k_type == "edit":
-                            res = ufk.create_or_update_edit(
-                                ctx.processor,
-                                {
-                                    "edit_id": kitsu_id,
-                                    "project_id": proj_id,
-                                },
-                            )
-                        elif k_type == "concept":
-                            res = ufk.create_or_update_concept(
-                                ctx.processor,
-                                {
-                                    "concept_id": kitsu_id,
-                                    "project_id": proj_id,
-                                },
-                            )
-                        else:
-                            raise ValueError(
-                                f"Unsupported kitsu entity type: {k_type}"
-                            )
-                if res is not None:
-                    st = getattr(
-                        res, "status_code", getattr(res, "status", 200)
+                    ctx.processor.pull_kitsu_entity(
+                        kitsu_id, k_type, current_kitsu
                     )
-                    if isinstance(st, int) and st >= 400:
-                        raise RuntimeError(
-                            f"Inbound pull returned error status {st}"
-                        )
             except Exception as exc:
                 logger.error(
                     "Could not pull kitsu entity on conflict: %s", exc
                 )
-                pull_fail_details = {
-                    "reason": (
-                        f"Inbound pull on conflict failed: {exc}"
-                    ),
-                    "retryable": True,
-                    "error_kind": ERROR_REJECTED,
-                    "attempt": ctx.attempt,
-                    "kitsu_id": kitsu_id,
-                    "entity_id": entity_id,
-                    "category": "entity_attributes",
-                    "writes": writes,
-                }
-                if getattr(ctx, "prior_not_written", None):
-                    pull_fail_details["unwritten"] = ctx.prior_not_written
-                return JobResult(
-                    decision=DECISION_FAILED,
-                    description=describe_job(
-                        DECISION_FAILED,
-                        pull_fail_details,
-                    ),
+                return failed_result(
+                    ctx,
+                    f"Inbound pull on conflict failed: {exc}",
                     retryable=True,
                     error_kind=ERROR_REJECTED,
                     kitsu_id=kitsu_id,
@@ -788,10 +622,9 @@ def handle_attributes(ctx: Any) -> Any:
         c_details = dict(details)
         c_details["conflicts"] = conflict_list
         c_details["policy"] = ctx.conflict_policy
-        desc = describe_job(DECISION_CONFLICT, c_details)
         return JobResult(
             decision=DECISION_CONFLICT,
-            description=desc,
+            details=c_details,
             writes=writes,
             kitsu_id=kitsu_id,
             entity_type="Task" if is_task else "Folder",
@@ -810,19 +643,17 @@ def handle_attributes(ctx: Any) -> Any:
         o_details = dict(details)
         o_details["conflicts"] = overwrite_list
         o_details["policy"] = ctx.conflict_policy
-        desc = describe_job(DECISION_CONFLICT, o_details)
         return JobResult(
             decision=DECISION_CONFLICT,
-            description=desc,
+            details=o_details,
             writes=writes,
             kitsu_id=kitsu_id,
             entity_type="Task" if is_task else "Folder",
         )
 
-    desc = describe_job(DECISION_APPLIED, details)
     return JobResult(
         decision=DECISION_APPLIED,
-        description=desc,
+        details=details,
         writes=writes,
         kitsu_id=kitsu_id,
         entity_type="Task" if is_task else "Folder",

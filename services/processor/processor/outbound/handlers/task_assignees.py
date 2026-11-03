@@ -11,13 +11,12 @@ from typing import Any, Dict, List, Optional
 from ..constants import (
     DECISION_APPLIED,
     DECISION_CONFLICT,
-    DECISION_FAILED,
     DECISION_SKIPPED,
 )
 from ..conflict import decide_field
-from ..describe import describe_job
 from ..kitsu_writer import ERROR_REJECTED, KitsuWriterError
 from ..mapping import kitsu_person_owner, resolve_assignees
+from ..models import JobContext, JobResult, failed_result
 from ..planning import plan_assignee_update
 
 logger = logging.getLogger(__name__)
@@ -38,7 +37,7 @@ def _person_name(p_rec: Any, fallback_id: str) -> str:
     return str(fallback_id)
 
 
-def handle_task_assignees(ctx: Any) -> Any:
+def handle_task_assignees(ctx: JobContext) -> JobResult:
     """Apply an entity.task.assignees_changed event to Kitsu.
 
     Args:
@@ -47,7 +46,6 @@ def handle_task_assignees(ctx: Any) -> Any:
     Returns:
         JobResult instance.
     """
-    from ..runner import JobResult
 
     prior_writes: List[Dict[str, Any]] = list(
         getattr(ctx, "prior_writes", []) or []
@@ -75,13 +73,9 @@ def handle_task_assignees(ctx: Any) -> Any:
             }
             if prior_writes:
                 skip_details["writes"] = prior_writes
-            desc = describe_job(
-                DECISION_SKIPPED,
-                skip_details,
-            )
             return JobResult(
                 decision=DECISION_SKIPPED,
-                description=desc,
+                details=skip_details,
                 writes=prior_writes,
                 kitsu_id=id_res.get("kitsu_id"),
                 entity_type="Task",
@@ -89,24 +83,9 @@ def handle_task_assignees(ctx: Any) -> Any:
         retryable = bool(id_res.get("retryable"))
         err_kind = id_res.get("error_kind")
         http_st = id_res.get("http_status")
-        details = {
-            "reason": id_res["reason"],
-            "error": id_res["reason"],
-            "retryable": retryable,
-            "error_kind": err_kind,
-            "http_status": http_st,
-            "attempt": ctx.attempt,
-            "kitsu_id": id_res.get("kitsu_id"),
-            "entity_id": entity_id,
-            "category": "task_assignees",
-        }
-        if prior_writes:
-            details["writes"] = prior_writes
-        if getattr(ctx, "prior_not_written", None):
-            details["unwritten"] = ctx.prior_not_written
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            id_res["reason"],
             writes=prior_writes,
             not_written=getattr(ctx, "prior_not_written", None),
             retryable=retryable,
@@ -123,24 +102,9 @@ def handle_task_assignees(ctx: Any) -> Any:
         kitsu_task = ctx.writer.get_task(kitsu_id)
         kitsu_persons = ctx.writer.all_persons()
     except KitsuWriterError as exc:
-        details = {
-            "reason": str(exc),
-            "error": str(exc),
-            "retryable": exc.retryable,
-            "error_kind": exc.kind,
-            "http_status": exc.http_status,
-            "attempt": ctx.attempt,
-            "kitsu_id": kitsu_id,
-            "entity_id": entity_id,
-            "category": "task_assignees",
-        }
-        if prior_writes:
-            details["writes"] = prior_writes
-        if getattr(ctx, "prior_not_written", None):
-            details["unwritten"] = ctx.prior_not_written
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            str(exc),
             writes=prior_writes,
             not_written=getattr(ctx, "prior_not_written", None),
             retryable=exc.retryable,
@@ -169,38 +133,23 @@ def handle_task_assignees(ctx: Any) -> Any:
             }
             rem = [u for u in new_assignees if u not in written_names]
             not_written = {"assignees": rem} if rem else None
-        details = {
-            "reason": f"Failed to fetch AYON users: {exc}",
-            "error": str(exc),
-            "retryable": True,
-            "error_kind": "server_error",
-            "attempt": ctx.attempt,
-            "kitsu_id": kitsu_id,
-            "entity_id": entity_id,
-            "category": "task_assignees",
-        }
-        if prior_writes:
-            details["writes"] = prior_writes
-        if not_written:
-            details["unwritten"] = not_written
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            f"Failed to fetch AYON users: {exc}",
             writes=prior_writes,
             not_written=not_written,
             retryable=True,
             error_kind="server_error",
             kitsu_id=kitsu_id,
             entity_type="Task",
+            error=str(exc),
         )
 
     # 4. Resolve assignees
     raw_new = payload.get("newValue")
     if raw_new is None:
         raw_new = payload.get("assignees", [])
-    new_assignees = (
-        raw_new if isinstance(raw_new, list) else [str(raw_new)]
-    )
+    new_assignees = raw_new if isinstance(raw_new, list) else [str(raw_new)]
 
     resolve_res = resolve_assignees(new_assignees, ayon_users, kitsu_persons)
     resolved_map = resolve_res["resolved"]
@@ -220,10 +169,7 @@ def handle_task_assignees(ctx: Any) -> Any:
 
     raw_assignees = kitsu_task.get("assignees", [])
     current_ids = sorted(
-        set(
-            p.get("id") if isinstance(p, dict) else p
-            for p in raw_assignees
-        )
+        set(p.get("id") if isinstance(p, dict) else p for p in raw_assignees)
     )
     managed_current_ids = sorted(set(current_ids) & set(managed_ids))
 
@@ -263,13 +209,9 @@ def handle_task_assignees(ctx: Any) -> Any:
             }
             if prior_writes:
                 skip_details["writes"] = prior_writes
-            desc = describe_job(
-                DECISION_SKIPPED,
-                skip_details,
-            )
             return JobResult(
                 decision=DECISION_SKIPPED,
-                description=desc,
+                details=skip_details,
                 writes=prior_writes,
                 kitsu_id=kitsu_id,
                 entity_type="Task",
@@ -282,13 +224,9 @@ def handle_task_assignees(ctx: Any) -> Any:
         }
         if prior_writes:
             applied_details["writes"] = prior_writes
-        desc = describe_job(
-            DECISION_APPLIED,
-            applied_details,
-        )
         return JobResult(
             decision=DECISION_APPLIED,
-            description=desc,
+            details=applied_details,
             writes=prior_writes,
             kitsu_id=kitsu_id,
             entity_type="Task",
@@ -297,55 +235,13 @@ def handle_task_assignees(ctx: Any) -> Any:
     # Conflict kitsu wins: pull inbound (Requirement 9.4)
     if action == "conflict_keep_kitsu":
         if ctx.processor is not None:
-            pull_fn = getattr(ctx.processor, "pull_kitsu_task", None)
             try:
-                res = None
-                if callable(pull_fn):
-                    res = pull_fn(kitsu_id, kitsu_task)
-                else:
-                    from ...update_from_kitsu import create_or_update_task
-
-                    proj_id = ""
-                    if isinstance(kitsu_task, dict):
-                        proj_id = kitsu_task.get("project_id", "")
-                    res = create_or_update_task(
-                        ctx.processor,
-                        {
-                            "task_id": kitsu_id,
-                            "project_id": proj_id,
-                        },
-                    )
-                if res is not None:
-                    st = getattr(
-                        res, "status_code", getattr(res, "status", 200)
-                    )
-                    if isinstance(st, int) and st >= 400:
-                        raise RuntimeError(
-                            f"Inbound pull returned error status {st}"
-                        )
+                ctx.processor.pull_kitsu_task(kitsu_id, kitsu_task)
             except Exception as exc:
-                logger.error(
-                    "Could not pull kitsu task on conflict: %s", exc
-                )
-                fail_details = {
-                    "reason": (
-                        f"Inbound pull on conflict failed: {exc}"
-                    ),
-                    "retryable": True,
-                    "error_kind": ERROR_REJECTED,
-                    "attempt": ctx.attempt,
-                    "kitsu_id": kitsu_id,
-                    "entity_id": entity_id,
-                    "category": "task_assignees",
-                }
-                if prior_writes:
-                    fail_details["writes"] = prior_writes
-                return JobResult(
-                    decision=DECISION_FAILED,
-                    description=describe_job(
-                        DECISION_FAILED,
-                        fail_details,
-                    ),
+                logger.error("Could not pull kitsu task on conflict: %s", exc)
+                return failed_result(
+                    ctx,
+                    f"Inbound pull on conflict failed: {exc}",
                     writes=prior_writes,
                     retryable=True,
                     error_kind=ERROR_REJECTED,
@@ -366,10 +262,9 @@ def handle_task_assignees(ctx: Any) -> Any:
             c_details["unresolved_assignees"] = sorted(unresolved_map.keys())
         if prior_writes:
             c_details["writes"] = prior_writes
-        desc = describe_job(DECISION_CONFLICT, c_details)
         return JobResult(
             decision=DECISION_CONFLICT,
-            description=desc,
+            details=c_details,
             writes=prior_writes,
             kitsu_id=kitsu_id,
             entity_type="Task",
@@ -391,13 +286,9 @@ def handle_task_assignees(ctx: Any) -> Any:
         }
         if prior_writes:
             skip_details["writes"] = prior_writes
-        desc = describe_job(
-            DECISION_SKIPPED,
-            skip_details,
-        )
         return JobResult(
             decision=DECISION_SKIPPED,
-            description=desc,
+            details=skip_details,
             writes=prior_writes,
             kitsu_id=kitsu_id,
             entity_type="Task",
@@ -425,14 +316,16 @@ def handle_task_assignees(ctx: Any) -> Any:
                 _person_name(persons_by_id.get(pid, {}), pid)
                 for pid in cur_ids
             )
-            writes.append({
-                "field": "assignees",
-                "action": "assign",
-                "person_id": p_id,
-                "person_name": p_name,
-                "before": b_names,
-                "sent": s_names,
-            })
+            writes.append(
+                {
+                    "field": "assignees",
+                    "action": "assign",
+                    "person_id": p_id,
+                    "person_name": p_name,
+                    "before": b_names,
+                    "sent": s_names,
+                }
+            )
             if callable(commit_fn):
                 commit_fn()
         for p_id in to_remove:
@@ -448,14 +341,16 @@ def handle_task_assignees(ctx: Any) -> Any:
                 _person_name(persons_by_id.get(pid, {}), pid)
                 for pid in cur_ids
             )
-            writes.append({
-                "field": "assignees",
-                "action": "unassign",
-                "person_id": p_id,
-                "person_name": p_name,
-                "before": b_names,
-                "sent": s_names,
-            })
+            writes.append(
+                {
+                    "field": "assignees",
+                    "action": "unassign",
+                    "person_id": p_id,
+                    "person_name": p_name,
+                    "before": b_names,
+                    "sent": s_names,
+                }
+            )
             if callable(commit_fn):
                 commit_fn()
     except KitsuWriterError as exc:
@@ -476,23 +371,9 @@ def handle_task_assignees(ctx: Any) -> Any:
         ]
         rem_all = rem_add + rem_rm
         not_written = {"assignees": rem_all} if rem_all else None
-        details = {
-            "reason": str(exc),
-            "error": str(exc),
-            "retryable": exc.retryable,
-            "error_kind": exc.kind,
-            "http_status": exc.http_status,
-            "attempt": ctx.attempt,
-            "kitsu_id": kitsu_id,
-            "entity_id": entity_id,
-            "category": "task_assignees",
-            "writes": writes,
-        }
-        if not_written:
-            details["unwritten"] = not_written
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            str(exc),
             writes=writes,
             not_written=not_written,
             retryable=exc.retryable,
@@ -527,12 +408,10 @@ def handle_task_assignees(ctx: Any) -> Any:
     ]
 
     before_names = sorted(
-        _person_name(persons_by_id.get(pid, {}), pid)
-        for pid in current_ids
+        _person_name(persons_by_id.get(pid, {}), pid) for pid in current_ids
     )
     sent_names = sorted(
-        _person_name(persons_by_id.get(pid, {}), pid)
-        for pid in cur_ids
+        _person_name(persons_by_id.get(pid, {}), pid) for pid in cur_ids
     )
 
     initial_before = (
@@ -566,9 +445,9 @@ def handle_task_assignees(ctx: Any) -> Any:
         details["no_user"] = True
 
     if action == "conflict_overwrite":
-        desc = describe_job(
-            DECISION_CONFLICT,
-            {
+        return JobResult(
+            decision=DECISION_CONFLICT,
+            details={
                 "field": "assignees",
                 "policy": ctx.conflict_policy,
                 "kitsu_current": managed_current_ids,
@@ -582,26 +461,21 @@ def handle_task_assignees(ctx: Any) -> Any:
                 "kitsu_id": kitsu_id,
                 "entity_type": "Task",
             },
-        )
-        return JobResult(
-            decision=DECISION_CONFLICT,
-            description=desc,
             writes=writes,
             kitsu_id=kitsu_id,
             entity_type="Task",
         )
 
-    desc = describe_job(DECISION_APPLIED, details)
     return JobResult(
         decision=DECISION_APPLIED,
-        description=desc,
+        details=details,
         writes=writes,
         kitsu_id=kitsu_id,
         entity_type="Task",
     )
 
 
-def _fetch_ayon_users(ctx: Any) -> List[Dict[str, Any]]:
+def _fetch_ayon_users(ctx: JobContext) -> List[Dict[str, Any]]:
     """Fetch AYON users via addon /users endpoint (Requirements 7.1-7.3)."""
     client = getattr(
         ctx,
@@ -620,9 +494,7 @@ def _fetch_ayon_users(ctx: Any) -> List[Dict[str, Any]]:
 
     if hasattr(client, "get"):
         res = client.get(endpoint)
-        if hasattr(res, "raise_for_status") and callable(
-            res.raise_for_status
-        ):
+        if hasattr(res, "raise_for_status") and callable(res.raise_for_status):
             res.raise_for_status()
         st = getattr(res, "status_code", getattr(res, "status", None))
         if isinstance(st, int) and st >= 400:

@@ -11,11 +11,8 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .constants import (
     AYON_RETRY_S,
-    DECISION_APPLIED,
-    DECISION_CONFLICT,
     DECISION_FAILED,
     DECISION_SKIPPED,
-    DESCRIPTION_FAILED,
     ENROLLED_TOPICS,
     ERROR_UNREACHABLE,
     FINAL_RETRIES_VALUE,
@@ -31,7 +28,6 @@ from .constants import (
     TARGET_TOPIC,
 )
 from .describe import (
-    _format_value,
     build_log_line,
     describe_job,
     redact,
@@ -52,13 +48,19 @@ from .handlers.task_status import handle_task_status
 from .identity import IdentityResolver
 from .kitsu_writer import KitsuWriter
 from .loop_guard import loop_guard_apply
+from .models import (
+    JobContext,
+    JobResult,
+    failed_result,
+    normalize_not_written,
+)
 from .origin import build_enroll_filter, classify_origin
 from .retry import retry_due, supersede_fields
 from .settings_watch import GateHistory, SettingsWatcher
 
 logger = logging.getLogger(__name__)
 
-HANDLERS: Dict[str, Callable[[Any], Any]] = {
+HANDLERS: Dict[str, Callable[[JobContext], JobResult]] = {
     "task_status": handle_task_status,
     "task_assignees": handle_task_assignees,
     "entity_attributes": handle_attributes,
@@ -66,104 +68,6 @@ HANDLERS: Dict[str, Callable[[Any], Any]] = {
     "entity_rename": handle_rename,
     "entity_deletion": handle_deletion,
 }
-
-
-class JobContext:
-    """Context passed to category handlers."""
-
-    def __init__(
-        self,
-        event: Dict[str, Any],
-        job_id: str,
-        category: str,
-        entity_id: str,
-        project_name: str,
-        effective_toggles: Dict[str, Any],
-        conflict_policy: str,
-        identity_resolver: Any,
-        writer: Any,
-        loop_guard_check: Callable[[str, str], Dict[str, Any]],
-        clock: Callable[[], float],
-        processor: Optional[Any] = None,
-        attempt: int = 1,
-        omitted_fields: Optional[List[str]] = None,
-        kitsu_project_id: Optional[str] = None,
-        loop_guard_commit: Optional[Callable[..., None]] = None,
-        loop_guard_discard: Optional[Callable[[], None]] = None,
-        prior_writes: Optional[List[Dict[str, Any]]] = None,
-        prior_not_written: Optional[Any] = None,
-    ):
-        self.event = event
-        self.job_id = job_id
-        self.category = category
-        self.entity_id = entity_id
-        self.project_name = project_name
-        self.effective_toggles = effective_toggles
-        self.conflict_policy = conflict_policy
-        self.identity_resolver = identity_resolver
-        self.writer = writer
-        self.loop_guard_check = loop_guard_check
-        self.clock = clock
-        self.processor = processor
-        self.attempt = attempt
-        self.omitted_fields = omitted_fields or []
-        self.kitsu_project_id = kitsu_project_id
-        self.loop_guard_commit = loop_guard_commit
-        self.loop_guard_discard = loop_guard_discard
-        self.prior_writes = prior_writes or []
-        self.prior_not_written = prior_not_written
-
-
-class JobResult:
-    """Outcome produced by a category handler."""
-
-    def __init__(
-        self,
-        decision: str,
-        description: str,
-        writes: Optional[List[Dict[str, Any]]] = None,
-        not_written: Optional[List[Dict[str, Any]]] = None,
-        error_kind: Optional[str] = None,
-        http_status: Optional[int] = None,
-        retryable: bool = False,
-        kitsu_id: Optional[str] = None,
-        entity_type: Optional[str] = None,
-        omitted_by: Optional[List[str]] = None,
-        details: Optional[Dict[str, Any]] = None,
-    ):
-        self.decision = decision
-        self.description = description
-        self.writes = writes or []
-        self.not_written = not_written or []
-        self.error_kind = error_kind
-        self.http_status = http_status
-        self.retryable = retryable
-        self.kitsu_id = kitsu_id
-        self.entity_type = entity_type
-        self.omitted_by = omitted_by or []
-        self.details = details or {}
-
-def _extract_failure_reason(description: str) -> Optional[str]:
-    """Extract original failure reason from formatted failure description."""
-    if not description:
-        return None
-    text = description.strip()
-    if text.startswith(DESCRIPTION_FAILED):
-        text = text[len(DESCRIPTION_FAILED):].strip()
-    for marker in (". Written fields:", ". No Kitsu field was written."):
-        if marker in text:
-            text = text.split(marker, 1)[0].strip()
-    parts = text.split(", ")
-    if (
-        len(parts) >= 4
-        and parts[0].startswith("entity ")
-        and parts[1].startswith("kitsu_id ")
-        and parts[2].startswith("category ")
-        and parts[3].startswith("unwritten values: ")
-    ):
-        reason = ", ".join(parts[4:]).strip()
-        return reason or None
-    return text or None
 
 
 def _retried_fields_for_job(
@@ -218,14 +122,18 @@ def _retried_fields_for_job(
         if "description" in changed:
             fields.append("description")
         for k in changed:
-            if k in (
-                "data.fps",
-                "data.frame_in",
-                "data.frame_out",
-                "nb_frames",
-                "data.resolution",
-                "description",
-            ) and k not in fields:
+            if (
+                k
+                in (
+                    "data.fps",
+                    "data.frame_in",
+                    "data.frame_out",
+                    "nb_frames",
+                    "data.resolution",
+                    "description",
+                )
+                and k not in fields
+            ):
                 fields.append(k)
         if not fields:
             return [
@@ -347,73 +255,16 @@ class OutboundJobRunner:
         return [s for s in secrets if s]
 
     def get_paired_projects(self) -> List[str]:
-        """Get list of paired AYON project names."""
-        if self.processor is not None:
-            getter = getattr(self.processor, "get_outbound_pairings", None)
-            if callable(getter):
-                try:
-                    res = getter()
-                    if isinstance(res, dict):
-                        return list(res.keys())
-                except Exception:
-                    pass
-            pairing = getattr(self.processor, "pairing_list", None)
-            if isinstance(pairing, dict):
-                has_get_paired = (
-                    hasattr(self.processor, "get_paired_ayon_project")
-                    and not getattr(
-                        self.processor.__class__,
-                        "__module__",
-                        "",
-                    ).startswith("unittest.mock")
-                )
-                if has_get_paired:
-                    return [name for name in pairing.values() if name]
-                return list(pairing.keys())
-            if isinstance(pairing, (list, tuple, set)):
-                return list(pairing)
-            p_getter = getattr(self.processor, "get_paired_projects", None)
-            if callable(p_getter):
-                try:
-                    res = p_getter()
-                    if isinstance(res, (list, tuple, set)):
-                        return list(res)
-                except Exception:
-                    pass
-        return []
+        """Return paired AYON project names from the processor contract."""
+        if self.processor is None:
+            return []
+        return list(self.processor.get_outbound_pairings())
 
     def get_kitsu_project_id(self, project_name: str) -> str:
-        """Get paired Kitsu project id for an AYON project name."""
-        if self.processor is not None:
-            getter = getattr(self.processor, "get_outbound_pairings", None)
-            if callable(getter):
-                try:
-                    res = getter()
-                    if isinstance(res, dict) and project_name in res:
-                        return str(res[project_name])
-                except Exception:
-                    pass
-            pairing = getattr(self.processor, "pairing_list", None)
-            if isinstance(pairing, dict):
-                has_get_paired = (
-                    hasattr(self.processor, "get_paired_ayon_project")
-                    and not getattr(
-                        self.processor.__class__,
-                        "__module__",
-                        "",
-                    ).startswith("unittest.mock")
-                )
-                if has_get_paired:
-                    for k_id, a_name in pairing.items():
-                        if a_name == project_name:
-                            return str(k_id)
-                val = pairing.get(project_name, "")
-                if val:
-                    return str(val)
-                for k_id, a_name in pairing.items():
-                    if a_name == project_name:
-                        return str(k_id)
-        return ""
+        """Return the Kitsu project paired with an AYON project."""
+        if self.processor is None:
+            return ""
+        return self.processor.get_outbound_pairings().get(project_name, "")
 
     def loop_guard_check(self, entity_id: str, field: str) -> Dict[str, Any]:
         """Run loop guard check for an entity field using current time."""
@@ -423,15 +274,11 @@ class OutboundJobRunner:
             if getattr(self, "_pending_guard_state", None) is not None
             else self.loop_guard_state
         )
-        res, new_state = loop_guard_apply(
-            base_state, entity_id, field, now
-        )
+        res, new_state = loop_guard_apply(base_state, entity_id, field, now)
         self._pending_guard_state = new_state
         return res
 
-    def loop_guard_commit(
-        self, fields: Optional[List[str]] = None
-    ) -> None:
+    def loop_guard_commit(self, fields: Optional[List[str]] = None) -> None:
         """Commit the pending loop guard state after write succeeds."""
         pending = getattr(self, "_pending_guard_state", None)
         if pending is not None:
@@ -587,9 +434,7 @@ class OutboundJobRunner:
             }
             return
 
-        reason_text = (
-            f"Interrupted by a Processor stop (attempt {attempt}/4)"
-        )
+        reason_text = f"Interrupted by a Processor stop (attempt {attempt}/4)"
 
         if attempt >= MAX_ATTEMPTS:
             desc = describe_job(
@@ -633,10 +478,7 @@ class OutboundJobRunner:
                 }
             )
         else:
-            desc = (
-                f"Failed: {reason_text}. "
-                "No Kitsu field was written."
-            )
+            desc = f"Failed: {reason_text}. No Kitsu field was written."
             self._update_event_safe(
                 job_id,
                 status="pending",
@@ -783,7 +625,8 @@ class OutboundJobRunner:
             kwargs = dict(pending["kwargs"])
         else:
             kwargs = {
-                k: v for k, v in pending.items()
+                k: v
+                for k, v in pending.items()
                 if k not in ("job_id", "_delivery_retries")
             }
         try:
@@ -844,12 +687,9 @@ class OutboundJobRunner:
                     "status_code",
                     getattr(post_exc, "status_code", None),
                 )
-                is_filter_err = (
-                    status in (400, 422)
-                    or (
-                        events_filter is not None
-                        and "filter" in str(post_exc).lower()
-                    )
+                is_filter_err = status in (400, 422) or (
+                    events_filter is not None
+                    and "filter" in str(post_exc).lower()
                 )
                 if is_filter_err and events_filter is not None:
                     self.enroll_filter_supported = False
@@ -942,9 +782,8 @@ class OutboundJobRunner:
                 return False
 
         # Ensure gate history is loaded before enrolling or processing jobs
-        if (
-            self.gate_history is not None
-            and not getattr(self.gate_history, "loaded", True)
+        if self.gate_history is not None and not getattr(
+            self.gate_history, "loaded", True
         ):
             try:
                 self.gate_history.load(started_at=now)
@@ -1006,24 +845,20 @@ class OutboundJobRunner:
                     merged = dict(full_job)
                     if job.get("status"):
                         merged["status"] = job["status"]
-                    if (
-                        not merged.get("dependsOn")
-                        and merged.get("depends_on")
+                    if not merged.get("dependsOn") and merged.get(
+                        "depends_on"
                     ):
                         merged["dependsOn"] = merged["depends_on"]
-                    if (
-                        not merged.get("depends_on")
-                        and merged.get("dependsOn")
+                    if not merged.get("depends_on") and merged.get(
+                        "dependsOn"
                     ):
                         merged["depends_on"] = merged["dependsOn"]
-                    if (
-                        not merged.get("project_name")
-                        and merged.get("project")
+                    if not merged.get("project_name") and merged.get(
+                        "project"
                     ):
                         merged["project_name"] = merged["project"]
-                    if (
-                        not merged.get("project")
-                        and merged.get("project_name")
+                    if not merged.get("project") and merged.get(
+                        "project_name"
                     ):
                         merged["project"] = merged["project_name"]
                     if "summary" in merged:
@@ -1151,605 +986,424 @@ class OutboundJobRunner:
         finally:
             self.in_drain = False
 
-    def _process_job(self, job: Dict[str, Any], attempt: int = 1) -> bool:
-        """Execute shared steps 1 to 8 for an Outbound_Job."""
-        job_id = job["id"]
-        source_event_id = job.get("dependsOn")
-        project_name = job.get("project_name") or job.get("project")
-
-        # Step 1: Set in_progress before any Kitsu call (4.2, 4.11)
+    def _start_job(self, job: Dict[str, Any], attempt: int) -> bool:
+        """Mark the job in progress before making any Kitsu calls."""
         try:
-            if hasattr(self.ayon_client, "update_event"):
-                self.ayon_client.update_event(
-                    job_id,
-                    status="in_progress",
-                    project_name=project_name,
-                    summary={"attempt": attempt},
-                )
+            self.ayon_client.update_event(
+                job["id"],
+                status="in_progress",
+                project_name=job.get("project_name") or job.get("project"),
+                summary={"attempt": attempt},
+            )
         except Exception as exc:
             logger.error(
                 "Failed to set job %s in_progress: %s. No Kitsu write sent.",
-                job_id,
+                job["id"],
                 redact(str(exc), self._get_secrets()),
             )
             return False
+        return True
 
-        # Load source event
-        job_summary = ensure_dict(job.get("summary"))
-        prior_writes = list(job_summary.get("writes") or [])
-        prior_not_written = job_summary.get("notWritten")
-        source_event = None
-        source_fetch_err = None
-        if hasattr(self.ayon_client, "get_event") and source_event_id:
-            try:
-                source_event = self.ayon_client.get_event(source_event_id)
-            except Exception as exc:
-                source_fetch_err = exc
-                logger.error(
-                    "Failed to fetch source event %s: %s",
-                    source_event_id,
-                    redact(str(exc), self._get_secrets()),
-                )
+    def _load_source_event(
+        self, job: Dict[str, Any], attempt: int
+    ) -> Optional[Dict[str, Any]]:
+        """Fetch the source event or finish the attempt if it is unreadable."""
+        source_id = job.get("dependsOn")
+        error = None
+        try:
+            event = (
+                self.ayon_client.get_event(source_id) if source_id else None
+            )
+            if event:
+                return event
+        except Exception as exc:
+            error = exc
+            logger.error(
+                "Failed to fetch source event %s: %s",
+                source_id,
+                redact(str(exc), self._get_secrets()),
+            )
 
-        if not source_event:
-            is_transient = source_fetch_err is not None
-            if is_transient and attempt < MAX_ATTEMPTS:
-                reason = (
-                    f"Transient error fetching source event "
-                    f"{source_event_id}: {source_fetch_err}"
-                )
-                fail_details = {
-                    "reason": reason,
-                    "error": str(source_fetch_err),
-                    "attempt": attempt,
-                    "retryable": True,
-                    "error_kind": ERROR_UNREACHABLE,
-                    "entity_id": NONE_VALUE,
-                    "kitsu_id": NONE_VALUE,
-                    "category": NONE_VALUE,
-                }
-                if prior_writes:
-                    fail_details["writes"] = prior_writes
-                if prior_not_written:
-                    fail_details["unwritten"] = prior_not_written
-                desc = describe_job(
-                    DECISION_FAILED,
-                    fail_details,
-                )
-                self._finish_job(
-                    job_id=job_id,
-                    decision=DECISION_FAILED,
-                    description=desc,
-                    summary={
-                        "attempt": attempt,
-                        "sourceEventId": source_event_id,
-                        "writes": prior_writes,
-                        "notWritten": prior_not_written,
-                    },
-                    project_name=project_name,
-                    attempt=attempt,
-                    retryable=True,
-                    error_kind=ERROR_UNREACHABLE,
-                )
-                return True
-
-            fail_details = {
-                "reason": (
-                    f"Failed to fetch source event {source_event_id}: "
-                    f"{source_fetch_err}"
-                    if is_transient
-                    else f"Source event {source_event_id} not found"
-                ),
+        retryable = error is not None and attempt < MAX_ATTEMPTS
+        if error is None:
+            reason = f"Source event {source_id} not found"
+        else:
+            prefix = (
+                "Transient error fetching" if retryable else "Failed to fetch"
+            )
+            reason = f"{prefix} source event {source_id}: {error}"
+        saved = ensure_dict(job.get("summary"))
+        result = JobResult(
+            decision=DECISION_FAILED,
+            details={"reason": reason, "error": str(error) if error else ""},
+            writes=list(saved.get("writes") or []),
+            not_written=normalize_not_written(saved.get("notWritten")),
+            retryable=retryable,
+            error_kind=ERROR_UNREACHABLE if retryable else None,
+        )
+        self._finish_job(
+            job_id=job["id"],
+            result=result,
+            summary={
+                "sourceEventId": source_id,
                 "attempt": attempt,
-                "retryable": False,
-                "entity_id": NONE_VALUE,
-                "kitsu_id": NONE_VALUE,
-                "category": NONE_VALUE,
-            }
-            if prior_writes:
-                fail_details["writes"] = prior_writes
-            if prior_not_written:
-                fail_details["unwritten"] = prior_not_written
-            desc = describe_job(
-                DECISION_FAILED,
-                fail_details,
-            )
-            self._finish_job(
-                job_id=job_id,
-                decision=DECISION_FAILED,
-                description=desc,
-                summary={
-                    "attempt": attempt,
-                    "sourceEventId": source_event_id,
-                    "writes": prior_writes,
-                    "notWritten": prior_not_written,
-                },
-                project_name=project_name,
-                attempt=attempt,
-                retryable=False,
-            )
-            return True
-
-        topic = source_event.get("topic", "")
-        summary = source_event.get("summary") or {}
-        if not project_name:
-            project_name = (
-                source_event.get("project_name")
-                or source_event.get("project")
-                or summary.get("project_name")
-                or summary.get("project")
-            )
-        entity_id = (
-            summary.get("entityId")
-            or summary.get("taskId")
-            or summary.get("folderId")
-            or ""
+                "writes": result.writes,
+                "notWritten": result.not_written or None,
+            },
+            project_name=job.get("project_name") or job.get("project"),
+            attempt=attempt,
         )
-        source_user = source_event.get("user") or "unknown"
-        source_topic = source_event.get("topic") or topic
-        created_at = (
-            source_event.get("createdAt")
-            or source_event.get("created_at")
+        return None
+
+    def _build_context(
+        self, job: Dict[str, Any], event: Dict[str, Any], attempt: int
+    ) -> JobContext:
+        """Collect source identity, dependencies, and prior retry state."""
+        summary = event.get("summary") or {}
+        saved = ensure_dict(job.get("summary"))
+        project_name = (
+            job.get("project_name")
+            or job.get("project")
+            or event.get("project_name")
+            or event.get("project")
+            or summary.get("project_name")
+            or summary.get("project")
         )
-
-        base_summary = {
-            "sourceEventId": source_event_id,
-            "dependsOn": source_event_id,
-            "sourceUser": source_user,
-            "sourceTopic": source_topic,
-            "sourceCreatedAt": created_at,
-            "entityId": entity_id or NONE_VALUE,
-            "attempt": attempt,
-            "writes": prior_writes,
-            "notWritten": prior_not_written,
-        }
-
-        def _with_writes(details_dict: Dict[str, Any]) -> Dict[str, Any]:
-            if prior_writes:
-                details_dict["writes"] = prior_writes
-            if prior_not_written:
-                details_dict["unwritten"] = prior_not_written
-            return details_dict
-
-        # Step 2: categories_for topic and out-of-scope check
-        if topic in ("entity.project.deleted", "entity.user.deleted"):
-            desc = describe_job(
-                DECISION_SKIPPED,
-                _with_writes({
-                    "reason": "project and person deletion is out of scope",
-                    "event_id": source_event_id,
-                    "project": project_name,
-                }),
-            )
-            self._finish_job(
-                job_id=job_id,
-                decision=DECISION_SKIPPED,
-                description=desc,
-                summary=dict(base_summary),
-                project_name=project_name,
-                attempt=attempt,
-                entity_id=entity_id,
-            )
-            return True
-
-        categories = categories_for(source_event)
-        if not categories:
-            desc = describe_job(
-                DECISION_SKIPPED,
-                _with_writes({
-                    "reason": f"topic {topic} is out of scope",
-                    "event_id": source_event_id,
-                    "project": project_name,
-                }),
-            )
-            self._finish_job(
-                job_id=job_id,
-                decision=DECISION_SKIPPED,
-                description=desc,
-                summary=dict(base_summary),
-                project_name=project_name,
-                attempt=attempt,
-                entity_id=entity_id,
-            )
-            return True
-
-        # Step 3: classify_origin
-        origin = classify_origin(source_event, ORIGIN_MARKERS)
-        if origin == ORIGIN_SYNC_ORIGINATED:
-            desc = describe_job(
-                DECISION_SKIPPED,
-                _with_writes({
-                    "reason": "sync originated",
-                    "event_id": source_event_id,
-                    "project": project_name,
-                }),
-            )
-            self._finish_job(
-                job_id=job_id,
-                decision=DECISION_SKIPPED,
-                description=desc,
-                summary=dict(base_summary),
-                project_name=project_name,
-                attempt=attempt,
-                entity_id=entity_id,
-                category=categories[0] if categories else None,
-            )
-            return True
-        elif origin == ORIGIN_UNKNOWN:
-            desc = describe_job(
-                DECISION_SKIPPED,
-                _with_writes({
-                    "reason": "origin unknown",
-                    "event_id": source_event_id,
-                    "project": project_name,
-                }),
-            )
-            self._finish_job(
-                job_id=job_id,
-                decision=DECISION_SKIPPED,
-                description=desc,
-                summary=dict(base_summary),
-                project_name=project_name,
-                attempt=attempt,
-                entity_id=entity_id,
-                category=categories[0] if categories else None,
-            )
-            return True
-
-        # Step 4: Paired_Project check (3.3)
-        paired_projects = self.get_paired_projects()
-        if project_name not in paired_projects:
-            desc = describe_job(
-                DECISION_SKIPPED,
-                _with_writes({
-                    "reason": (
-                        f"project '{project_name}' is not a Paired_Project"
-                    ),
-                    "event_id": source_event_id,
-                    "project": project_name,
-                }),
-            )
-            self._finish_job(
-                job_id=job_id,
-                decision=DECISION_SKIPPED,
-                description=desc,
-                summary=dict(base_summary),
-                project_name=project_name,
-                attempt=attempt,
-                entity_id=entity_id,
-                category=categories[0] if categories else None,
-            )
-            return True
-
-        # Step 5: Gate per category
-        gate_state = (
-            self.gate_history.toggles_at(project_name, created_at)
-            if self.gate_history
-            else {"state": "no_history", "toggles": None}
-        )
-        effective_now = (
-            self.settings_watcher.get_effective_toggles(project_name)
-            if self.settings_watcher
-            else {"valid": True, "master": True, "categories": {}}
-        )
-
-        enabled_categories: List[str] = []
-        gated_skips: List[tuple] = []
-        for cat in categories:
-            g_dec = gate_decision(cat, gate_state, effective_now)
-            if not g_dec["allowed"]:
-                gated_skips.append((cat, g_dec))
-                if gate_state.get("state") == STATE_UNKNOWN_GAP:
-                    if self.gate_history:
-                        self.gate_history.record_gap_skip()
-                if not effective_now.get("valid"):
-                    logger.error(
-                        "Invalid Two_Way_Sync_Settings for project %s: %s",
-                        project_name,
-                        redact(
-                            str(effective_now.get("error")),
-                            self._get_secrets(),
-                        ),
-                    )
-            else:
-                enabled_categories.append(cat)
-
-        if not enabled_categories:
-            cat, g_dec = gated_skips[0]
-            desc = describe_job(
-                DECISION_SKIPPED,
-                _with_writes({
-                    "reason": g_dec["reason"],
-                    "gated": True,
-                    "event_id": source_event_id,
-                    "project": project_name,
-                    "category": cat,
-                }),
-            )
-            self._finish_job(
-                job_id=job_id,
-                decision=DECISION_SKIPPED,
-                description=desc,
-                summary={
-                    **base_summary,
-                    "categories": categories,
-                    "category": cat,
-                },
-                project_name=project_name,
-                attempt=attempt,
-                category=cat,
-                entity_id=entity_id,
-            )
-            return True
-
-        cat = enabled_categories[0]
-
-        # Step 6: Retry supersession check when attempt > 1 (10.7)
-        omitted_fields: List[str] = []
-        newer_job_ids: List[str] = []
-        if attempt > 1 and hasattr(self.ayon_client, "get_events"):
-            try:
-                raw_newer = self.ayon_client.get_events(
-                    topics=[self.TARGET_TOPIC],
-                    project_names=[project_name],
-                    statuses=["finished"],
-                    fields=[
-                        "id",
-                        "topic",
-                        "summary",
-                        "status",
-                        "createdAt",
-                        "dependsOn",
-                        "project",
-                    ],
-                )
-                newer_list = list(raw_newer)
-                src_time = to_seconds_safe(created_at)
-                filtered_newer = []
-                for cand in newer_list:
-                    cand_summary = ensure_dict(cand.get("summary"))
-                    cand_ent = (
-                        cand_summary.get("entityId")
-                        or cand.get("entityId")
-                    )
-                    if cand_ent != entity_id:
-                        continue
-                    # Must match same Sync_Category (Req 10.7)
-                    cand_cats = cand_summary.get("categories") or []
-                    cand_cat = cand_summary.get("category")
-                    if cand_cat != cat and cat not in cand_cats:
-                        continue
-                    # Source event timestamp comparison (candidate > retried)
-                    if src_time is None:
-                        continue
-                    cand_src_raw = cand_summary.get("sourceCreatedAt")
-                    if (
-                        cand_src_raw is None
-                        and hasattr(self.ayon_client, "get_event")
-                        and cand_summary.get("sourceEventId")
-                    ):
-                        try:
-                            c_ev = self.ayon_client.get_event(
-                                cand_summary["sourceEventId"]
-                            )
-                            if c_ev:
-                                cand_src_raw = (
-                                    c_ev.get("createdAt")
-                                    or c_ev.get("created_at")
-                                )
-                        except Exception:
-                            pass
-                    cand_src_time = to_seconds_safe(cand_src_raw)
-                    if cand_src_time is None or cand_src_time <= src_time:
-                        continue
-                    filtered_newer.append(cand)
-
-                retried_fields = _retried_fields_for_job(cat, source_event)
-                sup = supersede_fields(retried_fields, filtered_newer)
-                omitted_fields = sup["omit"]
-                newer_job_ids = sup["newer_job_ids"]
-                if not sup["keep"] and omitted_fields:
-                    desc = describe_job(
-                        DECISION_SKIPPED,
-                        _with_writes({
-                            "reason": sup["skip_reason"] or (
-                                f"omitted by newer jobs: {newer_job_ids}"
-                            ),
-                            "event_id": source_event_id,
-                            "project": project_name,
-                        }),
-                    )
-                    self._finish_job(
-                        job_id=job_id,
-                        decision=DECISION_SKIPPED,
-                        description=desc,
-                        summary={
-                            **base_summary,
-                            "omittedBy": newer_job_ids,
-                            "omittedFields": omitted_fields,
-                            "category": cat,
-                        },
-                        project_name=project_name,
-                        attempt=attempt,
-                        entity_id=entity_id,
-                        category=cat,
-                    )
-                    return True
-            except Exception as exc:
-                logger.warning(
-                    "Supersession check failed: %s",
-                    redact(str(exc), self._get_secrets()),
-                )
-
-        # Step 7: Handler per enabled category
-        handler = HANDLERS.get(cat)
-        if not handler:
-            desc = describe_job(
-                DECISION_FAILED,
-                _with_writes({
-                    "reason": f"No handler registered for category {cat}",
-                    "attempt": attempt,
-                    "retryable": False,
-                    "entity_id": entity_id,
-                    "category": cat,
-                }),
-            )
-            self._finish_job(
-                job_id=job_id,
-                decision=DECISION_FAILED,
-                description=desc,
-                summary={
-                    "sourceEventId": source_event_id,
-                    "attempt": attempt,
-                    "writes": prior_writes,
-                    "notWritten": prior_not_written,
-                },
-                project_name=project_name,
-                attempt=attempt,
-                retryable=False,
-                category=cat,
-            )
-            return True
-
-        self._pending_guard_state = None
-        prior_writes = list(job.get("summary", {}).get("writes") or [])
-        prior_not_written = job.get("summary", {}).get("notWritten")
-        ctx = JobContext(
-            event=source_event,
-            job_id=job_id,
-            category=cat,
-            entity_id=entity_id,
-            project_name=project_name,
-            effective_toggles=effective_now,
-            conflict_policy=effective_now.get(
-                "conflict_policy", "kitsu_wins"
+        return JobContext(
+            event=event,
+            job_id=job["id"],
+            category="",
+            entity_id=(
+                summary.get("entityId")
+                or summary.get("taskId")
+                or summary.get("folderId")
+                or ""
             ),
+            project_name=project_name,
+            effective_toggles={},
+            conflict_policy="kitsu_wins",
             identity_resolver=self.identity_resolver,
             writer=self.writer,
             loop_guard_check=self.loop_guard_check,
             clock=self.clock,
             processor=self.processor,
             attempt=attempt,
-            omitted_fields=omitted_fields,
-            kitsu_project_id=self.get_kitsu_project_id(project_name),
             loop_guard_commit=self.loop_guard_commit,
             loop_guard_discard=self.loop_guard_discard,
-            prior_writes=prior_writes,
-            prior_not_written=prior_not_written,
+            prior_writes=list(saved.get("writes") or []),
+            prior_not_written=normalize_not_written(saved.get("notWritten")),
         )
 
+    @staticmethod
+    def _skip_result(
+        ctx: JobContext, reason: str, **details: Any
+    ) -> JobResult:
+        """Retain earlier writes when a retry is skipped before dispatch."""
+        return JobResult(
+            decision=DECISION_SKIPPED,
+            details={
+                "reason": reason,
+                "event_id": ctx.event.get("id"),
+                "project": ctx.project_name,
+                "writes": ctx.prior_writes,
+                "unwritten": ctx.prior_not_written,
+                **details,
+            },
+            writes=ctx.prior_writes,
+        )
+
+    def _check_eligibility(
+        self, ctx: JobContext
+    ) -> tuple[List[str], Optional[JobResult]]:
+        """Resolve category, origin, pairing, and historical settings gates."""
+        topic = ctx.event.get("topic", "")
+        if topic in ("entity.project.deleted", "entity.user.deleted"):
+            return [], self._skip_result(
+                ctx, "project and person deletion is out of scope"
+            )
+        categories = categories_for(ctx.event)
+        if not categories:
+            return [], self._skip_result(ctx, f"topic {topic} is out of scope")
+
+        ctx.category = categories[0]
+        origin = classify_origin(ctx.event, ORIGIN_MARKERS)
+        if origin in (ORIGIN_SYNC_ORIGINATED, ORIGIN_UNKNOWN):
+            reason = (
+                "sync originated"
+                if origin == ORIGIN_SYNC_ORIGINATED
+                else "origin unknown"
+            )
+            return [], self._skip_result(ctx, reason)
+        if ctx.project_name not in self.get_paired_projects():
+            return [], self._skip_result(
+                ctx, f"project '{ctx.project_name}' is not a Paired_Project"
+            )
+
+        created_at = ctx.event.get("createdAt") or ctx.event.get("created_at")
+        gate_state = (
+            self.gate_history.toggles_at(ctx.project_name, created_at)
+            if self.gate_history
+            else {"state": "no_history", "toggles": None}
+        )
+        ctx.effective_toggles = (
+            self.settings_watcher.get_effective_toggles(ctx.project_name)
+            if self.settings_watcher
+            else {"valid": True, "master": True, "categories": {}}
+        )
+        ctx.conflict_policy = ctx.effective_toggles.get(
+            "conflict_policy", "kitsu_wins"
+        )
+        enabled = []
+        gated = []
+        for category in categories:
+            decision = gate_decision(
+                category, gate_state, ctx.effective_toggles
+            )
+            if decision["allowed"]:
+                enabled.append(category)
+                continue
+            gated.append((category, decision))
+            if (
+                gate_state.get("state") == STATE_UNKNOWN_GAP
+                and self.gate_history
+            ):
+                self.gate_history.record_gap_skip()
+            if not ctx.effective_toggles.get("valid"):
+                logger.error(
+                    "Invalid Two_Way_Sync_Settings for project %s: %s",
+                    ctx.project_name,
+                    redact(
+                        str(ctx.effective_toggles.get("error")),
+                        self._get_secrets(),
+                    ),
+                )
+        if not enabled:
+            category, decision = gated[0]
+            ctx.category = category
+            return categories, self._skip_result(
+                ctx, decision["reason"], gated=True, category=category
+            )
+        ctx.category = enabled[0]
+        return enabled, None
+
+    def _check_supersession(self, ctx: JobContext) -> Dict[str, Any]:
+        """Find fields already written by jobs with newer source events."""
+        fields = _retried_fields_for_job(ctx.category, ctx.event)
+        if ctx.attempt <= 1:
+            return supersede_fields(fields, [])
         try:
-            result = handler(ctx)
+            candidates = self.ayon_client.get_events(
+                topics=[self.TARGET_TOPIC],
+                project_names=[ctx.project_name],
+                statuses=["finished"],
+                fields=[
+                    "id",
+                    "topic",
+                    "summary",
+                    "status",
+                    "createdAt",
+                    "dependsOn",
+                    "project",
+                ],
+            )
+            source_time = to_seconds_safe(
+                ctx.event.get("createdAt") or ctx.event.get("created_at")
+            )
+            newer = []
+            for candidate in candidates:
+                summary = ensure_dict(candidate.get("summary"))
+                entity_id = summary.get("entityId") or candidate.get(
+                    "entityId"
+                )
+                if entity_id != ctx.entity_id:
+                    continue
+                if summary.get(
+                    "category"
+                ) != ctx.category and ctx.category not in (
+                    summary.get("categories") or []
+                ):
+                    continue
+                if source_time is None:
+                    continue
+                timestamp = summary.get("sourceCreatedAt")
+                if timestamp is None and summary.get("sourceEventId"):
+                    try:
+                        event = self.ayon_client.get_event(
+                            summary["sourceEventId"]
+                        )
+                        if event:
+                            timestamp = event.get("createdAt") or event.get(
+                                "created_at"
+                            )
+                    except Exception:
+                        pass
+                candidate_time = to_seconds_safe(timestamp)
+                if candidate_time is not None and candidate_time > source_time:
+                    newer.append(candidate)
+            return supersede_fields(fields, newer)
+        except Exception as exc:
+            logger.warning(
+                "Supersession check failed: %s",
+                redact(str(exc), self._get_secrets()),
+            )
+            return supersede_fields(fields, [])
+
+    def _process_job(self, job: Dict[str, Any], attempt: int = 1) -> bool:
+        """Load, gate, dispatch, and finish a single outbound attempt."""
+        if not self._start_job(job, attempt):
+            return False
+        event = self._load_source_event(job, attempt)
+        if event is None:
+            return True
+
+        ctx = self._build_context(job, event, attempt)
+        categories, result = self._check_eligibility(ctx)
+        summary = {
+            "sourceEventId": job.get("dependsOn"),
+            "dependsOn": job.get("dependsOn"),
+            "sourceUser": event.get("user") or "unknown",
+            "sourceTopic": event.get("topic", ""),
+            "sourceCreatedAt": event.get("createdAt")
+            or event.get("created_at"),
+            "entityId": ctx.entity_id or NONE_VALUE,
+            "attempt": attempt,
+            "categories": categories,
+        }
+        if result is not None:
+            self._finish_result(ctx, result, summary)
+            return True
+
+        supersession = self._check_supersession(ctx)
+        ctx.omitted_fields = supersession["omit"]
+        if not supersession["keep"] and ctx.omitted_fields:
+            result = self._skip_result(ctx, supersession["skip_reason"])
+            result.omitted_by = supersession["newer_job_ids"]
+            summary["omittedFields"] = ctx.omitted_fields
+        else:
+            self._pending_guard_state = None
+            ctx.kitsu_project_id = self.get_kitsu_project_id(ctx.project_name)
+            result = self._dispatch(ctx)
+            result.omitted_by = (
+                result.omitted_by or supersession["newer_job_ids"]
+            )
+
+        self._finish_result(ctx, result, summary)
+        return True
+
+    def _dispatch(self, ctx: JobContext) -> JobResult:
+        """Run the handler, reporting unexpected exceptions as failures."""
+        handler = HANDLERS.get(ctx.category)
+        if handler is None:
+            return failed_result(
+                ctx,
+                f"No handler registered for category {ctx.category}",
+                writes=ctx.prior_writes,
+                not_written=ctx.prior_not_written,
+            )
+        try:
+            return handler(ctx)
         except Exception as exc:
             logger.error(
                 "Unexpected exception in handler for %s: %s",
-                job_id,
+                ctx.job_id,
                 redact(str(exc), self._get_secrets()),
             )
-            desc = describe_job(
-                DECISION_FAILED,
-                _with_writes({
-                    "reason": f"{type(exc).__name__}: {exc}",
-                    "error": str(exc),
-                    "attempt": attempt,
-                    "retryable": False,
-                    "entity_id": entity_id,
-                    "category": cat,
-                }),
+            return failed_result(
+                ctx,
+                f"{type(exc).__name__}: {exc}",
+                error=str(exc),
+                writes=ctx.prior_writes,
+                not_written=ctx.prior_not_written,
             )
-            self._finish_job(
-                job_id=job_id,
-                decision=DECISION_FAILED,
-                description=desc,
-                summary={
-                    "sourceEventId": source_event_id,
-                    "attempt": attempt,
-                    "writes": prior_writes,
-                    "notWritten": prior_not_written,
-                },
-                project_name=project_name,
-                attempt=attempt,
-                retryable=False,
-                entity_id=entity_id,
-                category=cat,
-            )
-            return True
 
-        # Step 8: job_outcome and finish job
-        saved_writes = (
-            result.writes if result.writes else prior_writes
-        )
-        if result.decision in (
-            DECISION_APPLIED, DECISION_SKIPPED, DECISION_CONFLICT
-        ):
-            saved_not_written = result.not_written or None
-        else:
-            saved_not_written = (
-                result.not_written
-                if result.not_written
-                else prior_not_written
-            )
-        self._finish_job(
-            job_id=job_id,
-            decision=result.decision,
-            description=result.description,
-            summary={
-                "sourceEventId": source_event_id,
-                "sourceTopic": topic,
-                "sourceUser": source_event.get("user") or "unknown",
-                "sourceCreatedAt": created_at,
+    def _finish_result(
+        self, ctx: JobContext, result: JobResult, summary: Dict[str, Any]
+    ) -> None:
+        """Merge write history and finish the structured handler outcome."""
+        saved_writes = result.writes or ctx.prior_writes
+        not_written = result.not_written
+        if result.decision == DECISION_FAILED:
+            not_written = not_written or ctx.prior_not_written
+        summary.update(
+            {
                 "entityType": result.entity_type or "task",
-                "entityId": entity_id,
                 "kitsuId": result.kitsu_id or NONE_VALUE,
-                "categories": enabled_categories,
                 "decision": result.decision,
-                "attempt": attempt,
                 "writes": saved_writes,
-                "notWritten": saved_not_written,
-                "omittedBy": result.omitted_by or newer_job_ids,
-            },
-            project_name=project_name,
-            attempt=attempt,
-            retryable=result.retryable,
-            error_kind=result.error_kind,
-            http_status=result.http_status,
-            entity_id=entity_id,
-            kitsu_id=result.kitsu_id,
-            category=cat,
+                "notWritten": not_written or None,
+                "omittedBy": result.omitted_by,
+            }
         )
-        return True
+        self._finish_job(
+            job_id=ctx.job_id,
+            result=result,
+            summary=summary,
+            project_name=ctx.project_name,
+            attempt=ctx.attempt,
+            entity_id=ctx.entity_id,
+            category=ctx.category,
+        )
 
     def _finish_job(
         self,
         job_id: str,
-        decision: str,
-        description: str,
+        result: JobResult,
         summary: Dict[str, Any],
         project_name: Optional[str] = None,
         attempt: int = 1,
-        retryable: bool = False,
-        error_kind: Optional[str] = None,
-        http_status: Optional[int] = None,
         entity_id: Optional[str] = None,
-        kitsu_id: Optional[str] = None,
         category: Optional[str] = None,
     ) -> None:
-        """Update job status and summary, and emit exactly one log entry."""
+        """Persist the outcome, schedule retries, and emit one log entry."""
         self._pending_guard_state = None
         now = float(self.clock())
-        is_retryable_attempt = (
+        decision = result.decision
+        retryable = (
             decision == DECISION_FAILED
-            and retryable
+            and result.retryable
             and attempt < MAX_ATTEMPTS
         )
+        details = dict(result.details)
+        retries_value = None
 
-        if is_retryable_attempt:
+        if decision == DECISION_FAILED:
+            summary.update(
+                {
+                    "lastFailedAt": now,
+                    "errorKind": result.error_kind,
+                    "httpStatus": result.http_status,
+                    "attempt": attempt,
+                }
+            )
+            details.update(
+                {
+                    "entity_id": entity_id,
+                    "kitsu_id": result.kitsu_id,
+                    "category": category,
+                    "attempt": attempt,
+                    "retryable": retryable,
+                    "error_kind": result.error_kind,
+                    "http_status": result.http_status,
+                    "writes": summary.get("writes") or [],
+                    "unwritten": summary.get("notWritten") or None,
+                }
+            )
+            if attempt >= MAX_ATTEMPTS:
+                label = result.error_kind or "retry limit exceeded"
+                if result.http_status:
+                    label = f"{label} [HTTP {result.http_status}]"
+                terminal_meta = f"{label} (attempt {attempt}/{MAX_ATTEMPTS})"
+                reason = str(details.get("reason") or "").strip()
+                details["reason"] = (
+                    f"{reason}, {terminal_meta}"
+                    if reason
+                    and reason not in terminal_meta
+                    and reason.lower() not in ("failure", "failed")
+                    else terminal_meta
+                )
+
+        if retryable:
             status = "pending"
-            retries_value = None
-            summary["lastFailedAt"] = now
-            summary["errorKind"] = error_kind
-            summary["httpStatus"] = http_status
-            summary["attempt"] = attempt
             self.held_job = {
                 "job": {
                     "id": job_id,
@@ -1762,70 +1416,9 @@ class OutboundJobRunner:
                 "sync_request_s_at_start": self.total_sync_request_s,
             }
         else:
-            status = (
-                "finished"
-                if decision
-                in (DECISION_APPLIED, DECISION_SKIPPED, DECISION_CONFLICT)
-                else "failed"
-            )
-            retries_value = (
-                FINAL_RETRIES_VALUE if decision == DECISION_FAILED else None
-            )
+            status = "failed" if decision == DECISION_FAILED else "finished"
             if decision == DECISION_FAILED:
-                summary["lastFailedAt"] = now
-                summary["errorKind"] = error_kind
-                summary["httpStatus"] = http_status
-                summary["attempt"] = attempt
-                unwritten = summary.get("notWritten") or []
-                saved_writes = list(summary.get("writes") or [])
-                if attempt >= MAX_ATTEMPTS:
-                    err_label = error_kind or "retry limit exceeded"
-                    if http_status:
-                        err_label = f"{err_label} [HTTP {http_status}]"
-                    terminal_meta = (
-                        f"{err_label} "
-                        f"(attempt {attempt}/{MAX_ATTEMPTS})"
-                    )
-                    orig_reason = _extract_failure_reason(description)
-                    if (
-                        orig_reason
-                        and orig_reason not in terminal_meta
-                        and orig_reason.lower() not in ("failure", "failed")
-                    ):
-                        fail_reason = f"{orig_reason}, {terminal_meta}"
-                    else:
-                        fail_reason = terminal_meta
-
-                    fail_details = {
-                        "entity_id": entity_id,
-                        "kitsu_id": kitsu_id,
-                        "category": category,
-                        "unwritten": unwritten,
-                        "retryable": False,
-                        "http_status": http_status,
-                        "error_kind": error_kind,
-                        "reason": fail_reason,
-                    }
-                    if saved_writes:
-                        fail_details["writes"] = saved_writes
-                    description = describe_job(
-                        DECISION_FAILED,
-                        fail_details,
-                    )
-                elif unwritten and "unwritten values: none" in description:
-                    if isinstance(unwritten, dict):
-                        u_str = ", ".join(
-                            f"{k}={_format_value(k, v)}"
-                            for k, v in unwritten.items()
-                        )
-                    elif isinstance(unwritten, (list, tuple)):
-                        u_str = ", ".join(str(x) for x in unwritten)
-                    else:
-                        u_str = str(unwritten)
-                    description = description.replace(
-                        "unwritten values: none",
-                        f"unwritten values: {u_str}",
-                    )
+                retries_value = FINAL_RETRIES_VALUE
                 self.failed_final_jobs.append(
                     {
                         "job_id": job_id,
@@ -1837,13 +1430,13 @@ class OutboundJobRunner:
         if category and "category" not in summary:
             summary["category"] = category
 
+        description = describe_job(decision, details)
         secrets = self._get_secrets()
-        if description and secrets:
+        if secrets:
             description = redact(description, secrets)
-        if secrets and isinstance(summary, dict):
-            for k, v in list(summary.items()):
-                if isinstance(v, str):
-                    summary[k] = redact(v, secrets)
+            for key, value in list(summary.items()):
+                if isinstance(value, str):
+                    summary[key] = redact(value, secrets)
 
         update_kwargs: Dict[str, Any] = {
             "status": status,
@@ -1853,21 +1446,17 @@ class OutboundJobRunner:
         }
         if retries_value is not None:
             update_kwargs["retries"] = retries_value
-
         self._update_event_safe(job_id, **update_kwargs)
 
-        log_details = {
-            "job_id": job_id,
-            "project_name": project_name,
-            "entity_id": entity_id,
-            "kitsu_id": kitsu_id,
-            "category": category,
-            "secrets": self._get_secrets(),
-        }
-        level, msg = build_log_line(decision, log_details)
-        if level == "INFO":
-            logger.info(msg)
-        elif level == "WARNING":
-            logger.warning(msg)
-        else:
-            logger.error(msg)
+        level, message = build_log_line(
+            decision,
+            {
+                "job_id": job_id,
+                "project_name": project_name,
+                "entity_id": entity_id,
+                "kitsu_id": result.kitsu_id,
+                "category": category,
+                "secrets": secrets,
+            },
+        )
+        logger.log(getattr(logging, level), message)

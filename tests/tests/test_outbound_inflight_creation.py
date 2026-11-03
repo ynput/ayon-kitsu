@@ -189,6 +189,7 @@ def test_creation_inbound_protected_before_post_response():
     resolver.ayon_client = MagicMock()
 
     ctx = MagicMock()
+    ctx.category = "entity_creation"
     ctx.event = {
         "topic": TOPIC_FOLDER_CREATED,
         "payload": {

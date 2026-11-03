@@ -748,6 +748,7 @@ def test_deletion_handler_retries_on_kitsu_owners_failure():
     resolver.get_kitsu_owners.side_effect = RuntimeError("503 Server Error")
 
     ctx = MagicMock()
+    ctx.category = "entity_deletion"
     ctx.event = {
         "topic": TOPIC_FOLDER_DELETED,
         "payload": {
@@ -797,6 +798,7 @@ def test_rename_preserves_requested_value_across_inbound_echo():
         },
     }
     ctx = MagicMock()
+    ctx.category = "entity_rename"
     ctx.event = {
         "topic": "entity.folder.label_changed",
         "user": "artist",
@@ -858,6 +860,7 @@ def test_rename_applies_conflict_policy_kitsu_wins_and_ayon_wins():
     }
 
     ctx = MagicMock()
+    ctx.category = "entity_rename"
     ctx.event = {
         "topic": "entity.folder.label_changed",
         "user": "artist",

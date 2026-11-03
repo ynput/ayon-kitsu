@@ -77,13 +77,13 @@ def _setup_queue_environment(clock_start: float = 1000.0):
     # Instance 1
     proc1 = MagicMock()
     proc1.sender = "kitsu-processor-host1"
-    proc1.pairing_list = pairing_list
+    proc1.get_outbound_pairings.return_value = pairing_list
     proc1.kitsu_host = "https://kitsu.local"
 
     # Instance 2
     proc2 = MagicMock()
     proc2.sender = "kitsu-processor-host2"
-    proc2.pairing_list = pairing_list
+    proc2.get_outbound_pairings.return_value = pairing_list
     proc2.kitsu_host = "https://kitsu.local"
 
     runner1 = OutboundJobRunner(

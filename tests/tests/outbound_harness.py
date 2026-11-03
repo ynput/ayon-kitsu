@@ -71,7 +71,7 @@ def build_runner(
 
     processor = MagicMock()
     processor.sender = SENDER
-    processor.pairing_list = {PROJECT: KITSU_PROJECT}
+    processor.get_outbound_pairings.return_value = {PROJECT: KITSU_PROJECT}
 
     gate_history = GateHistory(store, clock=clock)
     gate_history.record_observation(

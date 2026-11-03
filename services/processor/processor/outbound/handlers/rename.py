@@ -12,18 +12,17 @@ from ..conflict import decide_field
 from ..constants import (
     DECISION_APPLIED,
     DECISION_CONFLICT,
-    DECISION_FAILED,
     DECISION_SKIPPED,
     ERROR_REJECTED,
 )
-from ..describe import describe_job
 from ..kitsu_writer import KitsuWriterError
+from ..models import JobContext, JobResult, failed_result
 from ..planning import plan_rename
 
 logger = logging.getLogger(__name__)
 
 
-def handle_rename(ctx: Any) -> Any:
+def handle_rename(ctx: JobContext) -> JobResult:
     """Apply folder/task renamed or label_changed events to Kitsu.
 
     Args:
@@ -32,7 +31,6 @@ def handle_rename(ctx: Any) -> Any:
     Returns:
         JobResult instance.
     """
-    from ..runner import JobResult
 
     event = ctx.event
     topic = event.get("topic", "")
@@ -56,10 +54,7 @@ def handle_rename(ctx: Any) -> Any:
         if id_res.get("outcome") == "skip":
             return JobResult(
                 decision=DECISION_SKIPPED,
-                description=describe_job(
-                    DECISION_SKIPPED,
-                    {"reason": id_res["reason"], "entity_id": entity_id},
-                ),
+                details={"reason": id_res["reason"], "entity_id": entity_id},
                 kitsu_id=id_res.get("kitsu_id"),
                 entity_type=default_entity_type,
             )
@@ -71,33 +66,21 @@ def handle_rename(ctx: Any) -> Any:
             f"operation rename on kitsu_id {k_id} for AYON entity "
             f"{entity_id} failed: {id_res['reason']}"
         )
-        details = {
-            "reason": reason_msg,
-            "error": id_res["reason"],
-            "retryable": retryable,
-            "error_kind": err_kind,
-            "http_status": http_st,
-            "attempt": ctx.attempt,
-            "kitsu_id": k_id,
-            "entity_id": entity_id,
-            "category": "entity_rename",
-        }
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            reason_msg,
             retryable=retryable,
             error_kind=err_kind,
             http_status=http_st,
             kitsu_id=k_id,
             entity_type=default_entity_type,
+            error=id_res["reason"],
         )
 
     ayon_entity = id_res["ayon"]
     kitsu_entity = id_res["kitsu"]
     kitsu_id = str(kitsu_entity["id"])
-    kitsu_type = str(
-        kitsu_entity.get("type") or default_entity_type
-    )
+    kitsu_type = str(kitsu_entity.get("type") or default_entity_type)
     prev_kitsu_name = str(kitsu_entity.get("name") or "")
 
     # 2. Plan rename from source event and current AYON entity (Req 12.1).
@@ -137,14 +120,11 @@ def handle_rename(ctx: Any) -> Any:
     if not target_name:
         return JobResult(
             decision=DECISION_SKIPPED,
-            description=describe_job(
-                DECISION_SKIPPED,
-                {
-                    "reason": "target name is empty",
-                    "entity_id": entity_id,
-                    "kitsu_id": kitsu_id,
-                },
-            ),
+            details={
+                "reason": "target name is empty",
+                "entity_id": entity_id,
+                "kitsu_id": kitsu_id,
+            },
             kitsu_id=kitsu_id,
             entity_type=kitsu_type,
         )
@@ -196,15 +176,12 @@ def handle_rename(ctx: Any) -> Any:
     if action == "skip_in_sync":
         return JobResult(
             decision=DECISION_SKIPPED,
-            description=describe_job(
-                DECISION_SKIPPED,
-                {
-                    "reason": "already in sync",
-                    "field": "name",
-                    "kitsu_id": kitsu_id,
-                    "entity_type": kitsu_type,
-                },
-            ),
+            details={
+                "reason": "already in sync",
+                "field": "name",
+                "kitsu_id": kitsu_id,
+                "entity_type": kitsu_type,
+            },
             kitsu_id=kitsu_id,
             entity_type=kitsu_type,
         )
@@ -212,98 +189,19 @@ def handle_rename(ctx: Any) -> Any:
     if action == "conflict_keep_kitsu":
         if getattr(ctx, "processor", None) is not None:
             try:
-                res = None
-                proj_id = (
-                    kitsu_entity.get("project_id", "")
-                    if isinstance(kitsu_entity, dict)
-                    else ""
-                )
                 if is_task:
-                    pull_fn = getattr(ctx.processor, "pull_kitsu_task", None)
-                    if callable(pull_fn):
-                        res = pull_fn(kitsu_id, kitsu_entity)
-                    else:
-                        from ...update_from_kitsu import create_or_update_task
-
-                        res = create_or_update_task(
-                            ctx.processor,
-                            {"task_id": kitsu_id, "project_id": proj_id},
-                        )
+                    ctx.processor.pull_kitsu_task(kitsu_id, kitsu_entity)
                 else:
-                    k_type = kitsu_type.lower()
-                    pull_fn = getattr(ctx.processor, "pull_kitsu_entity", None)
-                    if callable(pull_fn):
-                        res = pull_fn(kitsu_id, k_type, kitsu_entity)
-                    else:
-                        from ... import update_from_kitsu as ufk
-
-                        if k_type == "shot":
-                            res = ufk.create_or_update_shot(
-                                ctx.processor,
-                                {"shot_id": kitsu_id, "project_id": proj_id},
-                            )
-                        elif k_type == "asset":
-                            res = ufk.create_or_update_asset(
-                                ctx.processor,
-                                {"asset_id": kitsu_id, "project_id": proj_id},
-                            )
-                        elif k_type == "sequence":
-                            res = ufk.create_or_update_sequence(
-                                ctx.processor,
-                                {
-                                    "sequence_id": kitsu_id,
-                                    "project_id": proj_id,
-                                },
-                            )
-                        elif k_type == "episode":
-                            res = ufk.create_or_update_episode(
-                                ctx.processor,
-                                {
-                                    "episode_id": kitsu_id,
-                                    "project_id": proj_id,
-                                },
-                            )
-                        elif k_type == "edit":
-                            res = ufk.create_or_update_edit(
-                                ctx.processor,
-                                {"edit_id": kitsu_id, "project_id": proj_id},
-                            )
-                        elif k_type == "concept":
-                            res = ufk.create_or_update_concept(
-                                ctx.processor,
-                                {
-                                    "concept_id": kitsu_id,
-                                    "project_id": proj_id,
-                                },
-                            )
-                if res is not None:
-                    st = getattr(
-                        res, "status_code", getattr(res, "status", 200)
+                    ctx.processor.pull_kitsu_entity(
+                        kitsu_id, kitsu_type.lower(), kitsu_entity
                     )
-                    if isinstance(st, int) and st >= 400:
-                        raise RuntimeError(
-                            f"Inbound pull returned error status {st}"
-                        )
             except Exception as exc:
                 logger.error(
                     "Could not pull kitsu entity on rename conflict: %s", exc
                 )
-                return JobResult(
-                    decision=DECISION_FAILED,
-                    description=describe_job(
-                        DECISION_FAILED,
-                        {
-                            "reason": (
-                                f"Inbound pull on conflict failed: {exc}"
-                            ),
-                            "retryable": True,
-                            "error_kind": ERROR_REJECTED,
-                            "attempt": ctx.attempt,
-                            "kitsu_id": kitsu_id,
-                            "entity_id": entity_id,
-                            "category": "entity_rename",
-                        },
-                    ),
+                return failed_result(
+                    ctx,
+                    f"Inbound pull on conflict failed: {exc}",
                     retryable=True,
                     error_kind=ERROR_REJECTED,
                     kitsu_id=kitsu_id,
@@ -323,7 +221,7 @@ def handle_rename(ctx: Any) -> Any:
             c_details["no_user"] = True
         return JobResult(
             decision=DECISION_CONFLICT,
-            description=describe_job(DECISION_CONFLICT, c_details),
+            details=c_details,
             kitsu_id=kitsu_id,
             entity_type=kitsu_type,
         )
@@ -333,54 +231,38 @@ def handle_rename(ctx: Any) -> Any:
     if not guard["allowed"]:
         return JobResult(
             decision=DECISION_SKIPPED,
-            description=describe_job(
-                DECISION_SKIPPED,
-                {
-                    "reason": "loop suspected",
-                    "entity_id": entity_id,
-                    "kitsu_id": kitsu_id,
-                    "category": "entity_rename",
-                },
-            ),
+            details={
+                "reason": "loop suspected",
+                "entity_id": entity_id,
+                "kitsu_id": kitsu_id,
+                "category": "entity_rename",
+            },
             kitsu_id=kitsu_id,
             entity_type=kitsu_type,
         )
 
     # 4. Write only 'name' via KitsuWriter.rename_entity (12.1, 12.7)
     try:
-        ctx.writer.rename_entity(
-            kitsu_entity, target_name, is_task=is_task
-        )
+        ctx.writer.rename_entity(kitsu_entity, target_name, is_task=is_task)
         commit_fn = getattr(ctx, "loop_guard_commit", None)
         if callable(commit_fn):
             commit_fn()
     except KitsuWriterError as exc:
-        unwritten = [{"field": "name", "ayonValue": target_name}]
+        unwritten = {"name": target_name}
         reason_msg = (
             f"operation rename on kitsu_id {kitsu_id} for AYON entity "
             f"{entity_id} failed: {exc}"
         )
-        details = {
-            "reason": reason_msg,
-            "error": str(exc),
-            "retryable": exc.retryable,
-            "error_kind": exc.kind,
-            "http_status": exc.http_status,
-            "attempt": ctx.attempt,
-            "kitsu_id": kitsu_id,
-            "entity_id": entity_id,
-            "category": "entity_rename",
-            "unwritten": unwritten,
-        }
-        return JobResult(
-            decision=DECISION_FAILED,
-            description=describe_job(DECISION_FAILED, details),
+        return failed_result(
+            ctx,
+            reason_msg,
             retryable=exc.retryable,
             error_kind=exc.kind,
             http_status=exc.http_status,
             kitsu_id=kitsu_id,
             entity_type=kitsu_type,
             not_written=unwritten,
+            error=str(exc),
         )
 
     writes: List[Dict[str, Any]] = [
@@ -404,7 +286,7 @@ def handle_rename(ctx: Any) -> Any:
             c_over_details["no_user"] = True
         return JobResult(
             decision=DECISION_CONFLICT,
-            description=describe_job(DECISION_CONFLICT, c_over_details),
+            details=c_over_details,
             writes=writes,
             kitsu_id=kitsu_id,
             entity_type=kitsu_type,
@@ -424,7 +306,7 @@ def handle_rename(ctx: Any) -> Any:
 
     return JobResult(
         decision=DECISION_APPLIED,
-        description=describe_job(DECISION_APPLIED, applied_details),
+        details=applied_details,
         writes=writes,
         kitsu_id=kitsu_id,
         entity_type=kitsu_type,
