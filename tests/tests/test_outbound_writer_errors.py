@@ -232,6 +232,23 @@ def test_writer_comment_status_args():
     finally:
         gazu.task.add_comment = orig_comment
 
+@pytest.mark.parametrize("task", ["task-100", {"id": "task-100"}])
+def test_writer_assign_sends_task_id_list(monkeypatch, task):
+    """Assignment uses the collection payload required by Zou validation."""
+    client = MagicMock()
+    writer = KitsuWriter(client=client)
+    put = MagicMock(return_value=[])
+    monkeypatch.setattr("gazu.raw.put", put)
+
+    writer.assign(task, "person-200")
+
+    put.assert_called_once_with(
+        "actions/persons/person-200/assign",
+        {"task_ids": ["task-100"]},
+        client=client,
+    )
+
+
 def test_writer_unassign_passes_task_collection_to_gazu():
     """unassign passes a task list to gazu.task.clear_assignations."""
     fake_client = MagicMock()

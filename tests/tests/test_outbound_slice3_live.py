@@ -12,7 +12,12 @@ from typing import Any, Dict, Generator, Tuple
 
 import pytest
 
-pytestmark = pytest.mark.live_servers
+from .live_support import isolated_outbound_live  # noqa: F401
+
+pytestmark = [
+    pytest.mark.live_servers,
+    pytest.mark.usefixtures("isolated_outbound_live"),
+]
 
 
 def _probe_server(url: str, timeout: float = 10.0) -> Tuple[bool, str]:

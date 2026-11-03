@@ -322,7 +322,12 @@ class KitsuWriter:
     ) -> None:
         """Assign a person to a Kitsu task (Requirement 7.4, 7.7)."""
         task_id = task.get("id") if isinstance(task, dict) else task
-        self._call(gazu.task.assign_task, task_id, person_id)
+        # Gazu 0.9 sends a scalar task_ids; Zou requires a task ID list.
+        self._call(
+            gazu.raw.put,
+            f"actions/persons/{person_id}/assign",
+            {"task_ids": [task_id]},
+        )
 
     def unassign(
         self, task: Dict[str, Any] | str, person_id: str

@@ -11,8 +11,13 @@ from typing import Any, Dict, Generator, Tuple
 
 import pytest
 
+from .live_support import isolated_outbound_live  # noqa: F401
+
 # Feature: kitsu-two-way-sync, Task 20.2: Live Slice 2 Integration Tests
-pytestmark = pytest.mark.live_servers
+pytestmark = [
+    pytest.mark.live_servers,
+    pytest.mark.usefixtures("isolated_outbound_live"),
+]
 
 
 def _probe_server(url: str, timeout: float = 10.0) -> Tuple[bool, str]:
@@ -131,6 +136,8 @@ def test_live_task_assignees_outbound_sync(
     kitsu_project = None
     processor = None
     proc_thread = None
+    created_ayon_user = None
+    created_kitsu_person = None
 
     try:
         kitsu_project = gazu.project.new_project(proj_name)
@@ -155,8 +162,10 @@ def test_live_task_assignees_outbound_sync(
             person = gazu.person.new_person(
                 "Artist", "One", f"artist_{uid}@studio.com", "user"
             )
+            created_kitsu_person = person
         else:
             person = persons[0]
+        gazu.project.add_person_to_team(kitsu_project, person)
 
         project_meta = {
             "code": proj_code,
@@ -238,11 +247,11 @@ def test_live_task_assignees_outbound_sync(
 
         if not target_username:
             target_username = f"artist_{uid}"
-            user_api.post(
-                "/users",
-                name=target_username,
+            user_api.put(
+                f"/users/{target_username}",
                 attrib={"email": person.get("email")},
-            )
+            ).raise_for_status()
+            created_ayon_user = target_username
 
         # Record initial Kitsu assignees and AYON events
         initial_kitsu_task = gazu.task.get_task(task1["id"])
@@ -300,6 +309,17 @@ def test_live_task_assignees_outbound_sync(
             f"{len(final_update_events) - len(initial_update_events)} extra"
         )
 
+        # Exercise the removal request as well as the initial assignment.
+        user_api.update_task(proj_name, ayon_task_id, assignees=[])
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
+            task = gazu.task.get_task(task1["id"])
+            if person["id"] not in (task.get("assignees") or []):
+                break
+            time.sleep(0.5)
+        else:
+            pytest.fail("Kitsu assignee was not removed within 30 seconds")
+
     finally:
         thread_join_err = None
         try:
@@ -311,6 +331,8 @@ def test_live_task_assignees_outbound_sync(
                     thread_join_err = RuntimeError(
                         "Processor worker thread did not stop within 10s"
                     )
+            if processor is not None:
+                processor.event_client.disconnect()
         except Exception as exc:
             thread_join_err = exc
 
@@ -323,12 +345,16 @@ def test_live_task_assignees_outbound_sync(
                 )
                 gazu.project.close_project(kitsu_project)
                 gazu.project.remove_project(kitsu_project, force=True)
+                if created_kitsu_person is not None:
+                    gazu.raw.delete(f"data/persons/{created_kitsu_person['id']}")
             except Exception as exc:
                 kitsu_cleanup_err = exc
 
         ayon_cleanup_err = None
         try:
             ayon_api.delete(f"/projects/{proj_name}")
+            if created_ayon_user is not None:
+                ayon_api.delete(f"/users/{created_ayon_user}")
         except Exception as exc:
             ayon_cleanup_err = exc
 
