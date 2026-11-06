@@ -213,6 +213,9 @@ def get_ordered_task_types(kitsu_project_id: str) -> list[dict[str, Any]]:
         {},
     )
 
+    if not kitsu_project:
+        return []
+
     priorities = kitsu_project.get("task_types_priority", {})
     task_types_by_entity: dict[str, list[dict[str, Any]]] = {}
     for task_type_id in kitsu_project["task_types"]:
