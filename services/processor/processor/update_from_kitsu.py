@@ -15,8 +15,7 @@ def update_project(parent: "KitsuProcessor", data: dict[str, str]):
     if not project_name:
         return  # do nothing as this kitsu and ayon project are not paired
 
-    # Get asset entity
-    entity = gazu.project.get_project(data["project_id"])
+    entity = utils.get_project_entity(data["project_id"])
 
     # Add ayon base url so we can use it in REST calls later on
     entity["ayon_server_url"] = ayon_api.get_base_url()
