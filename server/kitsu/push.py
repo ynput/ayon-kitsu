@@ -14,8 +14,10 @@ from ayon_server.types import Field, OPModel
 from .anatomy import get_kitsu_project_anatomy, parse_attrib
 from .constants import (
     CONSTANT_KITSU_MODELS,
+    sync_origin_headers,
 )
 from .utils import (
+    request_sender,
     calculate_end_frame,
     create_entity_link,
     create_folder,
@@ -26,6 +28,7 @@ from .utils import (
     get_links_for_output,
     get_task_by_kitsu_id,
     get_user_by_kitsu_id,
+    is_not_found_exception,
     update_project,
 
     update_folder,
@@ -131,7 +134,7 @@ async def create_access_group(
             settings = await addon.get_studio_settings()
             name = settings.sync_settings.sync_users.access_group
         session = await Session.create(user)
-        headers = {"Authorization": f"Bearer {session.token}"}
+        headers = sync_origin_headers(session.token, request_sender())
         # Check if group already exists
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -279,7 +282,7 @@ async def sync_person(
     if target_user:  # Update user
         try:
             session = await Session.create(user)
-            headers = {"Authorization": f"Bearer {session.token}"}
+            headers = sync_origin_headers(session.token, request_sender())
             ayon_server_url = entity_dict["ayon_server_url"]
             async with httpx.AsyncClient() as client:
                 await client.patch(
@@ -337,13 +340,23 @@ async def delete_project(
 ):
     logging.info("delete_project")
     session = await Session.create(user)
-    headers = {"Authorization": f"Bearer {session.token}"}
+    headers = sync_origin_headers(session.token, request_sender())
     # Check if group already exists
     async with httpx.AsyncClient() as client:
         await client.delete(
             f"{entity_dict['ayon_server_url']}/api/projects/{project.name}",
             headers=headers,
         )
+
+
+def _is_outbound_creation(entity: EntityDict, project_name: str) -> bool:
+    """Tell whether the outbound job is responsible for pairing this entity."""
+    marker = (entity.get("data") or {}).get("ayon_outbound_creation")
+    return (
+        isinstance(marker, dict)
+        and marker.get("project") == project_name
+        and bool(marker.get("job_id"))
+    )
 
 
 async def sync_folder(
@@ -358,14 +371,21 @@ async def sync_folder(
         entity_dict["id"],
         existing_folders,
     )
+    if target_folder is None and _is_outbound_creation(
+        entity_dict, project.name
+    ):
+        logging.info(
+            f"Waiting for outbound pairing of folder {entity_dict['id']}"
+        )
+        return
 
     # Add description to attrib data
     data: dict[str, str | int | None] | None = entity_dict.get("data", {})
     # The value of key data might be None, in that case, create a new dict
     if data is None:
         data = {}
-    if entity_dict.get("description"):
-        data["description"] = entity_dict["description"]
+    if "description" in entity_dict:
+        data["description"] = entity_dict["description"] or ""
     if target_folder is None:
         parent_folder = None
         if entity_dict["type"] == "Asset":
@@ -400,8 +420,8 @@ async def sync_folder(
                     )
                     if parent_folder is None:
                         logging.warning(
-                            f"Parent folder for {entity_dict['type']}"
-                            f" {entity_dict['name']} not found. Skipping."  # noqa
+                            f"Parent folder for {entity_dict['type']} "
+                            f"{entity_dict['name']} not found. Skipping."
                         )
                         return
                     parent_id = parent_folder.id
@@ -513,17 +533,32 @@ async def sync_task(
     existing_folders: dict[str, Any],
     entity_dict: "EntityDict",
 ):
+    target_task = await get_task_by_kitsu_id(
+        project.name,
+        entity_dict["id"],
+        existing_tasks,
+    )
+    if target_task is None and _is_outbound_creation(
+        entity_dict, project.name
+    ):
+        logging.info(
+            f"Waiting for outbound pairing of task {entity_dict['id']}"
+        )
+        return
+
     if "task_status_name" in entity_dict:
         await ensure_task_status(project, entity_dict["task_status_name"])
 
     if "task_type_name" in entity_dict:
         await ensure_task_type(project, entity_dict["task_type_name"])
 
-    target_task = await get_task_by_kitsu_id(
-        project.name,
-        entity_dict["id"],
-        existing_tasks,
-    )
+    # Add description to attrib data
+    data: dict[str, str | int | None] | None = entity_dict.get("data", {})
+    if data is None:
+        data = {}
+    if "description" in entity_dict:
+        data["description"] = entity_dict["description"] or ""
+    task_attrib = parse_attrib(data)
 
     if target_task is None:
         # Sync task
@@ -560,6 +595,7 @@ async def sync_task(
             name=entity_dict["name"],
             data={"kitsuId": entity_dict["id"]},
             assignees=entity_dict["assignees"],
+            attrib=task_attrib,
         )
         existing_tasks[entity_dict["id"]] = target_task.id
 
@@ -571,6 +607,7 @@ async def sync_task(
             assignees=entity_dict.get("assignees", target_task.assignees),
             status=entity_dict.get("task_status_name", target_task.status),
             task_type=entity_dict.get("task_type_name", target_task.task_type),
+            attrib=task_attrib,
         )
         if changed:
             logging.info(
@@ -876,10 +913,15 @@ async def remove_entities(
     folders = {}
     tasks = {}
 
-    async def get_project() -> "ProjectEntity":
+    async def get_project() -> "ProjectEntity | None":
         nonlocal project
         if project is None:
-            project = await ProjectEntity.load(payload.project_name)
+            try:
+                project = await ProjectEntity.load(payload.project_name)
+            except Exception as exc:
+                if is_not_found_exception(exc):
+                    return None
+                raise
         return project
 
     settings = await addon.get_studio_settings()
@@ -892,21 +934,30 @@ async def remove_entities(
 
         if entity_dict["type"] == "Project":
             if settings.delete_ayon_projects.enabled:
-                await update_project(
-                    addon,
-                    user,
-                    await get_project(),
-                    entity_dict,
-                )
+                p = await get_project()
+                if p:
+                    await update_project(
+                        addon,
+                        user,
+                        p,
+                        entity_dict,
+                    )
         elif entity_dict["type"] == "Person":
             target_user = await get_user_by_kitsu_id(entity_dict["id"])
             if not target_user:
                 continue
 
-            await target_user.delete()
+            try:
+                await target_user.delete()
+            except Exception as exc:
+                if is_not_found_exception(exc):
+                    continue
+                raise
 
         elif entity_dict["type"] == "Task":
             p = await get_project()
+            if not p:
+                continue
             task = await get_task_by_kitsu_id(
                 p.name,
                 entity_dict["id"],
@@ -915,16 +966,23 @@ async def remove_entities(
             if not task:
                 continue
 
-            await delete_task(
-                project_name=p.name,
-                task_id=task.id,
-                user=user,
-            )
+            try:
+                await delete_task(
+                    project_name=p.name,
+                    task_id=task.id,
+                    user=user,
+                )
+            except Exception as exc:
+                if is_not_found_exception(exc):
+                    continue
+                raise
             logging.info(f"Deleted {entity_dict['type']} '{task.name}'")
             tasks[entity_dict["id"]] = task.id
 
         else:
             p = await get_project()
+            if not p:
+                continue
             folder = await get_folder_by_kitsu_id(
                 p.name,
                 entity_dict["id"],
@@ -933,7 +991,12 @@ async def remove_entities(
             if not folder:
                 continue
 
-            await folder.delete(force=True)
+            try:
+                await folder.delete(force=True)
+            except Exception as exc:
+                if is_not_found_exception(exc):
+                    continue
+                raise
             logging.info(f"Deleted {entity_dict['type']} '{folder.name}'")
             folders[entity_dict["id"]] = folder.id
 

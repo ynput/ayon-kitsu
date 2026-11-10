@@ -10,6 +10,7 @@ from ayon_server.secrets import Secrets
 
 from .kitsu import Kitsu, KitsuMock
 from .kitsu.init_pairing import InitPairingRequest, init_pairing, sync_request
+from .kitsu.kitsu_owners import KitsuOwnersModel, get_kitsu_owners
 from .kitsu.pairing_list import PairingItemModel, get_pairing_list
 from .kitsu.user_list import get_user_sync_list
 from .kitsu.push import (
@@ -56,6 +57,9 @@ class KitsuAddon(BaseServerAddon):
         self.add_endpoint("/push", self.push, method="POST")
         self.add_endpoint("/remove", self.remove, method="POST")
         self.add_endpoint("/users", self.list_users, method="GET")
+        self.add_endpoint(
+            "/kitsu-owners", self.list_kitsu_owners, method="GET"
+        )
 
     async def setup(self):
         pass
@@ -119,6 +123,33 @@ class KitsuAddon(BaseServerAddon):
             }
             for user in users
         ]
+
+    async def list_kitsu_owners(
+        self,
+        user: CurrentUser,
+        project_name: str,
+        kitsu_id: str,
+    ) -> KitsuOwnersModel:
+        """List the AYON folders, tasks and users that own a Kitsu id.
+
+        Read only. Used by the Processor for duplicate detection during
+        outbound identity resolution.
+
+        Args:
+            user: Authenticated AYON user making the request.
+            project_name: AYON project name (query parameter).
+            kitsu_id: Kitsu entity id to look up (query parameter).
+
+        Returns:
+            Folder ids, task ids and user names whose ``data.kitsuId``
+            equals ``kitsu_id``.
+
+        Raises:
+            ForbiddenException: If the user is not a manager.
+        """
+        if not user.is_manager:
+            raise ForbiddenException("Only managers can look up Kitsu owners")
+        return await get_kitsu_owners(project_name, kitsu_id)
 
     async def init_pairing(
         self,
