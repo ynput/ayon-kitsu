@@ -5,6 +5,8 @@ Validates: Requirements 2.6, 2.7, 2.10, 4.7, 4.12, 4.13.
 
 import logging
 import time
+from datetime import datetime, timezone
+from threading import Lock
 from typing import Any, Dict, Iterable, List, Optional
 
 from .constants import (
@@ -124,34 +126,21 @@ class GateHistory:
         self.loaded = True
 
         # 2. Check for settings.changed events
-        settings_changed_times: List[float] = []
         query_failed = False
-        if hasattr(self.ayon_client, "get_events"):
-            try:
-                ch_events = list(
-                    self.ayon_client.get_events(
-                        topics=["settings.changed"],
-                        fields=["id", "topic", "summary", "createdAt"],
-                    )
-                )
-                for ch in ch_events:
-                    ch_summary = ensure_dict(ch.get("summary"))
-                    addon = (
-                        ch_summary.get("addon_name") or ch.get("addon_name")
-                    )
-                    if addon == settings_addon_name or not addon:
-                        c_time = ch.get("createdAt") or ch.get("created_at")
-                        if c_time is not None:
-                            settings_changed_times.append(c_time)
-            except Exception as exc:
-                logger.warning("Could not query settings.changed: %s", exc)
-                query_failed = True
+        try:
+            changes = self.settings_changes(
+                settings_addon_name, latest_obs, now
+            )
+        except Exception as exc:
+            logger.warning("Could not query settings.changed: %s", exc)
+            changes = []
+            query_failed = True
 
         # 3. Detect gap
         gap: Optional[Dict[str, Any]] = None
         if latest_obs is not None:
             gap = find_unknown_gap(
-                latest_obs, now, settings_changed_times
+                latest_obs, now, [moment for _, moment in changes]
             )
             # If query failed, fail closed by treating gap as unknown
             # (Requirements 2.8, 4.12)
@@ -159,26 +148,58 @@ class GateHistory:
                 gap["unknown"] = True
 
         if gap is not None:
-            gap_summary = {"gap": gap, "skippedEvents": 0}
-            self.gaps.append(gap_summary)
-            if hasattr(self.ayon_client, "dispatch_event"):
-                try:
-                    res = self.ayon_client.dispatch_event(
-                        GATE_TOPIC,
-                        summary=gap_summary,
-                        finished=True,
-                    )
-                    event_id = None
-                    if hasattr(res, "data") and isinstance(res.data, dict):
-                        event_id = res.data.get("id")
-                    elif isinstance(res, dict):
-                        event_id = res.get("id")
-                    if event_id:
-                        self.current_gap_event_id = str(event_id)
-                except Exception as exc:
-                    logger.warning("Could not persist gap marker: %s", exc)
+            try:
+                self.record_gap(gap)
+            except Exception as exc:
+                logger.warning("Could not persist gap marker: %s", exc)
 
         return gap
+
+    def settings_changes(
+        self, addon_name: str, since: float | None, now: float
+    ) -> list[tuple[str | None, float]]:
+        """Read relevant settings audit events through the observation time."""
+        if not hasattr(self.ayon_client, "get_events"):
+            return []
+        query = {}
+        if since is not None:
+            query["newer_than"] = datetime.fromtimestamp(
+                since, timezone.utc
+            ).isoformat()
+        changes = []
+        for event in self.ayon_client.get_events(
+            topics=["settings.changed"],
+            fields=["id", "topic", "summary", "createdAt", "project"],
+            **query,
+        ):
+            summary = ensure_dict(event.get("summary"))
+            addon = summary.get("addon_name") or event.get("addon_name")
+            if (addon and addon != addon_name) or summary.get("site_id"):
+                continue
+            moment = to_seconds_safe(
+                event.get("createdAt") or event.get("created_at")
+            )
+            if moment is not None and moment <= now and (
+                since is None or moment >= since
+            ):
+                project = event.get("project") or event.get("project_name")
+                changes.append((project, moment))
+        return changes
+
+    def record_gap(self, gap: dict[str, Any]) -> None:
+        """Persist a gap before advancing the heartbeat."""
+        summary = {"gap": gap, "skippedEvents": 0}
+        if summary not in self.gaps:
+            self.gaps.append(summary)
+        if hasattr(self.ayon_client, "dispatch_event"):
+            res = self.ayon_client.dispatch_event(
+                GATE_TOPIC, summary=summary, finished=True
+            )
+            event_id = self._extract_event_id(res)
+            if not event_id:
+                raise RuntimeError("AYON did not confirm the gate gap marker")
+            self.current_gap_event_id = event_id
+            self.skipped_events_count = 0
 
     @staticmethod
     def _extract_event_id(res: Any) -> Optional[str]:
@@ -349,7 +370,11 @@ class GateHistory:
     ) -> Dict[str, Any]:
         """Classify toggle state at event creation time."""
         proj_hist = self.history.get(project_name, [])
-        return toggles_at(proj_hist, self.gaps, created_at)
+        gaps = [
+            entry for entry in self.gaps
+            if entry["gap"].get("project") in (None, project_name)
+        ]
+        return toggles_at(proj_hist, gaps, created_at)
 
 
 class SettingsWatcher:
@@ -382,6 +407,7 @@ class SettingsWatcher:
         self.clock = clock or time.time
         self.refresh_interval_s = float(refresh_interval_s)
         self.last_refresh_time: float = 0.0
+        self._refresh_lock = Lock()
         self.effective_by_project: Dict[str, Dict[str, Any]] = {}
         self.addon_name = addon_name
         self.addon_version = addon_version
@@ -454,7 +480,38 @@ class SettingsWatcher:
         Returns:
             Dict mapping project_name to effective toggles.
         """
-        now = float(self.clock())
+        with self._refresh_lock:
+            now = float(self.clock())
+            return self._refresh(now, self._settings_changes(now))
+
+    def refresh_if_changed(self) -> None:
+        """Check the audit stream before a job uses the cached settings."""
+        with self._refresh_lock:
+            now = float(self.clock())
+            changes = self._settings_changes(now)
+            if changes:
+                self._refresh(now, changes)
+
+    def _settings_changes(self, now: float) -> list[tuple[str | None, float]]:
+        history = self.gate_history
+        if history is None or history.last_observed_at is None:
+            return []
+        return history.settings_changes(
+            self.addon_name or "kitsu", history.last_observed_at, now
+        )
+
+    def _refresh(
+        self, now: float, changes: list[tuple[str | None, float]]
+    ) -> Dict[str, Dict[str, Any]]:
+        if self.gate_history:
+            by_project: dict[str | None, list[float]] = {}
+            for project, moment in changes:
+                by_project.setdefault(project, []).append(moment)
+            for project, moments in by_project.items():
+                gap = find_unknown_gap(min(moments), now, moments)
+                if project:
+                    gap["project"] = project
+                self.gate_history.record_gap(gap)
 
         # 1. Read studio settings
         studio_settings: Optional[Dict[str, Any]] = None

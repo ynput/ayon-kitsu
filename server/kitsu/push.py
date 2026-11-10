@@ -349,6 +349,16 @@ async def delete_project(
         )
 
 
+def _is_outbound_creation(entity: EntityDict, project_name: str) -> bool:
+    """Tell whether the outbound job is responsible for pairing this entity."""
+    marker = (entity.get("data") or {}).get("ayon_outbound_creation")
+    return (
+        isinstance(marker, dict)
+        and marker.get("project") == project_name
+        and bool(marker.get("job_id"))
+    )
+
+
 async def sync_folder(
     addon: "KitsuAddon",
     user: "UserEntity",
@@ -361,6 +371,13 @@ async def sync_folder(
         entity_dict["id"],
         existing_folders,
     )
+    if target_folder is None and _is_outbound_creation(
+        entity_dict, project.name
+    ):
+        logging.info(
+            f"Waiting for outbound pairing of folder {entity_dict['id']}"
+        )
+        return
 
     # Add description to attrib data
     data: dict[str, str | int | None] | None = entity_dict.get("data", {})
@@ -516,17 +533,24 @@ async def sync_task(
     existing_folders: dict[str, Any],
     entity_dict: "EntityDict",
 ):
-    if "task_status_name" in entity_dict:
-        await ensure_task_status(project, entity_dict["task_status_name"])
-
-    if "task_type_name" in entity_dict:
-        await ensure_task_type(project, entity_dict["task_type_name"])
-
     target_task = await get_task_by_kitsu_id(
         project.name,
         entity_dict["id"],
         existing_tasks,
     )
+    if target_task is None and _is_outbound_creation(
+        entity_dict, project.name
+    ):
+        logging.info(
+            f"Waiting for outbound pairing of task {entity_dict['id']}"
+        )
+        return
+
+    if "task_status_name" in entity_dict:
+        await ensure_task_status(project, entity_dict["task_status_name"])
+
+    if "task_type_name" in entity_dict:
+        await ensure_task_type(project, entity_dict["task_type_name"])
 
     # Add description to attrib data
     data: dict[str, str | int | None] | None = entity_dict.get("data", {})

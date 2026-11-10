@@ -224,55 +224,59 @@ def handle_creation(ctx: JobContext) -> JobResult:
         }
 
     name = str(ayon_entity.get("name") or "")
-    kitsu_id = str(
-        (ayon_entity.get("data") or {}).get("kitsuId") or ""
-    ).strip()
     task_type: Optional[str] = (
         str(ayon_entity.get("taskType") or ayon_entity.get("task_type") or "")
         if is_task
         else None
     )
     folder_type = None if is_task else default_entity_type
+    marker_key = "ayon_outbound_creation"
+    origin = {"job_id": ctx.job_id, "project": project_name}
 
     def _plan(siblings: List[Dict[str, Any]], tts: List[Dict[str, Any]]):
         return plan_creation(
             name=name,
             folder_type=folder_type,
             task_type=task_type,
-            kitsu_id=kitsu_id or None,
             parent=parent_info,
             siblings=siblings,
             kitsu_task_types=tts,
         )
 
-    # 4. Preliminary plan without Kitsu reads (already paired, type,
-    # parent rule). Tasks need task types, so only check pairing first.
-    if kitsu_id or not is_task:
-        prelim = _plan([], [])
-        if prelim["action"] == "skip":
-            return _skip(prelim["reason"])
     if is_task and not (parent_info or {}).get("kitsu_id"):
         return _skip(_plan([], [])["reason"])
 
-    # 4. Fetch Kitsu task types and siblings, then plan (11.2, 11.9)
+    # 4. Validate the destination, then look for an earlier POST or duplicates.
     try:
+        task_types = ctx.writer.task_types(kitsu_project_id) if is_task else []
+        prelim = _plan([], task_types)
+        if prelim["action"] == "skip":
+            return _skip(prelim["reason"])
+        scope = {
+            "project_id": kitsu_project_id,
+            "entity_type": prelim["entity_type"],
+            "parent_id": prelim["parent_id"],
+            "task_type_id": prelim.get("task_type_id"),
+        }
+        pending_scope = getattr(ctx, "pending_creation_scope", None)
+        if isinstance(pending_scope, dict) and pending_scope != scope:
+            return failed_result(
+                ctx,
+                "Kitsu creation scope changed after an unconfirmed request",
+                error_kind=ERROR_REJECTED,
+                entity_type=default_entity_type,
+            )
         if is_task:
-            task_types = ctx.writer.task_types(kitsu_project_id) or []
-            prelim = _plan([], task_types)
-            if prelim["action"] == "skip":
-                return _skip(prelim["reason"])
             siblings = ctx.writer.get_tasks_for_entity(
                 prelim["parent_id"],
                 parent_type=(parent_info or {}).get("folder_type"),
             )
-            plan = _plan(siblings or [], task_types)
         else:
             siblings = ctx.writer.get_siblings(
                 entity_type=prelim["entity_type"],
                 project_id=kitsu_project_id,
                 parent_id=prelim["parent_id"],
             )
-            plan = _plan(siblings or [], [])
     except KitsuWriterError as exc:
         return failed_result(
             ctx,
@@ -283,15 +287,29 @@ def handle_creation(ctx: JobContext) -> JobResult:
             entity_type=default_entity_type,
         )
 
-    if plan["action"] == "skip":
-        return _skip(plan["reason"])
+    matches = [
+        sibling for sibling in siblings or []
+        if (sibling.get("data") or {}).get(marker_key) == origin
+    ]
+    if len(matches) > 1:
+        return failed_result(
+            ctx, "More than one Kitsu entity matches this creation job",
+            error_kind=ERROR_REJECTED,
+            entity_type=default_entity_type,
+        )
+    recovered = matches[0] if matches else None
+    if not recovered:
+        plan = _plan(siblings or [], task_types)
+        if plan["action"] == "skip":
+            return _skip(plan["reason"])
 
-    target_type = "Task" if is_task else plan["entity_type"]
-    target_name = plan["name"]
+    target_type = "Task" if is_task else prelim["entity_type"]
+    target_name = prelim["name"]
 
     # 5. Loop guard check
-    guard = ctx.loop_guard_check(entity_id, "entity_creation")
-    if not guard["allowed"]:
+    if not recovered and not ctx.loop_guard_check(
+        entity_id, "entity_creation"
+    )["allowed"]:
         return JobResult(
             decision=DECISION_SKIPPED,
             details={
@@ -316,24 +334,40 @@ def handle_creation(ctx: JobContext) -> JobResult:
     new_kitsu_id: Optional[str] = None
     try:
         try:
-            if is_task:
+            if not recovered:
+                ctx.pending_creation_scope = scope
+            if recovered:
+                created = recovered
+            elif is_task:
                 created = ctx.writer.create_task(
-                    entity_id=plan["parent_id"],
-                    task_type_id=plan["task_type_id"],
+                    entity_id=prelim["parent_id"],
+                    task_type_id=prelim["task_type_id"],
                     name=target_name,
                     project_id=kitsu_project_id,
+                    data={marker_key: origin},
                 )
             else:
                 created = ctx.writer.create_entity(
                     entity_type=target_type,
                     project_id=kitsu_project_id,
                     name=target_name,
-                    parent_id=plan["parent_id"],
+                    parent_id=prelim["parent_id"],
+                    data={marker_key: origin},
                 )
-            commit_fn = getattr(ctx, "loop_guard_commit", None)
-            if callable(commit_fn):
-                commit_fn()
+            if (
+                not created or not created.get("id")
+                or (created.get("data") or {}).get(marker_key) != origin
+            ):
+                raise KitsuWriterError(
+                    ERROR_REJECTED,
+                    "Kitsu did not confirm the creation marker",
+                    retryable=True,
+                )
+            if not recovered and ctx.loop_guard_commit:
+                ctx.loop_guard_commit()
         except KitsuWriterError as exc:
+            if not exc.retryable:
+                ctx.pending_creation_scope = None
             unwritten = {"name": target_name}
             return failed_result(
                 ctx,
@@ -346,6 +380,32 @@ def handle_creation(ctx: JobContext) -> JobResult:
             )
 
         new_kitsu_id = str((created or {}).get("id") or "")
+        if recovered:
+            try:
+                owners = ctx.identity_resolver.get_kitsu_owners(
+                    project_name, new_kitsu_id
+                )
+            except Exception as exc:
+                return failed_result(
+                    ctx,
+                    f"Could not verify recovered Kitsu entity owner: {exc}",
+                    retryable=True,
+                    error_kind=ERROR_UNREACHABLE,
+                    kitsu_id=new_kitsu_id,
+                    entity_type=target_type,
+                )
+            owner_key = "tasks" if is_task else "folders"
+            if any(
+                set(records) - ({entity_id} if kind == owner_key else set())
+                for kind, records in owners.items()
+            ):
+                return failed_result(
+                    ctx,
+                    "Recovered Kitsu entity has a different AYON owner",
+                    error_kind=ERROR_REJECTED,
+                    kitsu_id=new_kitsu_id,
+                    entity_type=target_type,
+                )
         writes: List[Dict[str, Any]] = [
             {
                 "field": "kitsuId",
@@ -384,16 +444,18 @@ def handle_creation(ctx: JobContext) -> JobResult:
                 writes=writes,
                 not_written={"data.kitsuId": new_kitsu_id},
             )
+        ctx.pending_creation_scope = None
     finally:
         if proc and hasattr(proc, "finish_in_flight_creation"):
             proc.finish_in_flight_creation(new_kitsu_id)
 
     # 8. Applied
+    verb = "recovered" if recovered else "created"
     applied_details: Dict[str, Any] = {
         "kitsu_entity_type": target_type,
         "kitsu_id": new_kitsu_id,
         "writes": writes,
-        "message": f"created {target_type} '{target_name}'",
+        "message": f"{verb} {target_type} '{target_name}'",
     }
     if not username:
         applied_details["no_user"] = True

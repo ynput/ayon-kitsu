@@ -258,7 +258,7 @@ SKIP_DISABLED_NO_HISTORY = (
 )
 #: Requirement 4.12.
 SKIP_UNKNOWN_TOGGLE_STATE = (
-    "toggle state was unknown while the Processor was stopped"
+    "toggle state was unknown between Processor settings observations"
 )
 #: Requirement 2.3. Fields: ``project_name``.
 SKIP_MASTER_DISABLED = "outbound sync disabled for project {project_name}"

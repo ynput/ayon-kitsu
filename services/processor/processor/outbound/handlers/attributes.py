@@ -10,6 +10,7 @@ import logging
 from typing import Any, Dict, List
 
 from ..constants import (
+    CONFLICT_POLICY_AYON_WINS,
     DECISION_APPLIED,
     DECISION_CONFLICT,
     DECISION_SKIPPED,
@@ -156,13 +157,6 @@ def handle_attributes(ctx: JobContext) -> JobResult:
     else:
         own_attrib = []
 
-    # 5. Plan attribute write
-    plan = plan_attribute_write(changed, effective_attrib, own_attrib)
-    planned_fields = dict(plan["fields"])
-    skipped = dict(plan["skipped"])
-    errors = list(plan["errors"])
-
-    # 6. Conflict checks per changed attribute
     fallback_start = (
         old_values.get("frameStart")
         if old_values and "frameStart" in old_values
@@ -171,7 +165,42 @@ def handle_attributes(ctx: JobContext) -> JobResult:
     current_view = kitsu_attrib_view(
         current_kitsu, fallback_frame_start=fallback_start
     )
+    raw_data = (
+        current_kitsu.get("data") if isinstance(current_kitsu, dict) else None
+    )
+    if isinstance(raw_data, dict) and raw_data.get("frame_out") == 0:
+        # Inbound's view treats a zero end as absent; it is still stored.
+        current_view["frameEnd"] = 0
 
+    # Under Kitsu-wins, a one-sided edit must not replace the untouched
+    # counterpart. Use AYON's effective value to fill in a missing Kitsu
+    # value, and keep skipping pairs with no effective AYON counterpart.
+    preserved = set()
+    if ctx.conflict_policy != CONFLICT_POLICY_AYON_WINS:
+        for first, second in (
+            ("frameStart", "frameEnd"),
+            ("resolutionWidth", "resolutionHeight"),
+        ):
+            for edited, untouched in ((first, second), (second, first)):
+                ayon_value = effective_attrib.get(untouched)
+                kitsu_value = current_view.get(untouched)
+                if (
+                    edited in changed
+                    and untouched not in changed
+                    and ayon_value is not None
+                    and kitsu_value is not None
+                    and kitsu_value != ayon_value
+                ):
+                    effective_attrib[untouched] = kitsu_value
+                    preserved.add(untouched)
+
+    # 5. Plan attribute write
+    plan = plan_attribute_write(changed, effective_attrib, own_attrib)
+    planned_fields = dict(plan["fields"])
+    skipped = dict(plan["skipped"])
+    errors = list(plan["errors"])
+
+    # 6. Conflict checks per changed attribute
     decisions: Dict[str, Any] = {}
     conflicts: Dict[str, Any] = {}
     overwrites: Dict[str, Any] = {}
@@ -453,7 +482,12 @@ def handle_attributes(ctx: JobContext) -> JobResult:
             )
 
     # 9. Requirement 8.3: invalid frame range writes others, then fails
-    if errors:
+    # A preserved counterpart can make the proposed range invalid. If
+    # conflict policy already rejected that edit, report the conflict.
+    rejected_recomposition = has_frame_conflict and bool(
+        preserved.intersection(("frameStart", "frameEnd"))
+    )
+    if errors and not rejected_recomposition:
         err_msg = errors[0]
         not_written = {
             k: changed[k] for k in ("frameStart", "frameEnd") if k in changed

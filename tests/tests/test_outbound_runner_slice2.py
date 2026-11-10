@@ -15,6 +15,7 @@ from processor.outbound.constants import (
 )
 from processor.outbound.kitsu_writer import (
     ERROR_SERVER_ERROR,
+    KitsuWriter,
     KitsuWriterError,
 )
 
@@ -323,6 +324,52 @@ def test_attribute_refresh_failure_propagates_without_stale_put():
     assert job["status"] == "pending"
 
 
+def test_attribute_change_before_put_rechecks_conflict(monkeypatch):
+    """The fresh read can invalidate a write planned from the first read."""
+    h = build_runner(SLICE2_CATEGORIES)
+    h.store.entities[("folder", "shot")] = {
+        "id": "shot",
+        "data": {"kitsuId": "kt-shot"},
+        "attrib": {"fps": 25.0},
+        "ownAttrib": ["fps"],
+    }
+    h.writer.tasks["kt-shot"] = {
+        "id": "kt-shot",
+        "type": "Shot",
+        "project_id": KITSU_PROJECT,
+        "data": {"fps": 24.0},
+    }
+    writer = KitsuWriter(client=MagicMock())
+
+    def read_concurrent_edit(kitsu_id):
+        h.writer.tasks[kitsu_id]["data"] = {"fps": 30.0}
+        return h.writer.get_entity(kitsu_id)
+
+    monkeypatch.setattr(writer, "get_entity", read_concurrent_edit)
+    monkeypatch.setattr(writer, "_call", MagicMock())
+    monkeypatch.setattr(
+        h.writer, "update_entity_fields", writer.update_entity_fields
+    )
+    h.store.add_source_event(
+        event_id="evt-attr-concurrent",
+        topic=TOPIC_FOLDER_ATTRIB_CHANGED,
+        project_name=PROJECT,
+        created_at=1010.0,
+        payload={"oldValue": {"fps": 24.0}, "newValue": {"fps": 25.0}},
+        summary={"entityId": "shot"},
+        user="artist",
+    )
+    assert h.runner.poll_once()
+    assert h.store.jobs["job-1"]["status"] == "pending"
+    writer._call.assert_not_called()
+
+    h.clock.advance(RETRY_DELAY_S + 1)
+    assert h.runner.poll_once()
+    assert h.store.jobs["job-1"]["summary"]["decision"] == "conflict"
+    writer._call.assert_not_called()
+    assert h.writer.tasks["kt-shot"]["data"]["fps"] == 30.0
+
+
 def test_assignees_fetch_failure_fails_retryably():
     """Finding 2: Failed AYON users lookup fails job retryably."""
     clock, store, writer, runner = _setup_slice2_runner()
@@ -536,6 +583,44 @@ def test_attribute_empty_own_attrib_treated_as_inherited():
     assert "inherited" in job["description"]
 
 
+def test_unconfirmed_assignment_keeps_existing_assignee(monkeypatch):
+    """A silent rejection of the replacement leaves the old assignee intact."""
+    _, store, writer, runner = _setup_slice2_runner()
+    store.users = [{"name": name, "kitsu_id": name} for name in ("alice", "bob")]
+    writer.persons = [
+        {"id": name, "name": name.title()} for name in ("alice", "bob")
+    ]
+    store.entities[("task", "task-1")] = {
+        "id": "task-1",
+        "data": {"kitsuId": "kt-task"},
+    }
+    writer.tasks["kt-task"] = {
+        "id": "kt-task",
+        "type": "Task",
+        "project_id": KITSU_PROJECT,
+        "assignees": ["bob"],
+    }
+    writer.assign = KitsuWriter(client=MagicMock()).assign
+    monkeypatch.setattr("gazu.raw.put", MagicMock(return_value=[]))
+    store.add_source_event(
+        event_id="evt-assignment-rejected",
+        topic=TOPIC_TASK_ASSIGNEES_CHANGED,
+        project_name=PROJECT,
+        created_at=1010.0,
+        payload={"oldValue": ["bob"], "newValue": ["alice"]},
+        summary={"entityId": "task-1"},
+    )
+
+    assert runner.poll_once()
+
+    job = store.jobs["job-1"]
+    assert job["status"] == "failed"
+    assert "did not confirm assigning" in job["description"]
+    assert job["summary"]["writes"] == []
+    assert writer.tasks["kt-task"]["assignees"] == ["bob"]
+    assert writer.unassigned == []
+
+
 def test_assignees_partial_write_retry_succeeds():
     """Finding 7: Partial assignee write retries without false conflict."""
     clock, store, writer, runner = _setup_slice2_runner()
@@ -601,6 +686,68 @@ def test_assignees_partial_write_retry_succeeds():
     assert "Applied:" in job["description"]
 
 
+@pytest.mark.parametrize("concurrent_edit", [False, True])
+def test_assignee_retry_reconciles_only_the_lost_request(
+    monkeypatch, concurrent_edit
+):
+    """A retry accounts for the timed-out assignment alone."""
+    clock, store, writer, runner = _setup_slice2_runner()
+    store.users = [
+        {"name": name, "kitsu_id": f"p-{name}"}
+        for name in ("alice", "bob", "cara")
+    ]
+    writer.persons = [
+        {"id": f"p-{name}", "name": name.title()}
+        for name in ("alice", "bob", "cara")
+    ]
+    store.entities[("task", "task")] = {
+        "id": "task", "data": {"kitsuId": "kt-task"}
+    }
+    writer.tasks["kt-task"] = {
+        "id": "kt-task",
+        "type": "Task",
+        "project_id": KITSU_PROJECT,
+        "assignees": ["p-bob"],
+    }
+    assign = writer.assign
+
+    def assign_then_timeout(task, person_id):
+        assign(task, person_id)
+        raise KitsuWriterError(ERROR_SERVER_ERROR, "response lost")
+
+    monkeypatch.setattr(writer, "assign", assign_then_timeout)
+    store.add_source_event(
+        event_id="evt-assign-timeout",
+        topic=TOPIC_TASK_ASSIGNEES_CHANGED,
+        project_name=PROJECT,
+        created_at=1010.0,
+        payload={"oldValue": ["bob"], "newValue": ["alice"]},
+        summary={"entityId": "task"},
+        user="artist",
+    )
+    assert runner.poll_once()
+    job = store.jobs["job-1"]
+    assert job["status"] == "pending"
+    assert job["summary"]["pendingAssigneeWrite"]["write"]["person_id"] == "p-alice"
+    assert job["summary"]["writes"] == []
+    if concurrent_edit:
+        writer.tasks["kt-task"]["assignees"].append("p-cara")
+
+    clock.advance(RETRY_DELAY_S + 1)
+    assert runner.poll_once()
+    assert job["status"] == "finished"
+    assert len(writer.assigned) == 1
+    assert job["summary"]["pendingAssigneeWrite"] is None
+    if concurrent_edit:
+        assert job["summary"]["decision"] == "conflict"
+        assert set(writer.tasks["kt-task"]["assignees"]) == {
+            "p-alice", "p-bob", "p-cara"
+        }
+    else:
+        assert job["summary"]["decision"] == "applied"
+        assert writer.tasks["kt-task"]["assignees"] == ["p-alice"]
+
+
 def test_assignee_description_zou_person_model_sorted():
     """Findings 8 & 9: Zou person records sorted by full name."""
     clock, store, writer, runner = _setup_slice2_runner()
@@ -661,9 +808,19 @@ def test_assignee_description_zou_person_model_sorted():
     )
 
 
-def test_composite_resolution_unchanged_counterpart_uses_effective():
-    """Requirement 8.2, 8.8: unchanged height uses AYON effective."""
-    clock, store, writer, runner = _setup_slice2_runner()
+@pytest.mark.parametrize(
+    ("policy", "kitsu_data", "expected"),
+    [
+        ("kitsu_wins", {"resolution": "1280x720"}, "1920x720"),
+        ("kitsu_wins", {}, "1920x1080"),
+        ("ayon_wins", {"resolution": "1280x720"}, "1920x1080"),
+    ],
+)
+def test_resolution_width_change_preserves_kitsu_height(
+    policy, kitsu_data, expected
+):
+    """Protect Kitsu height under Kitsu-wins, with AYON as a fallback."""
+    _, store, writer, runner = _setup_slice2_runner(policy=policy)
 
     store.entities[("folder", "fold-res")] = {
         "id": "fold-res",
@@ -675,7 +832,7 @@ def test_composite_resolution_unchanged_counterpart_uses_effective():
         "id": "kt-fold-res",
         "type": "Shot",
         "project_id": "kitsu-proj-1",
-        "data": {"resolution": "1280x720"},
+        "data": dict(kitsu_data),
     }
 
     store.add_source_event(
@@ -684,7 +841,7 @@ def test_composite_resolution_unchanged_counterpart_uses_effective():
         project_name="test-project",
         created_at=1020.0,
         payload={
-            "oldValue": {"resolutionWidth": 1280},
+            "oldValue": {"resolutionWidth": 1280 if kitsu_data else None},
             "newValue": {"resolutionWidth": 1920},
         },
         summary={"entityId": "fold-res"},
@@ -697,11 +854,7 @@ def test_composite_resolution_unchanged_counterpart_uses_effective():
     assert job["status"] == "finished"
     assert "Applied:" in job["description"]
     assert len(writer.updated_fields) == 1
-    # Must write 1920x1080 (AYON effective height), NOT 1920x720
-    assert (
-        writer.updated_fields[0]["fields"].get("data.resolution")
-        == "1920x1080"
-    )
+    assert writer.tasks["kt-fold-res"]["data"]["resolution"] == expected
 
 
 def test_composite_resolution_conflict_kitsu_wins_omits_resolution_write():
@@ -742,9 +895,19 @@ def test_composite_resolution_conflict_kitsu_wins_omits_resolution_write():
     assert len(writer.updated_fields) == 0
 
 
-def test_composite_frame_range_conflict_kitsu_wins_omits_frame_writes():
-    """Requirement 8.2, 9.2: conflict on frameStart writes nothing."""
-    clock, store, writer, runner = _setup_slice2_runner()
+@pytest.mark.parametrize(
+    ("old_start", "kitsu_end", "status", "message"),
+    [
+        (100, 50, "finished", "Conflict:"),
+        (0, 50, "failed", "invalid frame range"),
+        (0, 0, "failed", "invalid frame range"),
+    ],
+)
+def test_frame_start_change_does_not_write_past_kitsu_end(
+    old_start, kitsu_end, status, message
+):
+    """Preserve Kitsu when the changed start conflicts or exceeds its end."""
+    _, store, writer, runner = _setup_slice2_runner()
 
     store.entities[("folder", "fold-fr-c")] = {
         "id": "fold-fr-c",
@@ -756,7 +919,7 @@ def test_composite_frame_range_conflict_kitsu_wins_omits_frame_writes():
         "id": "kt-fold-fr-c",
         "type": "Shot",
         "project_id": "kitsu-proj-1",
-        "data": {"frame_in": 1, "frame_out": 50},
+        "data": {"frame_in": 0, "frame_out": kitsu_end},
     }
 
     store.add_source_event(
@@ -765,7 +928,7 @@ def test_composite_frame_range_conflict_kitsu_wins_omits_frame_writes():
         project_name="test-project",
         created_at=1040.0,
         payload={
-            "oldValue": {"frameStart": 100},
+            "oldValue": {"frameStart": old_start},
             "newValue": {"frameStart": 1001},
         },
         summary={"entityId": "fold-fr-c"},
@@ -775,8 +938,8 @@ def test_composite_frame_range_conflict_kitsu_wins_omits_frame_writes():
     ran = runner.poll_once()
     assert ran is True
     job = store.jobs["job-1"]
-    assert job["status"] == "finished"
-    assert "Conflict:" in job["description"]
+    assert job["status"] == status
+    assert message in job["description"]
     assert len(writer.updated_fields) == 0
 
 
@@ -1022,8 +1185,8 @@ def test_inbound_pull_on_conflict_supports_edit_and_concept():
             proc.pull_kitsu_entity("kt-bad-1", "unknown_type", {})
 
 
-def test_frame_range_writes_both_counterparts_when_different():
-    """Audit #3 P1: write effective counterpart when differing from kitsu."""
+def test_frame_end_change_preserves_kitsu_start():
+    """Recalculate frame count using the preserved Kitsu start."""
     clock, store, writer, runner = _setup_slice2_runner()
 
     store.entities[("folder", "fold-fr")] = {
@@ -1066,15 +1229,16 @@ def test_frame_range_writes_both_counterparts_when_different():
     ran = runner.poll_once()
     assert ran is True
 
-    # Both frame_in and frame_out should be updated to AYON effective values
     assert len(writer.updated_fields) == 1
-    call = writer.updated_fields[0]
-    assert call["fields"]["data.frame_in"] == 1001
-    assert call["fields"]["data.frame_out"] == 1050
+    assert writer.updated_fields[0]["fields"] == {
+        "data.frame_out": 1050,
+        "nb_frames": 1050,
+    }
+    assert writer.tasks["kt-fold-fr"]["data"]["frame_in"] == 1
 
 
-def test_frame_range_changed_endpoint_in_sync_corrects_counterpart():
-    """Audit #4 P1: in-sync changed endpoint still corrects counterpart."""
+def test_in_sync_frame_end_does_not_overwrite_kitsu_start():
+    """An already applied end edit should not reset the untouched start."""
     clock, store, writer, runner = _setup_slice2_runner()
 
     store.entities[("folder", "fold-fr2")] = {
@@ -1117,11 +1281,9 @@ def test_frame_range_changed_endpoint_in_sync_corrects_counterpart():
     ran = runner.poll_once()
     assert ran is True
 
-    assert len(writer.updated_fields) == 1
-    call = writer.updated_fields[0]
-    assert call["fields"]["data.frame_in"] == 1001
-    assert call["fields"]["nb_frames"] == 50
-    assert "data.frame_out" not in call["fields"]
+    assert writer.updated_fields == []
+    assert writer.tasks["kt-fold-fr2"]["data"]["frame_in"] == 1
+    assert "already in sync" in store.jobs["job-1"]["description"]
 
 
 def test_assignee_loop_guard_commits_immediately_per_mutation():

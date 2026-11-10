@@ -4,7 +4,7 @@ Validates: Requirements 6.1, 6.4, 6.8, 10.1, 10.3, 10.4, 13.6.
 """
 
 import time
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import gazu
 import requests
@@ -323,18 +323,34 @@ class KitsuWriter:
         """Assign a person to a Kitsu task (Requirement 7.4, 7.7)."""
         task_id = task.get("id") if isinstance(task, dict) else task
         # Gazu 0.9 sends a scalar task_ids; Zou requires a task ID list.
-        self._call(
+        affected = self._call(
             gazu.raw.put,
             f"actions/persons/{person_id}/assign",
             {"task_ids": [task_id]},
         )
+        if not isinstance(affected, list) or not any(
+            isinstance(item, dict) and item.get("id") == task_id
+            for item in affected
+        ):
+            raise KitsuWriterError(
+                ERROR_REJECTED,
+                f"Kitsu did not confirm assigning {person_id} to {task_id}",
+            )
 
     def unassign(
         self, task: Dict[str, Any] | str, person_id: str
     ) -> None:
         """Unassign a person from a Kitsu task (Requirement 7.4, 7.7)."""
         task_id = task.get("id") if isinstance(task, dict) else task
-        self._call(gazu.task.clear_assignations, [task_id], person_id)
+        affected = self._call(
+            gazu.task.clear_assignations, [task_id], person_id
+        )
+        if not isinstance(affected, list) or task_id not in affected:
+            raise KitsuWriterError(
+                ERROR_REJECTED,
+                f"Kitsu did not confirm unassigning {person_id} "
+                f"from {task_id}",
+            )
 
     def update_entity_fields(
         self,
@@ -365,6 +381,20 @@ class KitsuWriter:
                 if is_task
                 else self.get_entity(kitsu_id)
             )
+            before_data = entity.get("data") or {}
+            fresh_data = fresh_entity.get("data") or {}
+            for field in fields:
+                if field.startswith("data."):
+                    key = field.removeprefix("data.")
+                    changed = before_data.get(key) != fresh_data.get(key)
+                else:
+                    changed = entity.get(field) != fresh_entity.get(field)
+                if changed:
+                    raise KitsuWriterError(
+                        ERROR_REJECTED,
+                        f"Kitsu changed {field} before writing to {kitsu_id}",
+                        retryable=True,
+                    )
         else:
             kitsu_id = str(entity)
             is_task = False
@@ -432,76 +462,64 @@ class KitsuWriter:
         project_id: str,
         name: str,
         parent_id: Optional[str] = None,
+        *,
+        data: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Create a Kitsu folder entity (Episode, Sequence, Shot, Asset)."""
+        base = f"data/projects/{project_id}"
+        body = {"name": name, "data": data}
         if entity_type == "Episode":
-            return self._call(gazu.shot.new_episode, project_id, name)
-        if entity_type == "Sequence":
-            return self._call(
-                gazu.shot.new_sequence,
-                project_id,
-                name,
-                episode=parent_id,
+            path = f"{base}/episodes"
+        elif entity_type == "Sequence":
+            path = f"{base}/sequences"
+            if parent_id:
+                body["episode_id"] = parent_id
+        elif entity_type == "Shot":
+            path = f"{base}/shots"
+            body["sequence_id"] = parent_id
+        elif entity_type == "Asset":
+            path = f"{base}/asset-types/{parent_id}/assets/new"
+        else:
+            raise KitsuWriterError(
+                ERROR_REJECTED,
+                f"Unsupported entity_type for creation: {entity_type}",
             )
-        if entity_type == "Shot":
-            return self._call(
-                gazu.shot.new_shot, project_id, parent_id, name
-            )
-        if entity_type == "Asset":
-            return self._call(
-                gazu.asset.new_asset, project_id, parent_id, name
-            )
-        raise KitsuWriterError(
-            ERROR_REJECTED,
-            f"Unsupported entity_type for creation: {entity_type}",
-            retryable=False,
-        )
+        return self._call(gazu.raw.post, path, body)
 
     def create_task(
         self,
         entity_id: str,
         task_type_id: str,
-        name: Optional[str] = None,
-        project_id: Optional[str] = None,
-        task_status: Optional[Union[str, Dict[str, Any]]] = None,
+        name: str,
+        project_id: str,
+        *,
+        data: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Create a Kitsu task on a parent entity (Requirement 11.2)."""
-        entity_arg: Union[str, Dict[str, Any]] = entity_id
-        if project_id:
-            entity_arg = {"id": entity_id, "project_id": project_id}
-        elif isinstance(entity_id, str):
-            try:
-                parent = self.get_entity(entity_id)
-                if isinstance(parent, dict) and parent.get("project_id"):
-                    entity_arg = parent
-            except Exception:
-                pass
-
-        if not task_status:
-            try:
-                statuses = self.task_statuses() or []
-                for st in statuses:
-                    if isinstance(st, dict):
-                        if st.get("is_default") or st.get("default"):
-                            task_status = st
-                            break
-                        st_name = str(st.get("name") or "").lower()
-                        if st_name in ("todo", "to do"):
-                            task_status = st
-                            break
-                if not task_status and statuses:
-                    task_status = statuses[0]
-            except Exception:
-                task_status = None
-
-        call_kwargs: Dict[str, Any] = {}
-        if name:
-            call_kwargs["name"] = name
-        if task_status:
-            call_kwargs["task_status"] = task_status
-
+        statuses = self.task_statuses()
+        status = next(
+            (
+                row for row in statuses
+                if row.get("is_default")
+                or row.get("default")
+                or str(row.get("name", "")).lower() in ("todo", "to do")
+            ),
+            statuses[0] if statuses else None,
+        )
+        if not status:
+            raise KitsuWriterError(ERROR_REJECTED, "No Kitsu task statuses")
         return self._call(
-            gazu.task.new_task, entity_arg, task_type_id, **call_kwargs
+            gazu.raw.post,
+            "data/tasks",
+            {
+                "project_id": project_id,
+                "entity_id": entity_id,
+                "task_type_id": task_type_id,
+                "task_status_id": status["id"],
+                "assignees": [],
+                "name": name or "main",
+                "data": data,
+            },
         )
 
     def get_siblings(

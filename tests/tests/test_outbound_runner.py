@@ -28,6 +28,43 @@ def _setup_runner(clock=None, store=None, writer=None):
     return h.clock, h.store, h.writer, h.runner, h.processor
 
 
+@pytest.mark.parametrize("refresh_before_poll", [False, True])
+def test_job_skips_unobserved_toggle_changes(refresh_before_poll):
+    """A disable and re-enable between polls leaves a durable gate gap."""
+    h = build_runner()
+    for index, moment in enumerate((1005.0, 1015.0)):
+        h.store.other_events.append(
+            {
+                "id": f"setting-{index}",
+                "topic": "settings.changed",
+                "createdAt": moment,
+                "project": PROJECT,
+                "summary": {"addon_name": "kitsu"},
+            }
+        )
+    h.store.add_source_event(
+        event_id="evt-between-toggles",
+        topic="entity.task.status_changed",
+        project_name=PROJECT,
+        created_at=1010.0,
+        summary={"taskId": "task"},
+    )
+    h.clock.advance(20)
+    if refresh_before_poll:
+        h.watcher.refresh()
+
+    assert h.runner.poll_once()
+    assert h.store.jobs["job-1"]["summary"]["decision"] == "skipped"
+    assert "toggle state was unknown" in h.store.jobs["job-1"]["description"]
+    assert h.writer.comments == []
+
+    history = GateHistory(h.store, clock=h.clock)
+    history.load()
+    assert history.toggles_at(PROJECT, 1010.0)["state"] == "unknown_gap"
+    assert history.toggles_at(PROJECT, 1004.0)["state"] == "snapshot"
+    assert history.toggles_at("unrelated", 1010.0)["state"] == "no_history"
+
+
 def test_in_progress_before_kitsu_calls():
     """Job is set in_progress before any Kitsu write request (Req 4.2)."""
     clock, store, writer, runner, _ = _setup_runner()
@@ -318,6 +355,40 @@ def test_stale_job_reaped():
     job = store.jobs["job-other"]
     assert job["status"] == "failed"
     assert "Abandoned by kitsu-processor-other-host" in job["description"]
+
+
+def test_recovery_and_reaping_follow_runner_topic():
+    """An isolated runner must leave stale and interrupted real jobs alone."""
+    clock, store, _, runner, _ = _setup_runner()
+    runner.TARGET_TOPIC = "kitsu.live_validation.isolated"
+    for prefix, topic in (
+        ("real", TARGET_TOPIC),
+        ("test", runner.TARGET_TOPIC),
+    ):
+        for suffix, sender in (
+            ("own", runner.sender),
+            ("foreign", "other-processor"),
+        ):
+            job_id = f"{prefix}-{suffix}"
+            store.jobs[job_id] = {
+                "id": job_id,
+                "topic": topic,
+                "sender": sender,
+                "status": "in_progress",
+                "summary": {"attempt": 1},
+                "updatedAt": clock() - 600,
+                "project_name": PROJECT,
+            }
+
+    runner.recover_interrupted()
+    runner.reap_stale()
+
+    assert store.jobs["real-own"]["status"] == "in_progress"
+    assert store.jobs["real-foreign"]["status"] == "in_progress"
+    assert store.jobs["real-foreign"]["sender"] == "other-processor"
+    assert store.jobs["test-own"]["status"] == "pending"
+    assert runner.held_job["job"]["id"] == "test-own"
+    assert store.jobs["test-foreign"]["status"] == "failed"
 
 
 @pytest.mark.parametrize("pull_fails", [False, True])

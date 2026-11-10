@@ -10,6 +10,7 @@ import pytest
 
 from processor.outbound.constants import (
     ENROLLED_TOPICS,
+    RETRY_DELAY_S,
     SLICE_3_TOPICS,
     TOPIC_FOLDER_CREATED,
     TOPIC_FOLDER_DELETED,
@@ -150,6 +151,62 @@ def test_create_shot_stores_kitsu_id():
     assert created["project_id"] == KITSU_PROJECT
     shot = store.entities[("folder", "fold-shot")]
     assert shot["data"]["kitsuId"] == created["id"]
+
+
+@pytest.mark.parametrize("interference", [None, "moved", "different_owner"])
+def test_create_retry_recovers_shot_after_lost_response(
+    monkeypatch, interference
+):
+    """Retry pairs its marked shot without issuing a second POST."""
+    clock, store, writer, runner = _setup()
+    _seq_parent(store)
+    _shot(store)
+    _add_event(store, "evt-c", TOPIC_FOLDER_CREATED, "fold-shot")
+    create = writer.create_entity
+
+    def create_then_timeout(**kwargs):
+        create(**kwargs)
+        raise KitsuWriterError(ERROR_UNREACHABLE, "response lost")
+
+    monkeypatch.setattr(writer, "create_entity", create_then_timeout)
+    assert runner.poll_once()
+    job = _only_job(store)
+    assert job["status"] == "pending"
+    shot = store.entities[("folder", "fold-shot")]
+    assert not shot["data"]
+    created_id = writer.created[0]["id"]
+    if interference == "moved":
+        store.entities[("folder", "fold-seq-2")] = {
+            "id": "fold-seq-2",
+            "folderType": "Sequence",
+            "data": {"kitsuId": "kt-seq-2"},
+        }
+        writer.tasks["kt-seq-2"] = {
+            "id": "kt-seq-2",
+            "type": "Sequence",
+            "project_id": KITSU_PROJECT,
+        }
+        shot["parentId"] = "fold-seq-2"
+    elif interference == "different_owner":
+        store.entities[("folder", "other-shot")] = {
+            "id": "other-shot",
+            "data": {"kitsuId": created_id},
+        }
+
+    clock.advance(RETRY_DELAY_S + 1)
+    assert runner.poll_once()
+    assert len(writer.created) == 1
+    if interference is None:
+        assert job["status"] == "finished"
+        assert shot["data"]["kitsuId"] == created_id
+    else:
+        assert job["status"] == "failed"
+        assert not shot["data"]
+        reason = (
+            "scope changed" if interference == "moved"
+            else "different AYON owner"
+        )
+        assert reason in job["description"]
 
 
 def test_create_already_paired_skips():

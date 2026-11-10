@@ -163,7 +163,7 @@ def test_creation_inbound_protected_before_post_response():
         # Inbound callback arrives while HTTP POST is executing:
         active = proc.wait_for_in_flight_creation("kt-new", timeout=0.01)
         observed_active_during_post.append(active)
-        return {"id": "kt-new"}
+        return {"id": "kt-new", "data": kw["data"]}
 
     writer.create_entity = mock_create_entity
 
@@ -190,6 +190,7 @@ def test_creation_inbound_protected_before_post_response():
 
     ctx = MagicMock()
     ctx.category = "entity_creation"
+    ctx.job_id = "creation-job"
     ctx.event = {
         "topic": TOPIC_FOLDER_CREATED,
         "payload": {

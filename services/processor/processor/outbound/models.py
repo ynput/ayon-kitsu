@@ -25,6 +25,13 @@ class WriteRecord(TypedDict, total=False):
     person_name: str
 
 
+class PendingAssigneeWrite(TypedDict):
+    """An assignee request whose outcome was unknown when it returned."""
+
+    kitsu_id: str
+    write: WriteRecord
+
+
 def normalize_not_written(value: Any) -> dict[str, Any]:
     """Read unwritten values, accepting records persisted by older jobs.
 
@@ -68,6 +75,8 @@ class JobContext:
     loop_guard_discard: Callable[[], None] | None = None
     prior_writes: list[WriteRecord] = field(default_factory=list)
     prior_not_written: dict[str, Any] = field(default_factory=dict)
+    pending_assignee_write: PendingAssigneeWrite | None = None
+    pending_creation_scope: dict[str, str | None] | None = None
 
 
 @dataclass

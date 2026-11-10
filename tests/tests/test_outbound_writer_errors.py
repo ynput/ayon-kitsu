@@ -17,6 +17,7 @@ from processor.outbound.constants import (
 )
 from processor.outbound.kitsu_writer import (
     KitsuWriter,
+    KitsuWriterError,
     classify_kitsu_error,
 )
 
@@ -232,12 +233,13 @@ def test_writer_comment_status_args():
     finally:
         gazu.task.add_comment = orig_comment
 
+
 @pytest.mark.parametrize("task", ["task-100", {"id": "task-100"}])
 def test_writer_assign_sends_task_id_list(monkeypatch, task):
     """Assignment uses the collection payload required by Zou validation."""
     client = MagicMock()
     writer = KitsuWriter(client=client)
-    put = MagicMock(return_value=[])
+    put = MagicMock(return_value=[{"id": "task-100"}])
     monkeypatch.setattr("gazu.raw.put", put)
 
     writer.assign(task, "person-200")
@@ -260,7 +262,7 @@ def test_writer_unassign_passes_task_collection_to_gazu():
 
     def fake_clear_assignations(*args, **kwargs):
         captured_args.append((args, kwargs))
-        return []
+        return ["task-100"]
 
     orig_clear = gazu.task.clear_assignations
     try:
@@ -274,4 +276,27 @@ def test_writer_unassign_passes_task_collection_to_gazu():
         assert kwargs.get("client") == fake_client
     finally:
         gazu.task.clear_assignations = orig_clear
+
+
+@pytest.mark.parametrize(
+    ("operation", "endpoint", "response"),
+    [
+        ("assign", "gazu.raw.put", []),
+        ("assign", "gazu.raw.put", [{"id": "other-task"}]),
+        ("unassign", "gazu.task.clear_assignations", []),
+        ("unassign", "gazu.task.clear_assignations", ["other-task"]),
+    ],
+)
+def test_assignee_mutation_must_confirm_task(
+    monkeypatch, operation, endpoint, response
+):
+    """Successful HTTP responses must acknowledge the requested task."""
+    writer = KitsuWriter(client=MagicMock())
+    monkeypatch.setattr(endpoint, MagicMock(return_value=response))
+
+    with pytest.raises(KitsuWriterError, match="did not confirm") as error:
+        getattr(writer, operation)("task-100", "person-200")
+
+    assert error.value.kind == ERROR_REJECTED
+    assert not error.value.retryable
 

@@ -171,6 +171,13 @@ def handle_task_assignees(ctx: JobContext) -> JobResult:
     current_ids = sorted(
         set(p.get("id") if isinstance(p, dict) else p for p in raw_assignees)
     )
+    pending = getattr(ctx, "pending_assignee_write", None)
+    if pending and pending["kitsu_id"] == kitsu_id:
+        write = pending["write"]
+        assigned = write["person_id"] in current_ids
+        if assigned == (write["action"] == "assign"):
+            prior_writes.append(write)
+    ctx.pending_assignee_write = None
     managed_current_ids = sorted(set(current_ids) & set(managed_ids))
 
     # 6. Conflict check against oldValue (accounting for prior writes)
@@ -181,7 +188,7 @@ def handle_task_assignees(ctx: JobContext) -> JobResult:
         old_list = raw_old if isinstance(raw_old, list) else [str(raw_old)]
         old_res = resolve_assignees(old_list, ayon_users, kitsu_persons)
         prev_set = set(old_res["resolved"].values())
-        for w in getattr(ctx, "prior_writes", []):
+        for w in prior_writes:
             if w.get("action") == "assign" and "person_id" in w:
                 prev_set.add(w["person_id"])
             elif w.get("action") == "unassign" and "person_id" in w:
@@ -299,61 +306,50 @@ def handle_task_assignees(ctx: JobContext) -> JobResult:
         p["id"]: p for p in kitsu_persons if isinstance(p, dict) and "id" in p
     }
 
-    writes: List[Dict[str, Any]] = list(prior_writes)
+    writes = list(prior_writes)
     commit_fn = getattr(ctx, "loop_guard_commit", None)
     cur_ids = set(current_ids)
+    operations = (
+        ("assign", ctx.writer.assign, to_add),
+        ("unassign", ctx.writer.unassign, to_remove),
+    )
     try:
-        for p_id in to_add:
-            b_names = sorted(
-                _person_name(persons_by_id.get(pid, {}), pid)
-                for pid in cur_ids
-            )
-            p_rec = persons_by_id.get(p_id) or {}
-            p_name = _person_name(p_rec, p_id)
-            ctx.writer.assign(kitsu_task, p_id)
-            cur_ids.add(p_id)
-            s_names = sorted(
-                _person_name(persons_by_id.get(pid, {}), pid)
-                for pid in cur_ids
-            )
-            writes.append(
-                {
+        for operation, send, person_ids in operations:
+            for person_id in person_ids:
+                next_ids = cur_ids.copy()
+                if operation == "assign":
+                    next_ids.add(person_id)
+                else:
+                    next_ids.discard(person_id)
+                write = {
                     "field": "assignees",
-                    "action": "assign",
-                    "person_id": p_id,
-                    "person_name": p_name,
-                    "before": b_names,
-                    "sent": s_names,
+                    "action": operation,
+                    "person_id": person_id,
+                    "person_name": _person_name(
+                        persons_by_id.get(person_id), person_id
+                    ),
+                    "before": sorted(
+                        _person_name(persons_by_id.get(pid), pid)
+                        for pid in cur_ids
+                    ),
+                    "sent": sorted(
+                        _person_name(persons_by_id.get(pid), pid)
+                        for pid in next_ids
+                    ),
                 }
-            )
-            if callable(commit_fn):
-                commit_fn()
-        for p_id in to_remove:
-            b_names = sorted(
-                _person_name(persons_by_id.get(pid, {}), pid)
-                for pid in cur_ids
-            )
-            p_rec = persons_by_id.get(p_id) or {}
-            p_name = _person_name(p_rec, p_id)
-            ctx.writer.unassign(kitsu_task, p_id)
-            cur_ids.discard(p_id)
-            s_names = sorted(
-                _person_name(persons_by_id.get(pid, {}), pid)
-                for pid in cur_ids
-            )
-            writes.append(
-                {
-                    "field": "assignees",
-                    "action": "unassign",
-                    "person_id": p_id,
-                    "person_name": p_name,
-                    "before": b_names,
-                    "sent": s_names,
+                ctx.pending_assignee_write = {
+                    "kitsu_id": kitsu_id,
+                    "write": write,
                 }
-            )
-            if callable(commit_fn):
-                commit_fn()
+                send(kitsu_task, person_id)
+                ctx.pending_assignee_write = None
+                writes.append(write)
+                cur_ids = next_ids
+                if callable(commit_fn):
+                    commit_fn()
     except KitsuWriterError as exc:
+        if not exc.retryable:
+            ctx.pending_assignee_write = None
         written_ids = {
             w.get("person_id")
             for w in writes

@@ -356,7 +356,7 @@ class OutboundJobRunner:
             return
         try:
             events = self.ayon_client.get_events(
-                topics=[TARGET_TOPIC],
+                topics=[self.TARGET_TOPIC],
                 statuses=["in_progress", "pending"],
                 fields=[
                     "id",
@@ -512,7 +512,7 @@ class OutboundJobRunner:
             return
         try:
             events = self.ayon_client.get_events(
-                topics=[TARGET_TOPIC],
+                topics=[self.TARGET_TOPIC],
                 statuses=["in_progress", "pending"],
                 fields=[
                     "id",
@@ -1049,6 +1049,8 @@ class OutboundJobRunner:
                 "attempt": attempt,
                 "writes": result.writes,
                 "notWritten": result.not_written or None,
+                "pendingAssigneeWrite": saved.get("pendingAssigneeWrite"),
+                "pendingCreationScope": saved.get("pendingCreationScope"),
             },
             project_name=job.get("project_name") or job.get("project"),
             attempt=attempt,
@@ -1092,6 +1094,8 @@ class OutboundJobRunner:
             loop_guard_discard=self.loop_guard_discard,
             prior_writes=list(saved.get("writes") or []),
             prior_not_written=normalize_not_written(saved.get("notWritten")),
+            pending_assignee_write=saved.get("pendingAssigneeWrite"),
+            pending_creation_scope=saved.get("pendingCreationScope"),
         )
 
     @staticmethod
@@ -1138,6 +1142,17 @@ class OutboundJobRunner:
             return [], self._skip_result(
                 ctx, f"project '{ctx.project_name}' is not a Paired_Project"
             )
+
+        if self.settings_watcher:
+            try:
+                self.settings_watcher.refresh_if_changed()
+            except Exception as exc:
+                return categories, failed_result(
+                    ctx,
+                    f"Could not check outbound settings changes: {exc}",
+                    retryable=True,
+                    error_kind=ERROR_UNREACHABLE,
+                )
 
         created_at = ctx.event.get("createdAt") or ctx.event.get("created_at")
         gate_state = (
@@ -1332,6 +1347,8 @@ class OutboundJobRunner:
                 "writes": saved_writes,
                 "notWritten": not_written or None,
                 "omittedBy": result.omitted_by,
+                "pendingAssigneeWrite": ctx.pending_assignee_write,
+                "pendingCreationScope": ctx.pending_creation_scope,
             }
         )
         self._finish_job(

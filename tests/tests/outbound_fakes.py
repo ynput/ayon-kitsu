@@ -642,6 +642,8 @@ class FakeKitsuWriter:
         project_id: str,
         name: str,
         parent_id: Optional[str] = None,
+        *,
+        data: Dict[str, Any],
     ) -> Dict[str, Any]:
         self._slice3_init()
         if self.error_on_create:
@@ -652,9 +654,11 @@ class FakeKitsuWriter:
             "name": name,
             "project_id": project_id,
             "parent_id": parent_id,
+            "data": data,
         }
         self.created.append(dict(new))
         self.tasks[new["id"]] = new
+        self.siblings.setdefault((entity_type, parent_id), []).append(new)
         return dict(new)
 
     def create_task(
@@ -663,7 +667,8 @@ class FakeKitsuWriter:
         task_type_id: str,
         name: Optional[str] = None,
         project_id: Optional[str] = None,
-        **kwargs: Any,
+        *,
+        data: Dict[str, Any],
     ) -> Dict[str, Any]:
         self._slice3_init()
         if self.error_on_create:
@@ -675,9 +680,11 @@ class FakeKitsuWriter:
             "entity_id": entity_id,
             "task_type_id": task_type_id,
             "project_id": project_id,
+            "data": data,
         }
         self.created.append(dict(new))
         self.tasks[new["id"]] = new
+        self.entity_tasks.setdefault(entity_id, []).append(new)
         return dict(new)
 
     def rename_entity(

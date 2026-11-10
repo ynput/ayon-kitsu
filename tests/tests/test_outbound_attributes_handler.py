@@ -64,8 +64,12 @@ def test_attributes_inherited_fps_reset_skipped():
     assert len(writer.updated_fields) == 0
 
 
-def test_attributes_unchanged_counterpart_preserved():
-    """When counterpart in Kitsu conflicts, protect from overwrite."""
+@pytest.mark.parametrize(
+    "old_values",
+    [{"frameStart": 1001}, {"frameStart": 1001, "frameEnd": 1100}],
+)
+def test_attributes_unchanged_counterpart_preserved(old_values):
+    """Kitsu's frame end survives a start-only edit with any old snapshot."""
     writer = FakeKitsuWriter()
     writer.tasks["kt-shot-1"] = {
         "id": "kt-shot-1",
@@ -95,7 +99,7 @@ def test_attributes_unchanged_counterpart_preserved():
         "topic": "entity.folder.attrib_changed",
         "payload": {
             "changed": {"frameStart": 1002},
-            "oldValue": {"frameStart": 1001, "frameEnd": 1100},
+            "oldValue": old_values,
         },
     }
     ctx.entity_id = "fold-1"
@@ -110,9 +114,12 @@ def test_attributes_unchanged_counterpart_preserved():
     ctx.prior_writes = []
 
     res = handle_attributes(ctx)
-    assert res.decision == "conflict"
-    for update in writer.updated_fields:
-        assert "data.frame_out" not in update["fields"]
+    assert res.decision == DECISION_APPLIED
+    assert writer.updated_fields[0]["fields"] == {
+        "data.frame_in": 1002,
+        "nb_frames": 199,
+    }
+    assert writer.tasks["kt-shot-1"]["data"]["frame_out"] == 1200
 
 
 def test_task_attribute_conflict_restored_under_kitsu_wins():
