@@ -17,10 +17,7 @@ RUN \
 # Create a group and user: ayonuser
 RUN addgroup -S ayonuser && adduser -SH ayonuser -G ayonuser
 
-RUN chown ayonuser:ayonuser -R /service
-RUN chmod 777 -R /service
-
-COPY processor /service/processor
+COPY --chmod=755 processor /service/processor
 
 # Tell docker that all future commands should run as the appuser user
 USER ayonuser
