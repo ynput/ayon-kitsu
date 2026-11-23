@@ -106,8 +106,9 @@ class StatusChangeConditionsModel(BaseSettingsModel):
         default_factory=list,
         title="Family requirements",
         description=(
-            "The published product types must satisfy one of these"
-            " requirements for the status to change."
+            "Match product types and primary families across all enabled"
+            " publish instances. When requirements are configured, at least"
+            " one must match for the status to change."
         ),
     )
 

@@ -29,38 +29,79 @@ def note_plugin(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("families", "requirements", "change_status"),
+    ("products", "requirements", "change_status"),
     [
         pytest.param(
-            ["render", "workfile"],
+            [{"family": "render"}, {"family": "workfile"}],
             [("equal", "render")],
             True,
             id="mixed-families",
         ),
         pytest.param(
-            ["renderPass"], [("equal", "RENDERPASS")], True, id="case"
+            [{"family": "renderPass"}],
+            [("equal", "RENDERPASS")],
+            True,
+            id="case",
         ),
         pytest.param(
-            ["render"],
+            [{"family": "render", "productType": "renderPass"}],
+            [("equal", "RENDERPASS")],
+            True,
+            id="custom-product-type",
+        ),
+        pytest.param(
+            [{"family": "render", "productType": "renderPass"}],
+            [("equal", "render")],
+            True,
+            id="primary-family-with-custom-product-type",
+        ),
+        pytest.param(
+            [{"family": "render", "productType": "renderPass"}],
+            [("not_equal", "renderpass")],
+            False,
+            id="excluded-custom-product-type",
+        ),
+        pytest.param(
+            [{"productType": "renderPass"}],
+            [("equal", "renderpass")],
+            True,
+            id="missing-primary-family",
+        ),
+        pytest.param(
+            [
+                {"family": "render"},
+                {"productType": "renderPass", "publish": False},
+            ],
+            [("equal", "renderpass")],
+            False,
+            id="disabled-custom-product-type",
+        ),
+        pytest.param(
+            [{"family": "render"}],
             [("equal", "workfile"), ("equal", "render")],
             True,
             id="second-requirement-matches",
         ),
         pytest.param(
-            ["render"],
+            [{"family": "render"}],
             [("equal", "render"), ("equal", "workfile")],
             True,
             id="first-requirement-matches",
         ),
-        pytest.param(["render"], [("equal", "workfile")], False, id="missing"),
         pytest.param(
-            ["render"],
+            [{"family": "render"}],
+            [("equal", "workfile")],
+            False,
+            id="missing",
+        ),
+        pytest.param(
+            [{"family": "render"}],
             [("not_equal", "workfile")],
             True,
             id="absent-family",
         ),
         pytest.param(
-            ["render", "Workfile"],
+            [{"family": "render"}, {"family": "Workfile"}],
             [("not_equal", "workfile")],
             False,
             id="excluded-family",
@@ -70,12 +111,15 @@ def note_plugin(monkeypatch):
         ),
         pytest.param([], [], True, id="no-requirements"),
         pytest.param(
-            ["render"], [("equal", "review")], False, id="secondary-family"
+            [{"family": "render"}],
+            [("equal", "review")],
+            False,
+            id="secondary-family",
         ),
     ],
 )
 def test_note_status_family_requirements(
-    note_plugin, families, requirements, change_status
+    note_plugin, products, requirements, change_status
 ):
     plugin, task_api = note_plugin
     plugin.set_status_note = True
@@ -95,16 +139,16 @@ def test_note_status_family_requirements(
     task_api.get_task_status_by_short_name.return_value = target_status
     review = SimpleNamespace(
         data={
-            "family": families[0] if families else "render",
             "families": ["review", "kitsu"],
             "kitsuTask": task,
-            "publish": bool(families),
+            "publish": bool(products),
             "comment": "Publish note",
+            **(products[0] if products else {}),
         }
     )
     instances = [
-        SimpleNamespace(data={"family": family, "publish": True})
-        for family in families[1:]
+        SimpleNamespace(data={"publish": True, **product})
+        for product in products[1:]
     ]
 
     plugin.process([review, *instances])

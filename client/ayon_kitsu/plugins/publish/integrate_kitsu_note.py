@@ -56,7 +56,8 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
             # Check if instance is a review by checking its family
             # Allow a match to primary family or any of families
             families = set(
-                [instance.data["family"]] + instance.data.get("families", [])
+                [instance.data.get("family")]
+                + instance.data.get("families", [])
             )
             if "review" not in families or "kitsu" not in families:
                 continue
@@ -82,17 +83,21 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
                     break
 
             if allow_status_change:
-                published_families = {
-                    instance.data["family"].lower()
-                    for instance in context
-                    if instance.data.get("publish")
-                    and instance.data.get("family")
+                published_types = {
+                    product_type.lower()
+                    for published_instance in context
+                    if published_instance.data.get("publish")
+                    for product_type in (
+                        published_instance.data.get("family"),
+                        published_instance.data.get("productType"),
+                    )
+                    if product_type
                 }
                 requirements = self.status_change_conditions[
                     "family_requirements"
                 ]
                 allow_status_change = not requirements or any(
-                    (requirement["product_type"].lower() in published_families)
+                    (requirement["product_type"].lower() in published_types)
                     == (requirement["condition"] == "equal")
                     for requirement in requirements
                 )
