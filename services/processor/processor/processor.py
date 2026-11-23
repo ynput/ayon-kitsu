@@ -36,6 +36,15 @@ if service_name := os.environ.get("AYON_SERVICE_NAME"):
 
 SENDER = f"kitsu-processor-{socket.gethostname()}"
 
+# How often the watchdog checks the Kitsu event client's connection state.
+EVENT_WATCHDOG_INTERVAL = 30
+# Force a full reconnect if the event client has been disconnected for
+# longer than this, rather than letting socketio retry forever with a
+# potentially stale auth token.
+EVENT_WATCHDOG_MAX_DISCONNECTED = 120
+# Delay between reconnect attempts of the Kitsu event client.
+EVENT_RECONNECT_DELAY = 10
+
 
 class KitsuServerError(Exception):
     pass
@@ -128,18 +137,131 @@ class KitsuProcessor:
         except gazu.exception.AuthFailedException as e:
             raise KitsuServerError(f"Kitsu login failed: {e}") from e
 
+        # Zou access tokens expire after 7 days: re-login on 401 and let
+        # gazu replay the failed request.
+        self._relogging_in = False
+
+        def relogin(client, path):
+            if self._relogging_in:
+                return False
+            self._relogging_in = True
+            try:
+                gazu.log_in(
+                    self.kitsu_login_email,
+                    self.kitsu_login_password,
+                    client=client,
+                )
+                logging.info(f"Kitsu session renewed (on {path})")
+                return True
+            except Exception:
+                log_traceback("Kitsu re-login failed")
+                return False
+            finally:
+                self._relogging_in = False
+
+        gazu.client.default_client.callback_not_authenticated = relogin
+
         # init event client
         self.kitsu_events_url = self.kitsu_server_url.replace(
             "api", "socket.io"
         )
         gazu.set_event_host(self.kitsu_events_url)
-        self.event_client = gazu.events.init()
+        self.event_client = None
 
         # ============= Add Kitsu Event Listeners ==============
-        gazu_listener_thread = threading.Thread(target=self.run_gazu_listeners)
+        # Connects the event client and (re)connects it
+        # whenever the connection drops or the watchdog forces it.
+        gazu_listener_thread = threading.Thread(
+            target=self.run_gazu_listeners, daemon=True
+        )
         gazu_listener_thread.start()
 
+        # python-socketio's own reconnection logic can get stuck
+        # retrying forever using a stale auth header (captured once at
+        # connect time), e.g. after the Kitsu server restarts or the
+        # access token expires.
+        # This watchdog detects that and forces a clean reconnect.
+        gazu_watchdog_thread = threading.Thread(
+            target=self.watch_gazu_connection, daemon=True
+        )
+        gazu_watchdog_thread.start()
+
     def run_gazu_listeners(self):
+        """(Re)connect the Kitsu event client and listen for events.
+
+        Runs forever in its own thread. Whenever the connection is lost,
+        dropped, or closed by the watchdog, this re-authenticates with Kitsu
+        (in case the access token has expired) and reconnects.
+        """
+        while True:
+            try:
+                gazu.log_in(
+                    self.kitsu_login_email, self.kitsu_login_password
+                )
+            except Exception:
+                log_traceback(
+                    "Failed to re-login to Kitsu before (re)connecting "
+                    "the event client"
+                )
+                time.sleep(EVENT_RECONNECT_DELAY)
+                continue
+
+            try:
+                self.event_client = gazu.events.init(ssl_verify=True)
+                self.add_gazu_listeners()
+                logging.info("Gazu event listeners added")
+                gazu.events.run_client(self.event_client)
+            except Exception:
+                log_traceback("Gazu event client crashed")
+
+            logging.warning(
+                "Gazu event listener disconnected, reconnecting in "
+                f"{EVENT_RECONNECT_DELAY}s..."
+            )
+            try:
+                if self.event_client is not None:
+                    self.event_client.disconnect()
+            except Exception:
+                pass
+            time.sleep(EVENT_RECONNECT_DELAY)
+
+    def watch_gazu_connection(self):
+        """Force a full reconnect if the event client stays disconnected.
+
+        Disconnecting here causes `run_gazu_listeners` to loop around and
+        reconnect with a freshly logged-in client.
+        """
+        disconnected_since = None
+        while True:
+            time.sleep(EVENT_WATCHDOG_INTERVAL)
+
+            connected = bool(
+                self.event_client and self.event_client.connected
+            )
+            if connected:
+                disconnected_since = None
+                continue
+
+            if disconnected_since is None:
+                disconnected_since = time.time()
+                continue
+
+            if (
+                time.time() - disconnected_since
+                > EVENT_WATCHDOG_MAX_DISCONNECTED
+            ):
+                logging.warning(
+                    "Kitsu event client has been disconnected for over "
+                    f"{EVENT_WATCHDOG_MAX_DISCONNECTED}s, forcing "
+                    "reconnect"
+                )
+                try:
+                    self.event_client.disconnect()
+                except Exception:
+                    log_traceback()
+                disconnected_since = None
+
+    def add_gazu_listeners(self):
         gazu.events.add_listener(
             self.event_client,
             "project:update",
@@ -283,12 +405,13 @@ class KitsuProcessor:
                 "concept:delete",
                 lambda data: delete_concept(self, data),
             )
-        logging.info("Gazu event listeners added")
-        gazu.events.run_client(self.event_client)
 
-    def get_pairing_list(self):
-        """maintain a list of pairings so that we can check
-        the kitsu change is in a paired project and get the ayon project name
+    def get_pairing_list(self) -> dict[str, str | None]:
+        """maintain the ayon project name of each kitsu project, so that we
+        can check the kitsu change is in a paired project
+
+        The endpoint lists every kitsu project, the ones that are not paired
+        yet carrying a null ayon project name.
         """
         logging.info("get_pairing_list")
         res = ayon_api.get(f"{self.entrypoint}/pairing")
@@ -298,27 +421,20 @@ class KitsuProcessor:
             f" Status code '{res.status_code}': {res.detail}"
         )
 
-        return res.data
+        return {
+            pair["kitsuProjectId"]: pair["ayonProjectName"]
+            for pair in res.data
+        }
 
     def get_paired_ayon_project(self, kitsu_project_id: str) -> str | None:
         """returns the ayon project if paired else None"""
-        for pair in self.pairing_list:
-            if pair["kitsuProjectId"] == kitsu_project_id:
-                return pair["ayonProjectName"]
+        return self.pairing_list.get(kitsu_project_id)
 
     def set_paired_ayon_project(
         self, kitsu_project_id: str, ayon_project_name: str
     ):
-        """add a new pair to the list"""
-        for pair in self.pairing_list:
-            if "kitsuProjectId" in pair:
-                return
-        self.pairing_list.append(
-            {
-                "kitsuProjectId": kitsu_project_id,
-                "ayonProjectName": ayon_project_name
-            }
-        )
+        """pair a kitsu project with an ayon one"""
+        self.pairing_list[kitsu_project_id] = ayon_project_name
 
     def start_processing(self):
         logging.info("KitsuProcessor started")
@@ -328,9 +444,7 @@ class KitsuProcessor:
             # Sync all paired projects
             if startup:
                 logging.info("Running sync for all paired projects")
-                for pair in self.pairing_list:
-                    project_id = pair.get("kitsuProjectId")
-                    project_name = pair.get("ayonProjectName")
+                for project_id, project_name in self.pairing_list.items():
                     if project_id and project_name:
                         project_full_sync(
                             self,

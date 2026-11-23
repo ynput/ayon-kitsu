@@ -209,17 +209,6 @@ def get_statuses() -> dict[str, str]:
     return kitsu_statuses
 
 
-def get_ayon_users_by_email() -> dict[str, str]:
-    """Get AYON users by email.
-
-    Returns:
-        dict[str, str]: A dictionary of AYON users by email.
-    """
-    return {
-        user["attrib"]["email"]: user["name"] for user in ayon_api.get_users()
-    }
-
-
 def preprocess_asset(
     kitsu_project_id: str,
     asset: dict[str, str],
@@ -233,12 +222,55 @@ def preprocess_asset(
     return asset
 
 
+def get_ayon_users_by_email() -> dict[str, str]:
+    """Return AYON usernames keyed by user email."""
+    return {
+        email: user["name"]
+        for user in ayon_api.get_users()
+        if (email := user.get("attrib", {}).get("email"))
+    }
+
+
+def get_persons_by_id() -> dict[str, dict[str, Any]]:
+    """Return Kitsu persons keyed by person ID."""
+    return {
+        person_id: person
+        for person in gazu.person.all_persons()
+        if (person_id := person.get("id"))
+    }
+
+
+def get_task_persons(
+    task: dict[str, Any], persons_by_id: dict[str, dict[str, Any]]
+) -> list[dict[str, str]]:
+    """Return task assignees as person email records.
+
+    Args:
+        task: Kitsu task with assignee person IDs.
+        persons_by_id: Kitsu persons keyed by ID.
+    """
+    return [
+        {"email": email}
+        for person_id in task.get("assignees", [])
+        if person_id in persons_by_id
+        and (email := persons_by_id[person_id].get("email"))
+    ]
+
+
 def preprocess_task(
     task: dict[str, Any],
     task_types: dict[str, str],
     statuses: dict[str, str],
     ayon_users_by_email: dict[str, str],
 ) -> dict[str, Any]:
+    """Add Kitsu type/status names and AYON usernames to a task.
+
+    Args:
+        task: Kitsu task to preprocess.
+        task_types: Kitsu task type names keyed by type ID.
+        statuses: Kitsu task status names keyed by status ID.
+        ayon_users_by_email: AYON usernames keyed by email.
+    """
     if "task_type_id" in task and task["task_type_id"] in task_types:
         task["task_type_name"] = task_types[task["task_type_id"]]
 
@@ -248,7 +280,11 @@ def preprocess_task(
     if "name" in task and "task_type_name" in task and task["name"] == "main":
         task["name"] = task["task_type_name"].lower()
 
-    task_emails = {user["email"] for user in task["persons"]}
+    task_emails = {
+        email
+        for person in task.get("persons", [])
+        if (email := person.get("email"))
+    }
     task["assignees"] = [
         ayon_users_by_email[email]
         for email in task_emails

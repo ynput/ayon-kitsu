@@ -11,8 +11,10 @@ if TYPE_CHECKING:
 from .utils import (
     get_asset_types,
     get_ayon_users_by_email,
+    get_persons_by_id,
     get_persons_to_update,
     get_statuses,
+    get_task_persons,
     get_task_types,
     preprocess_asset,
     preprocess_task,
@@ -33,20 +35,21 @@ def get_tasks(
     kitsu_project_id: str,
     task_types: dict[str, str],
     task_statuses: dict[str, str],
-    persons: list[dict[str, Any]],
-) -> list[dict[str, str]]:
-    persons_by_id: dict[str, dict] = {
-        p["id"]: p for p in persons
-    }
+    persons_by_id: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Fetch and preprocess project tasks with AYON assignee names.
 
-    tasks: list[dict[str, str]] = []
+    Args:
+        kitsu_project_id: Kitsu project whose tasks are fetched.
+        task_types: Kitsu task type names keyed by type ID.
+        task_statuses: Kitsu task status names keyed by status ID.
+        persons_by_id: Kitsu persons keyed by ID for resolving task assignees.
+    """
     ayon_users_by_email = get_ayon_users_by_email()
+
+    tasks: list[dict[str, Any]] = []
     for record in gazu.task.all_tasks_for_project(kitsu_project_id):
-        record["persons"] = [
-            {"email": persons_by_id[assignee_id]["email"]}
-            for assignee_id in record["assignees"]
-            if assignee_id in persons_by_id
-        ]
+        record["persons"] = get_task_persons(record, persons_by_id)
         tasks.append(
             preprocess_task(
                 record,
@@ -177,7 +180,10 @@ def project_full_sync(
 
     assets = get_assets(kitsu_project_id, asset_types)
     tasks = get_tasks(
-        kitsu_project_id, task_types, task_statuses, gazu.person.all_persons()
+        kitsu_project_id,
+        task_types,
+        task_statuses,
+        get_persons_by_id(),
     )
     sync_casting_settings = (
         parent.settings.get("sync_settings", {})

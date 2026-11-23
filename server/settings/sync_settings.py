@@ -43,7 +43,14 @@ class SyncUsers(BaseSettingsModel):
 
     enabled: bool = SettingsField(True)
     default_password: str = SettingsField(title="Default Password")
-    access_group: str = SettingsField(title="Access Group", regex=NAME_REGEX)
+    access_group: str = SettingsField(
+        title="Access Group",
+        description=(
+            "AYON access group given to synced users. It is created when it"
+            " does not exist yet."
+        ),
+        regex=NAME_REGEX,
+    )
     roles: RolesCondition = SettingsField(
         default_factory=RolesCondition, title="Roles"
     )
@@ -89,10 +96,22 @@ class DefaultSyncInfo(BaseSettingsModel):
 
 
 class SyncCasting(BaseSettingsModel):
-    enabled: bool = SettingsField(False, title="Sync casting links")
+    enabled: bool = SettingsField(
+        False,
+        title="Sync casting links",
+        description=(
+            "Create AYON links between a shot or asset and the assets cast"
+            " on it in the Kitsu breakdown."
+        ),
+    )
     casting_link_type: str = SettingsField(
         "breakdown",
         title="Casting link type",
+        description=(
+            "Name of the AYON link type used for casting links. It is"
+            " expanded to 'name|folder|folder', as casting always links a"
+            " folder to a folder."
+        ),
         regex=NAME_REGEX,
     )
 
