@@ -159,3 +159,48 @@ def test_note_status_family_requirements(
     task_api.add_comment.assert_called_once_with(
         task, expected_status, comment="Publish note"
     )
+
+
+@pytest.mark.parametrize(
+    ("set_status_note", "status_conditions"),
+    [
+        pytest.param(False, [], id="status-changes-disabled"),
+        pytest.param(
+            True,
+            [{"condition": "equal", "short_name": "todo"}],
+            id="current-status-does-not-match",
+        ),
+    ],
+)
+def test_matching_family_keeps_current_status_when_status_change_is_blocked(
+    note_plugin, set_status_note, status_conditions
+):
+    plugin, task_api = note_plugin
+    plugin.set_status_note = set_status_note
+    plugin.status_change_conditions = {
+        "status_conditions": status_conditions,
+        "family_requirements": [
+            {"condition": "equal", "product_type": "render"}
+        ],
+    }
+    task = {
+        "id": "task-id",
+        "task_status": {"short_name": "wip"},
+        "task_status_id": "current-status-id",
+    }
+    review = SimpleNamespace(
+        data={
+            "family": "render",
+            "families": ["review", "kitsu"],
+            "kitsuTask": task,
+            "publish": True,
+            "comment": "Publish note",
+        }
+    )
+
+    plugin.process([review])
+
+    task_api.get_task_status_by_short_name.assert_not_called()
+    task_api.add_comment.assert_called_once_with(
+        task, task["task_status_id"], comment="Publish note"
+    )
