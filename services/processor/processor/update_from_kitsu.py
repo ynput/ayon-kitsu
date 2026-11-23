@@ -9,6 +9,43 @@ from . import utils
 if TYPE_CHECKING:
     from .processor import KitsuProcessor
 
+
+def _sync_deletions_enabled(parent: "KitsuProcessor") -> bool:
+    """Return whether Kitsu delete events may remove AYON entities.
+
+    Missing or malformed settings fail closed. Project removal additionally
+    remains subject to the existing ``delete_projects`` setting.
+    """
+    settings = getattr(parent, "settings", {})
+    if not isinstance(settings, dict):
+        return False
+    sync_settings = settings.get("sync_settings", {})
+    if not isinstance(sync_settings, dict):
+        return False
+    return sync_settings.get("sync_deletions", False) is True
+
+
+def _skip_delete_when_disabled(
+    parent: "KitsuProcessor", entity_type: str
+) -> bool:
+    if _sync_deletions_enabled(parent):
+        if entity_type != "project":
+            return False
+        sync_settings = parent.settings.get("sync_settings", {})
+        if sync_settings.get("delete_projects", False) is True:
+            return False
+        logging.info(
+            "Skipping Kitsu project delete event because "
+            "Delete projects is disabled"
+        )
+        return True
+    logging.info(
+        "Skipping Kitsu %s delete event because Sync deletions is disabled",
+        entity_type,
+    )
+    return True
+
+
 def update_project(parent: "KitsuProcessor", data: dict[str, str]):
     logging.info(f"update_project: {data}")
     project_name = parent.get_paired_ayon_project(data["project_id"])
@@ -29,6 +66,8 @@ def update_project(parent: "KitsuProcessor", data: dict[str, str]):
 
 
 def delete_project(parent: "KitsuProcessor", data: dict[str, str]):
+    if _skip_delete_when_disabled(parent, "project"):
+        return
     logging.info(f"delete_project: {data}")
     project_name = parent.get_paired_ayon_project(data["project_id"])
     if not project_name:
@@ -69,6 +108,8 @@ def create_or_update_asset(parent: "KitsuProcessor", data: dict[str, str]):
 
 
 def delete_asset(parent: "KitsuProcessor", data: dict[str, str]):
+    if _skip_delete_when_disabled(parent, "asset"):
+        return
     logging.info(f"delete_asset: {data}")
     project_name = parent.get_paired_ayon_project(data["project_id"])
     if not project_name:
@@ -105,6 +146,8 @@ def create_or_update_episode(parent: "KitsuProcessor", data: dict[str, str]):
 
 
 def delete_episode(parent: "KitsuProcessor", data: dict[str, str]):
+    if _skip_delete_when_disabled(parent, "episode"):
+        return
     logging.info(f"delete_episode: {data}")
     project_name = parent.get_paired_ayon_project(data["project_id"])
     if not project_name:
@@ -141,6 +184,8 @@ def create_or_update_sequence(parent: "KitsuProcessor", data: dict[str, str]):
 
 
 def delete_sequence(parent: "KitsuProcessor", data: dict[str, str]):
+    if _skip_delete_when_disabled(parent, "sequence"):
+        return
     logging.info(f"delete_sequence: {data}")
     project_name = parent.get_paired_ayon_project(data["project_id"])
     if not project_name:
@@ -177,6 +222,8 @@ def create_or_update_shot(parent: "KitsuProcessor", data: dict[str, str]):
 
 
 def delete_shot(parent: "KitsuProcessor", data: dict[str, str]):
+    if _skip_delete_when_disabled(parent, "shot"):
+        return
     logging.info(f"delete_shot: {data}")
     project_name = parent.get_paired_ayon_project(data["project_id"])
     if not project_name:
@@ -244,6 +291,8 @@ def create_or_update_task(
 
 
 def delete_task(parent: "KitsuProcessor", data: dict[str, str]):
+    if _skip_delete_when_disabled(parent, "task"):
+        return
     logging.info(f"delete_task: {data}")
     project_name = parent.get_paired_ayon_project(data["project_id"])
     if not project_name:
@@ -281,6 +330,8 @@ def create_or_update_edit(parent: "KitsuProcessor", data: dict[str, str]):
 
 
 def delete_edit(parent: "KitsuProcessor", data: dict[str, str]):
+    if _skip_delete_when_disabled(parent, "edit"):
+        return
     logging.info(f"delete_edit: {data}")
     project_name = parent.get_paired_ayon_project(data["project_id"])
     if not project_name:
@@ -318,6 +369,8 @@ def create_or_update_concept(parent: "KitsuProcessor", data: dict[str, str]):
 
 
 def delete_concept(parent: "KitsuProcessor", data: dict[str, str]):
+    if _skip_delete_when_disabled(parent, "concept"):
+        return
     logging.info(f"delete_concept: {data}")
     project_name = parent.get_paired_ayon_project(data["project_id"])
     if not project_name:
@@ -359,6 +412,8 @@ def create_or_update_person(parent: "KitsuProcessor", data: dict[str, str]):
 
 
 def delete_person(parent: "KitsuProcessor", data: dict[str, str]):
+    if _skip_delete_when_disabled(parent, "person"):
+        return
     logging.info(f"delete_person: {data}")
     entity = {
         "id": data["person_id"],

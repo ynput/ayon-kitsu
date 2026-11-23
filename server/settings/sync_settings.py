@@ -119,6 +119,14 @@ class SyncCasting(BaseSettingsModel):
 class SyncSettings(BaseSettingsModel):
     """Enabling 'Delete projects' will remove projects on Ayon when they get deleted on Kitsu"""
 
+    sync_deletions: bool = SettingsField(
+        False,
+        title="Sync deletions",
+        description=(
+            "Allow delete events from Kitsu to remove corresponding entities "
+            "from AYON. Project deletion also requires Delete projects."
+        ),
+    )
     delete_projects: bool = SettingsField(title="Delete projects")
     sync_users: SyncUsers = SettingsField(
         default_factory=SyncUsers,
@@ -135,6 +143,7 @@ class SyncSettings(BaseSettingsModel):
 
 
 SYNC_DEFAULT_VALUES = {
+    "sync_deletions": False,
     "delete_projects": False,
     "sync_users": {
         "enabled": False,
