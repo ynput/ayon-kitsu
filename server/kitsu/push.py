@@ -964,22 +964,19 @@ async def remove_entities(
             continue
 
         if entity_dict["type"] == "Project":
-            if settings.sync_settings.delete_projects:
-                try:
-                    target_project = await get_project()
-                except NotFoundException:
-                    logging.info(
-                        f"Project '{payload.project_name}' already removed"
-                    )
-                    continue
-                await delete_project(
-                    user,
-                    target_project,
-                    entity_dict,
+            if not settings.sync_settings.delete_projects:
+                continue
+            try:
+                target_project = await get_project()
+            except NotFoundException:
+                logging.info(
+                    f"Project '{payload.project_name}' already removed"
                 )
-                # A repeated Project entry must reload instead of using
-                # an entity that may have just been deleted.
-                project = None
+                continue
+            await delete_project(user, target_project, entity_dict)
+            # A repeated Project entry must reload instead of using
+            # an entity that may have just been deleted.
+            project = None
         elif entity_dict["type"] == "Person":
             target_user = await get_user_by_kitsu_id(entity_dict["id"])
             if not target_user:
