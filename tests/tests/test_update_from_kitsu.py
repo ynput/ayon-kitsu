@@ -119,6 +119,19 @@ def test_new_task(api, gazu, processor, monkeypatch):
     monkeypatch.setattr(
         gazu.task, "all_task_statuses", lambda: mock_data.all_task_statuses
     )
+    monkeypatch.setattr(
+        gazu.person,
+        "all_persons",
+        lambda: [
+            {"id": "user-id-1", "email": "user-id-1@temp.com"},
+            {"id": "user-id-3", "email": "user-id-3@temp.com"},
+        ],
+    )
+    monkeypatch.setattr(
+        update_from_kitsu.utils,
+        "get_ayon_users_by_email",
+        lambda: {},
+    )
     data = {"task_id": new_task["id"], "project_id": "project-id-1"}
     res = update_from_kitsu.create_or_update_task(processor, data)
     assert res.status_code == 200
@@ -164,6 +177,12 @@ def test_update_task(api, gazu, processor, monkeypatch):
     )
     monkeypatch.setattr(
         gazu.task, "all_task_statuses", lambda: mock_data.all_task_statuses
+    )
+    monkeypatch.setattr(gazu.person, "all_persons", lambda: [])
+    monkeypatch.setattr(
+        update_from_kitsu.utils,
+        "get_ayon_users_by_email",
+        lambda: {},
     )
 
     data = {"task_id": updated_task["id"], "project_id": "project-id-1"}
