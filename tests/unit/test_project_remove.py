@@ -3,7 +3,6 @@
     python -m unittest discover -s tests/unit -p test_project_remove.py
 """
 
-import asyncio
 import unittest
 from importlib.util import find_spec
 from types import SimpleNamespace
@@ -45,7 +44,6 @@ class ProjectRemovalTests(unittest.IsolatedAsyncioTestCase):
         self.status_code = 204
         self.transport_error = None
         client_cls = httpx.AsyncClient
-        self.client_cls = client_cls
 
         def respond(request):
             self.requests.append(request)
@@ -155,46 +153,11 @@ class ProjectRemovalTests(unittest.IsolatedAsyncioTestCase):
         for status in (403, 404, 500):
             with self.subTest(status=status):
                 self.status_code = status
+                self.load.reset_mock()
                 with self.assertRaises(httpx.HTTPStatusError) as raised:
                     await self.remove()
                 self.assertEqual(raised.exception.response.status_code, status)
-
-    async def test_concurrent_deletion_accepts_confirmed_absence(self):
-        self.settings.sync_settings.delete_projects = True
-        both_loaded = asyncio.Event()
-        loads = 0
-
-        async def load(name):
-            nonlocal loads
-            loads += 1
-            if loads > 2:
-                raise NotFoundException("Already removed")
-            if loads == 2:
-                both_loaded.set()
-            await both_loaded.wait()
-            return self.project
-
-        self.load.side_effect = load
-        statuses = iter((204, 404))
-        self.client.side_effect = lambda: self.client_cls(
-            transport=httpx.MockTransport(
-                lambda request: httpx.Response(next(statuses))
-            )
-        )
-        results = await asyncio.wait_for(
-            asyncio.gather(self.remove(), self.remove()), timeout=2
-        )
-        self.assertEqual(results, [{"folders": {}, "tasks": {}}] * 2)
-        self.assertEqual(self.load.await_count, 3)
-
-    async def test_404_confirmation_errors_are_not_swallowed(self):
-        self.settings.sync_settings.delete_projects = True
-        self.status_code = 404
-        self.load.side_effect = [
-            self.project, RuntimeError("Database unavailable")
-        ]
-        with self.assertRaisesRegex(RuntimeError, "Database unavailable"):
-            await self.remove()
+                self.load.assert_awaited_once_with(self.project.name)
 
     async def test_transport_failure_is_not_reported_as_success(self):
         self.settings.sync_settings.delete_projects = True

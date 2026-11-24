@@ -360,13 +360,6 @@ async def delete_project(
             f"{entity_dict['ayon_server_url']}/api/projects/{project.name}",
             headers=headers,
         )
-        if response.status_code == 404:
-            # Another removal request may have deleted it after we loaded it.
-            try:
-                await ProjectEntity.load(project.name)
-            except NotFoundException:
-                logging.info(f"Project '{project.name}' is already removed")
-                return
         response.raise_for_status()
     logging.info(f"Deleted project '{project.name}'")
 
