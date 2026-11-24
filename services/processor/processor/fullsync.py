@@ -174,6 +174,14 @@ def project_full_sync(
     """
     start_time = time.time()
     logging.info(f"Syncing kitsu project {kitsu_project_id} to {project_name}")
+
+    if not (
+        gazu.project.get_project(kitsu_project_id)["project_status_id"]
+        == gazu.project.get_project_status_by_name("Open")["id"]
+    ):
+        logging.info(f"Skipping {project_name} as it's closed in kitsu")
+        return
+
     asset_types = get_asset_types(kitsu_project_id)
     task_statuses = get_statuses()
     task_types = get_task_types(kitsu_project_id, ordered_list=True)
