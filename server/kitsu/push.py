@@ -345,11 +345,12 @@ async def delete_project(
         project: AYON project to delete.
         entity_dict: Deleted Kitsu project's ID and AYON server URL.
     """
-    (entity_id,) = required_values(entity_dict, ["id"])
-    if project.data.get("kitsuProjectId") != entity_id:
+    (deleted_kitsu_id,) = required_values(entity_dict, ["id"])
+    paired_kitsu_id = project.data.get("kitsuProjectId")
+    if paired_kitsu_id != deleted_kitsu_id:
         logging.warning(
             f"Skipping project deletion: {project.name} is not paired"
-            f" with Kitsu project {entity_id}"
+            f" with Kitsu project {deleted_kitsu_id}"
         )
         return
 
