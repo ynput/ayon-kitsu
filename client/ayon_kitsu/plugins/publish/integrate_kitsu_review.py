@@ -32,6 +32,9 @@ class IntegrateKitsuReview(KitsuPublishInstancePlugin):
 
         # Add review representations as preview of comment
         task_id = kitsu_task["id"]
+        revision = (
+            instance.data["version"] if self.match_version_number else None
+        )
         for representation in instance.data.get("representations", []):
             # Skip if not tagged as review
             if "kitsureview" not in representation.get("tags", []):
@@ -43,15 +46,29 @@ class IntegrateKitsuReview(KitsuPublishInstancePlugin):
             review_path = representation.get("published_path")
             self.log.debug(f"Found review at: {review_path}")
 
-            gazu.task.add_preview(
-                task=task_id,
-                comment=comment_id,
-                preview_file_path=review_path,
+            preview_file = self.create_preview(task_id, comment_id, revision)
+            gazu.task.upload_preview_file(
+                preview_file,
+                review_path,
                 normalize_movie=self.normalize_movie,
-                revision=(
-                    instance.data["version"]
-                    if self.match_version_number
-                    else None
-                ),
             )
             self.log.info("Review upload on comment")
+
+    def create_preview(self, task_id, comment_id, revision):
+        """Create the preview. Let Kitsu set the revision if it is taken.
+
+        Kitsu counts revisions for each task, not for each product. Thus
+        the AYON version can already exist as a revision on the task.
+        """
+        try:
+            return gazu.task.create_preview(
+                task_id, comment_id, revision=revision
+            )
+        except gazu.exception.ParameterException as e:
+            if revision is None:
+                raise
+            self.log.warning(
+                f"Kitsu does not accept revision {revision}: {e}."
+                " Kitsu sets the revision number."
+            )
+            return gazu.task.create_preview(task_id, comment_id)
