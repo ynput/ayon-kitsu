@@ -163,9 +163,8 @@ class IntegrateKitsuReviews(BaseSettingsModel):
         title="Match version number",
         description=(
             "Set Kitsu note revision to match AYON version number.\n\n"
-            "Note: If enabled avoid uploading reviewables directly"
-            " into Kitsu without passing through AYON, as this can desynchronize"
-            " product version and revision number and cause errors during publish."
+            "Note: Kitsu counts revisions for each task. If the revision"
+            " already exists on the task, Kitsu sets the next revision number."
         )
     )
 
