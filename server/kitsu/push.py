@@ -844,6 +844,7 @@ async def push_entities(
     tasks = {}
     users = {}
     status_cache = TaskStatusCache()
+    failed = []
 
     settings = await addon.get_studio_settings()
     for entity_dict in payload.entities:
@@ -857,61 +858,74 @@ async def push_entities(
             )
             continue
 
-        if entity_dict["type"] == "Project":
-            await sync_project(
-                addon, user, project, entity_dict, payload.mock
-            )
-        elif entity_dict["type"] == "Person":
-            if settings.sync_settings.sync_users.enabled:
-                await create_access_group(
-                    addon,
-                    user,
-                    entity_dict,
+        try:
+            if entity_dict["type"] == "Project":
+                await sync_project(
+                    addon, user, project, entity_dict, payload.mock
                 )
-                await sync_person(
-                    addon,
-                    user,
-                    users,
-                    entity_dict,
-                )
-        elif entity_dict["type"] == "SyncCasting":
-            if project:
-                await sync_casting(
+            elif entity_dict["type"] == "Person":
+                if settings.sync_settings.sync_users.enabled:
+                    await create_access_group(
+                        addon,
+                        user,
+                        entity_dict,
+                    )
+                    await sync_person(
+                        addon,
+                        user,
+                        users,
+                        entity_dict,
+                    )
+            elif entity_dict["type"] == "SyncCasting":
+                if project:
+                    await sync_casting(
+                        addon,
+                        user,
+                        project,
+                        entity_dict,
+                        settings,
+                    )
+                else:
+                    logging.warning("SyncCasting received without project context")
+            elif entity_dict["type"] != "Task":
+                await sync_folder(
                     addon,
                     user,
                     project,
+                    folders,
                     entity_dict,
-                    settings,
                 )
             else:
-                logging.warning("SyncCasting received without project context")
-        elif entity_dict["type"] != "Task":
-            await sync_folder(
-                addon,
-                user,
-                project,
-                folders,
-                entity_dict,
-            )
-        else:
-            await sync_task(
-                addon,
-                user,
-                project,
-                tasks,
-                folders,
-                entity_dict,
-                payload.mock,
-                status_cache=status_cache,
+                await sync_task(
+                    addon,
+                    user,
+                    project,
+                    tasks,
+                    folders,
+                    entity_dict,
+                    payload.mock,
+                    status_cache=status_cache,
+                )
+        except Exception as e:
+            # One invalid entity must not stop the sync of the others.
+            failed.append(entity_dict["id"])
+            logging.error(
+                f"Cannot sync {entity_dict['type']} {entity_dict['id']}: {e!r}"
             )
 
     logging.info(
-        f"Synced {len(payload.entities)}"
+        f"Synced {len(payload.entities) - len(failed)}"
+        f" of {len(payload.entities)}"
         f" entities in {time.time() - start_time}s"
     )
 
     # pass back the map of kitsu to ayon ids
-    return {"folders": folders, "tasks": tasks, "users": users}
+    return {
+        "folders": folders,
+        "tasks": tasks,
+        "users": users,
+        "failed": failed,
+    }
 
 
 async def remove_entities(
