@@ -92,15 +92,15 @@ def test_get_tasks(gazu, monkeypatch):
             "user-id-3@temp.com": "user.three",
         },
     )
-    persons = [
-        {**mock_data.all_persons[0], "id": "user-id-1"},
-        {**mock_data.all_persons[2], "id": "user-id-3"},
-    ]
+    persons_by_id = {
+        "user-id-1": {**mock_data.all_persons[0], "id": "user-id-1"},
+        "user-id-3": {**mock_data.all_persons[2], "id": "user-id-3"},
+    }
     res = fullsync.get_tasks(
         PROJECT_ID,
         {"task-type-id-1": "Animation", "task-type-id-2": "Compositing"},
         {"task-status-id-1": "Todo", "task-status-id-2": "Approved"},
-        persons,
+        persons_by_id,
     )
 
     assert len(res) == 2
@@ -115,22 +115,28 @@ def test_get_tasks(gazu, monkeypatch):
 
 
 def test_get_tasks_ignores_unknown_assignees(gazu, monkeypatch):
+    person = mock_data.all_persons[0]
+    persons_by_id = {person["id"]: person}
     task = {
         **mock_data.all_tasks_for_project[0],
-        "assignees": ["missing-person"],
+        "assignees": [person["id"], "missing-person"],
     }
     monkeypatch.setattr(gazu.task, "all_tasks_for_project", lambda x: [task])
-    monkeypatch.setattr(fullsync, "get_ayon_users_by_email", lambda: {})
+    monkeypatch.setattr(
+        fullsync,
+        "get_ayon_users_by_email",
+        lambda: {person["email"]: "user.one"},
+    )
 
     res = fullsync.get_tasks(
         PROJECT_ID,
         {"task-type-id-1": "Animation"},
         {"task-status-id-2": "Approved"},
-        mock_data.all_persons,
+        persons_by_id,
     )
 
-    assert res[0]["persons"] == []
-    assert res[0]["assignees"] == []
+    assert res[0]["persons"] == [{"email": person["email"]}]
+    assert res[0]["assignees"] == ["user.one"]
 
 
 def test_full_sync(gazu, processor, monkeypatch, mocker):
