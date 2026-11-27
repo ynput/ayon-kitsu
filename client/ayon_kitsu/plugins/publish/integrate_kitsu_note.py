@@ -56,7 +56,8 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
             # `families` is inert on a ContextPlugin, so the kitsu family
             # collected by CollectKitsuFamily is checked by hand here.
             families = set(
-                [instance.data["family"]] + instance.data.get("families", [])
+                [instance.data.get("family")]
+                + instance.data.get("families", [])
             )
             if "kitsu" not in families:
                 continue
@@ -82,31 +83,24 @@ class IntegrateKitsuNote(KitsuPublishContextPlugin):
                     break
 
             if allow_status_change:
-                # Get families
-                families = {
-                    instance.data.get("family")
-                    for instance in context
-                    if instance.data.get("publish")
+                published_types = {
+                    product_type.lower()
+                    for published_instance in context
+                    if published_instance.data.get("publish")
+                    for product_type in (
+                        published_instance.data.get("family"),
+                        published_instance.data.get("productType"),
+                    )
+                    if product_type
                 }
-
-                # Check if any family requirement is met
-
-                for family_requirement in (
-                    self.status_change_conditions["family_requirements"]
-                ):
-                    condition = family_requirement["condition"] == "equal"
-
-                    for family in families:
-                        match = (
-                            family_requirement["product_type"].lower()
-                            == family
-                        )
-                        if match and not condition or condition and not match:
-                            allow_status_change = False
-                            break
-
-                    if allow_status_change:
-                        break
+                requirements = self.status_change_conditions[
+                    "family_requirements"
+                ]
+                allow_status_change = not requirements or any(
+                    (requirement["product_type"].lower() in published_types)
+                    == (requirement["condition"] == "equal")
+                    for requirement in requirements
+                )
 
             # Set note status
             if self.set_status_note and allow_status_change:
