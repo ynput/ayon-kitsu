@@ -69,6 +69,8 @@ class KitsuAddon(BaseServerAddon):
         user: CurrentUser,
         project_name: str
     ) -> EmptyResponse:
+        if not user.is_manager:
+            raise ForbiddenException("Only managers can sync Kitsu projects")
         await sync_request(project_name, user)
 
     async def push(
@@ -99,8 +101,12 @@ class KitsuAddon(BaseServerAddon):
         )
 
     async def list_pairings(
-        self, mock: bool = False
+        self,
+        user: CurrentUser,
+        mock: bool = False,
     ) -> list[PairingItemModel]:
+        if not user.is_manager:
+            raise ForbiddenException("Only managers can list Kitsu pairings")
         await self.ensure_kitsu(mock)
         return await get_pairing_list(self)
 
