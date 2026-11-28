@@ -1,5 +1,4 @@
-import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from ayon_server.entities import ProjectEntity
 from ayon_server.exceptions import AyonException
@@ -10,6 +9,7 @@ from ayon_server.settings.anatomy.task_types import TaskType
 from nxtools import logging
 
 from .addon_helpers import create_short_name, remove_accents
+from .attrib_parsing import parse_attrib
 from .extract_ayon_project_anatomy import extract_ayon_project_anatomy
 
 if TYPE_CHECKING:
@@ -162,37 +162,7 @@ async def parse_statuses(
 #
 
 
-def parse_attrib(source: dict[str, Any] | None = None) -> dict[str, Any]:
-    result = {}
-    if source is None:
-        return result
-    for key, value in source.items():
-        if value is None:
-            continue
-
-        if key == "fps":
-            with contextlib.suppress(ValueError):
-                result["fps"] = float(value)
-        elif key == "frame_in":
-            with contextlib.suppress(ValueError):
-                result["frameStart"] = int(value)
-        elif key == "frame_out":
-            with contextlib.suppress(ValueError):
-                result["frameEnd"] = int(value)
-        elif key == "resolution" and value:
-            try:
-                result["resolutionWidth"] = int(value.split("x")[0])
-                result["resolutionHeight"] = int(value.split("x")[1])
-            except (IndexError, ValueError):
-                pass
-        elif key == "description":
-            result["description"] = value
-        elif key == "start_date" and value:
-            result["startDate"] = value + "T00:00:00Z"
-        elif key == "end_date" and value:
-            result["endDate"] = value + "T00:00:00Z"
-
-    return result
+# parse_attrib is re-exported from .attrib_parsing (Task 16.1)
 
 
 async def get_primary_anatomy_preset() -> Anatomy:

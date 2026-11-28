@@ -37,8 +37,9 @@ class RolesCondition(BaseSettingsModel):
 
 
 class SyncUsers(BaseSettingsModel):
-    """When a Kitsu user is synced, the default password will be set for the newly created user.
-    Please ask the user to change the password inside Ayon.
+    """When a Kitsu user is synced, the default password will be set for
+    the newly created user. Please ask the user to change the password
+    inside Ayon.
     """
 
     enabled: bool = SettingsField(True)
@@ -85,7 +86,9 @@ class StatusCondition(BaseSettingsModel):
 
 
 class DefaultSyncInfo(BaseSettingsModel):
-    """As statuses already have names and short names we only need the short name to match Kitsu with Ayon"""
+    """As statuses already have names and short names we only need the short
+    name to match Kitsu with Ayon.
+    """
 
     default_task_info: list[TaskCondition] = SettingsField(
         default_factory=list, title="Tasks"
@@ -116,8 +119,63 @@ class SyncCasting(BaseSettingsModel):
     )
 
 
+#
+## Two-way sync (experimental AYON to Kitsu sync)
+#
+def _conflict_policy_enum():
+    """Return the conflict policies offered for two-way sync.
+
+    Returns:
+        list[dict[str, str]]: Enum items with ``value`` and ``label`` keys.
+    """
+    return [
+        {"value": "kitsu_wins", "label": "Kitsu wins"},
+        {"value": "ayon_wins", "label": "AYON wins"},
+    ]
+
+
+class TwoWaySyncSettings(BaseSettingsModel):
+    """Experimental AYON to Kitsu sync. Every toggle is off by default.
+
+    Nothing is written to Kitsu unless the master toggle and the toggle of
+    the change's category are both enabled. Project overrides take
+    precedence over studio values.
+    """
+
+    enabled: bool = SettingsField(
+        False,
+        title="Enable AYON to Kitsu sync",
+        description=(
+            "Master toggle. When disabled, no AYON change is written to"
+            " Kitsu, whatever the category toggles are."
+        ),
+    )
+    task_status: bool = SettingsField(False, title="Task status")
+    task_assignees: bool = SettingsField(False, title="Task assignees")
+    entity_attributes: bool = SettingsField(
+        False,
+        title="Entity attributes",
+        description="Frame range, fps, resolution and description.",
+    )
+    entity_creation: bool = SettingsField(False, title="Entity creation")
+    entity_rename: bool = SettingsField(False, title="Entity rename")
+    entity_deletion: bool = SettingsField(False, title="Entity deletion")
+    conflict_policy: str = SettingsField(
+        "kitsu_wins",
+        enum_resolver=_conflict_policy_enum,
+        title="Conflict policy",
+        description=(
+            "What happens when the Kitsu value changed since the AYON value"
+            " was last synced. 'Kitsu wins' keeps the Kitsu value and syncs"
+            " it back to AYON. 'AYON wins' overwrites Kitsu."
+        ),
+    )
+
+
 class SyncSettings(BaseSettingsModel):
-    """Enabling 'Delete projects' will remove projects on Ayon when they get deleted on Kitsu"""
+    """Enabling 'Delete projects' will remove projects on Ayon when they get
+    deleted on Kitsu.
+    """
 
     delete_projects: bool = SettingsField(title="Delete projects")
     sync_users: SyncUsers = SettingsField(
@@ -127,6 +185,10 @@ class SyncSettings(BaseSettingsModel):
     sync_casting: SyncCasting = SettingsField(
         default_factory=SyncCasting,
         title="Sync casting",
+    )
+    two_way_sync: TwoWaySyncSettings = SettingsField(
+        default_factory=TwoWaySyncSettings,
+        title="Two-way sync (experimental)",
     )
     default_sync_info: DefaultSyncInfo = SettingsField(
         default_factory=DefaultSyncInfo,
@@ -144,6 +206,16 @@ SYNC_DEFAULT_VALUES = {
     "sync_casting": {
         "enabled": False,
         "casting_link_type": "breakdown",
+    },
+    "two_way_sync": {
+        "enabled": False,
+        "task_status": False,
+        "task_assignees": False,
+        "entity_attributes": False,
+        "entity_creation": False,
+        "entity_rename": False,
+        "entity_deletion": False,
+        "conflict_policy": "kitsu_wins",
     },
     "default_sync_info": {
         "default_task_info": [
