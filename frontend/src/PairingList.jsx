@@ -19,11 +19,18 @@ import styled, { keyframes } from 'styled-components'
 const ACTIVE_SYNC_STATUSES = new Set(['pending', 'restarted', 'in_progress'])
 const ACTIVE_POLL_MS = 2000
 const IDLE_POLL_MS = 15000
+const NOTICE_TTL_MS = 8000
 
 const isSyncActive = (fullSync) => {
   if (!fullSync) return false
   if (ACTIVE_SYNC_STATUSES.has(fullSync.status)) return true
   return fullSync.status === 'failed' && Boolean(fullSync.retryable)
+}
+
+const parseTimeMs = (iso) => {
+  if (!iso) return 0
+  const ms = Date.parse(iso)
+  return Number.isFinite(ms) ? ms : 0
 }
 
 const spin = keyframes`
@@ -118,10 +125,11 @@ const Table = styled.table`
   }
 `
 
-const ProjectCell = styled.span`
+const StatusCellRow = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  flex-wrap: wrap;
 `
 
 const StatusIndicator = styled.span`
@@ -249,16 +257,27 @@ const PairingList = () => {
   const syncStatusReqIdRef = useRef(0)
   const inFlightPollRef = useRef(false)
 
-  const loadSyncStatus = useCallback(({ includeSettings = false } = {}) => {
+  // Auto-expire transient action notices so they never hide newer processor errors.
+  useEffect(() => {
+    if (!notice || notice.tone === 'error' || notice.tone === 'warning') {
+      return undefined
+    }
+    const timerId = setTimeout(() => {
+      setNotice((current) =>
+        current && current.createdAt === notice.createdAt ? null : current
+      )
+    }, NOTICE_TTL_MS)
+    return () => clearTimeout(timerId)
+  }, [notice])
+
+  const loadSyncStatus = useCallback(() => {
     if (!addonData.baseUrl) {
       return Promise.resolve()
     }
     const reqId = ++syncStatusReqIdRef.current
     inFlightPollRef.current = true
     return axios
-      .get(`${addonData.baseUrl}/sync-status`, {
-        params: { include_settings: includeSettings },
-      })
+      .get(`${addonData.baseUrl}/sync-status`)
       .then((response) => {
         if (reqId !== syncStatusReqIdRef.current) {
           return
@@ -288,6 +307,7 @@ const PairingList = () => {
                 tone: 'success',
                 icon: 'check_circle',
                 text: `Synced ${projectName}`,
+                createdAt: Date.now(),
               })
             } else if (fullSync.status === 'failed') {
               setNotice({
@@ -298,31 +318,17 @@ const PairingList = () => {
                 errorMessage:
                   fullSync.error || fullSync.description || 'Sync failed.',
                 updatedAt: fullSync.updatedAt,
+                createdAt: Date.now(),
               })
             }
           }
         })
 
-        setSyncStatusData((prev) => {
-          const mergedProjects = {}
-          Object.entries(incomingProjects).forEach(([name, proj]) => {
-            mergedProjects[name] = includeSettings
-              ? proj
-              : {
-                  ...proj,
-                  twoWaySyncEnabled:
-                    prev.projects?.[name]?.twoWaySyncEnabled ??
-                    proj.twoWaySyncEnabled,
-                }
-          })
-          return {
-            projects: mergedProjects,
-            processorRunning:
-              data.processorRunning !== undefined
-                ? data.processorRunning
-                : null,
-            lastServiceError: data.lastServiceError || null,
-          }
+        setSyncStatusData({
+          projects: incomingProjects,
+          processorRunning:
+            data.processorRunning !== undefined ? data.processorRunning : null,
+          lastServiceError: data.lastServiceError || null,
         })
       })
       .catch((err) => {
@@ -359,7 +365,7 @@ const PairingList = () => {
 
   const refreshAll = useCallback(() => {
     loadPairings()
-    loadSyncStatus({ includeSettings: true })
+    loadSyncStatus()
   }, [loadPairings, loadSyncStatus])
 
   useEffect(() => {
@@ -387,7 +393,7 @@ const PairingList = () => {
           scheduleNext()
           return
         }
-        loadSyncStatus({ includeSettings: false }).finally(scheduleNext)
+        loadSyncStatus().finally(scheduleNext)
       }, delayMs)
     }
 
@@ -434,6 +440,7 @@ const PairingList = () => {
           tone: 'warning',
           icon: 'warning',
           text: `Queued ${projectName} (processor offline)`,
+          createdAt: Date.now(),
         })
       } else {
         setNotice({
@@ -442,10 +449,11 @@ const PairingList = () => {
           text: isPairing
             ? `Paired ${projectName}, sync queued`
             : `Sync queued for ${projectName}`,
+          createdAt: Date.now(),
         })
       }
 
-      loadSyncStatus({ includeSettings: isPairing })
+      loadSyncStatus()
     },
     [loadSyncStatus, syncStatusData.processorRunning, syncStatusData.projects]
   )
@@ -471,6 +479,7 @@ const PairingList = () => {
       text: `Could not sync ${projectName}`,
       errorTitle: `Sync request failed — ${projectName}`,
       errorMessage: message,
+      createdAt: Date.now(),
     })
   }, [])
 
@@ -494,11 +503,14 @@ const PairingList = () => {
       )
     }
 
+    const serviceErr = syncStatusData.lastServiceError
+
     if (syncStatusData.processorRunning === false) {
-      const err = syncStatusData.lastServiceError
-      if (err) {
+      if (serviceErr) {
         const errDetail =
-          err.error || err.description || 'Unknown processor error.'
+          serviceErr.error ||
+          serviceErr.description ||
+          'Unknown processor error.'
         return (
           <StatusButton
             type="button"
@@ -508,7 +520,7 @@ const PairingList = () => {
               setErrorModal({
                 title: 'Kitsu processor offline — recent error',
                 message: errDetail,
-                updatedAt: err.updatedAt,
+                updatedAt: serviceErr.updatedAt,
               })
             }
           >
@@ -522,6 +534,36 @@ const PairingList = () => {
           <Icon icon="warning" />
           <NoticeText>Kitsu processor offline</NoticeText>
         </StatusNotice>
+      )
+    }
+
+    // If a newer processor error arrived after the last action notice,
+    // surface the processor error instead of letting an old notice mask it.
+    const serviceErrIsNewer =
+      serviceErr &&
+      (!notice || parseTimeMs(serviceErr.updatedAt) > (notice.createdAt || 0))
+
+    if (serviceErrIsNewer) {
+      const errDetail =
+        serviceErr.error ||
+        serviceErr.description ||
+        'Unknown processor error.'
+      return (
+        <StatusButton
+          type="button"
+          $tone="error"
+          title="View processor error"
+          onClick={() =>
+            setErrorModal({
+              title: 'Kitsu processor error',
+              message: errDetail,
+              updatedAt: serviceErr.updatedAt,
+            })
+          }
+        >
+          <Icon icon="error" />
+          <NoticeText>Recent processor error</NoticeText>
+        </StatusButton>
       )
     }
 
@@ -553,30 +595,6 @@ const PairingList = () => {
       )
     }
 
-    if (syncStatusData.lastServiceError) {
-      const errDetail =
-        syncStatusData.lastServiceError.error ||
-        syncStatusData.lastServiceError.description ||
-        'Unknown processor error.'
-      return (
-        <StatusButton
-          type="button"
-          $tone="error"
-          title="View processor error"
-          onClick={() =>
-            setErrorModal({
-              title: 'Kitsu processor error',
-              message: errDetail,
-              updatedAt: syncStatusData.lastServiceError.updatedAt,
-            })
-          }
-        >
-          <Icon icon="error" />
-          <NoticeText>Recent processor error</NoticeText>
-        </StatusButton>
-      )
-    }
-
     return null
   }
 
@@ -586,53 +604,94 @@ const PairingList = () => {
     }
 
     const fullSync = projectStatus?.fullSync
-    if (!fullSync) {
+    const inboundErr = projectStatus?.lastInboundError
+    const showInboundErr = Boolean(
+      inboundErr &&
+        (!fullSync ||
+          fullSync.status !== 'finished' ||
+          parseTimeMs(inboundErr.updatedAt) > parseTimeMs(fullSync.updatedAt))
+    )
+
+    if (!fullSync && !showInboundErr) {
       return <Muted>—</Muted>
     }
 
-    const effectiveKey =
-      fullSync.status === 'failed' && fullSync.retryable
-        ? 'retrying'
-        : fullSync.status
-    const meta = STATUS_META[effectiveKey]
-    if (!meta) {
-      return <Muted>—</Muted>
+    let fullSyncEl = null
+    if (fullSync) {
+      const effectiveKey =
+        fullSync.status === 'failed' && fullSync.retryable
+          ? 'retrying'
+          : fullSync.status
+      const meta = STATUS_META[effectiveKey]
+      if (meta) {
+        if (effectiveKey === 'failed') {
+          const errMsg =
+            fullSync.error || fullSync.description || 'Sync failed.'
+          fullSyncEl = (
+            <StatusButton
+              type="button"
+              $tone="error"
+              title="View full-sync error details"
+              onClick={() =>
+                setErrorModal({
+                  title: `Sync failed — ${pairing.ayonProjectName}`,
+                  message: errMsg,
+                  updatedAt: fullSync.updatedAt,
+                })
+              }
+            >
+              <Icon icon={meta.icon} style={{ fontSize: 16 }} />
+              <span>{meta.label}</span>
+            </StatusButton>
+          )
+        } else {
+          const tooltipParts = []
+          if (effectiveKey === 'retrying' && fullSync.error) {
+            tooltipParts.push(`Retrying after error: ${fullSync.error}`)
+          } else if (fullSync.description) {
+            tooltipParts.push(fullSync.description)
+          }
+          if (fullSync.updatedAt) {
+            tooltipParts.push(formatTimestamp(fullSync.updatedAt))
+          }
+          fullSyncEl = (
+            <StatusIndicator $tone={meta.tone} title={tooltipParts.join(' · ')}>
+              <SpinningIcon $spinning={Boolean(meta.spin)} icon={meta.icon} />
+              <span>{meta.label}</span>
+            </StatusIndicator>
+          )
+        }
+      }
     }
 
-    if (effectiveKey === 'failed') {
-      const errMsg = fullSync.error || fullSync.description || 'Sync failed.'
-      return (
+    let inboundEl = null
+    if (showInboundErr) {
+      const inboundMsg =
+        inboundErr.error || inboundErr.description || 'Inbound update failed.'
+      inboundEl = (
         <StatusButton
           type="button"
           $tone="error"
-          title="View error details"
+          title="View inbound live-sync error"
           onClick={() =>
             setErrorModal({
-              title: `Sync failed — ${pairing.ayonProjectName}`,
-              message: errMsg,
-              updatedAt: fullSync.updatedAt,
+              title: `Inbound sync failed — ${pairing.ayonProjectName}`,
+              message: inboundMsg,
+              updatedAt: inboundErr.updatedAt,
             })
           }
         >
-          <Icon icon={meta.icon} style={{ fontSize: 16 }} />
-          <span>{meta.label}</span>
+          <Icon icon="error" style={{ fontSize: 15 }} />
+          <span>Live error</span>
         </StatusButton>
       )
     }
 
-    const tooltipParts = []
-    if (effectiveKey === 'retrying' && fullSync.error) {
-      tooltipParts.push(`Retrying after error: ${fullSync.error}`)
-    } else if (fullSync.description) {
-      tooltipParts.push(fullSync.description)
-    }
-    if (fullSync.updatedAt) tooltipParts.push(formatTimestamp(fullSync.updatedAt))
-
     return (
-      <StatusIndicator $tone={meta.tone} title={tooltipParts.join(' · ')}>
-        <SpinningIcon $spinning={Boolean(meta.spin)} icon={meta.icon} />
-        <span>{meta.label}</span>
-      </StatusIndicator>
+      <StatusCellRow>
+        {fullSyncEl}
+        {inboundEl}
+      </StatusCellRow>
     )
   }
 
@@ -682,23 +741,7 @@ const PairingList = () => {
                     <tr key={pairing.kitsuProjectId}>
                       <td>{pairing.kitsuProjectName}</td>
                       <td>
-                        {pairing.ayonProjectName ? (
-                          <ProjectCell>
-                            <span>{pairing.ayonProjectName}</span>
-                            {projectStatus?.twoWaySyncEnabled && (
-                              <Icon
-                                icon="sync_alt"
-                                title="Two-way sync enabled"
-                                style={{
-                                  fontSize: 15,
-                                  color: 'var(--md-sys-color-primary)',
-                                }}
-                              />
-                            )}
-                          </ProjectCell>
-                        ) : (
-                          <Warn>Not paired</Warn>
-                        )}
+                        {pairing.ayonProjectName || <Warn>Not paired</Warn>}
                       </td>
                       <td>{renderStatusCell(pairing, projectStatus)}</td>
                       <td>

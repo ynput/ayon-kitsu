@@ -17,6 +17,8 @@ SYNC_REQUEST_EXPIRY = timedelta(days=3)
 #: Maximum age of an ASH service heartbeat before considering it stale.
 PROCESSOR_HEARTBEAT_TTL = timedelta(minutes=5)
 
+_ACTIVE_CHILD_STATUSES = frozenset({"pending", "restarted", "in_progress"})
+
 
 class SyncEventInfoModel(OPModel):
     """Summary of an AYON sync event for UI status display."""
@@ -41,14 +43,8 @@ class ProjectSyncStatusModel(OPModel):
     full_sync: SyncEventInfoModel | None = Field(
         None, title="Latest full sync status"
     )
-    last_outbound: SyncEventInfoModel | None = Field(
-        None, title="Latest outbound sync event"
-    )
     last_inbound_error: SyncEventInfoModel | None = Field(
         None, title="Latest inbound sync error"
-    )
-    two_way_sync_enabled: bool = Field(
-        False, title="Whether two-way sync is enabled for the project"
     )
 
 
@@ -184,7 +180,7 @@ def _is_service_alive(row: Any, now_utc: datetime) -> bool:
 
 
 def _is_request_expired(row: Any, now_utc: datetime) -> bool:
-    """Return True if an unenrolled ``kitsu.sync_request`` exceeded 3 days.
+    """Return True if a ``kitsu.sync_request`` exceeded AYON's 3-day window.
 
     Args:
         row: ``kitsu.sync_request`` row from ``events``.
@@ -205,16 +201,19 @@ def _row_to_event_info(
     status_override: str | None = None,
     description_override: str | None = None,
     check_retryable: bool = False,
+    source_expired: bool = False,
 ) -> SyncEventInfoModel:
     """Convert an ``events`` table row into ``SyncEventInfoModel``.
 
     Args:
         row: Mapping/Record from Postgres ``events`` table.
-        status_override: Optional status override (e.g. ``pending`` for an
-            unenrolled ``kitsu.sync_request``).
+        status_override: Optional status override (e.g. ``pending`` or
+            ``expired``).
         description_override: Optional description override.
         check_retryable: Whether to compute ``retryable`` from ``retries``
             and ``depends_on`` for ``kitsu.sync`` jobs.
+        source_expired: True when the parent ``kitsu.sync_request`` has aged
+            out of AYON's enrollment window and will not be re-enrolled.
 
     Returns:
         Serialized ``SyncEventInfoModel`` instance.
@@ -228,8 +227,17 @@ def _row_to_event_info(
     raw_retries = _row_get(row, "retries")
     retries = raw_retries if isinstance(raw_retries, int) else None
     depends_on = _row_get(row, "depends_on")
+
+    if source_expired and status == "restarted":
+        status = "expired"
+        description = (
+            "Sync request expired before processor enrolled it; "
+            "click Sync now to retry."
+        )
+
     retryable = bool(
         check_retryable
+        and not source_expired
         and status == "failed"
         and depends_on is not None
         and retries is not None
@@ -247,28 +255,131 @@ def _row_to_event_info(
     )
 
 
-async def get_sync_status(
-    addon: "KitsuAddon",
-    *,
-    include_settings: bool = True,
-) -> SyncStatusResponseModel:
+def _is_manual_child_active(row: Any, source_expired: bool) -> bool:
+    """Return True if a manual ``kitsu.sync`` child job is still active.
+
+    Args:
+        row: ``kitsu.sync`` row linked to a ``kitsu.sync_request``.
+        source_expired: Whether the parent ``kitsu.sync_request`` expired.
+
+    Returns:
+        True if the job is pending, in progress, or still eligible for
+        enrollment/retry.
+    """
+    if source_expired:
+        return False
+    status = str(row["status"])
+    if status in _ACTIVE_CHILD_STATUSES:
+        return True
+    raw_retries = _row_get(row, "retries")
+    return (
+        status == "failed"
+        and _row_get(row, "depends_on") is not None
+        and isinstance(raw_retries, int)
+        and raw_retries <= SYNC_MAX_RETRIES
+    )
+
+
+def _resolve_project_full_sync(
+    sync_row: Any | None,
+    req_row: Any | None,
+    manual_sync_row: Any | None,
+    now_utc: datetime,
+) -> SyncEventInfoModel | None:
+    """Resolve the authoritative full-sync status for one project.
+
+    Keeps an unexpired queued or active manual request visible even if an
+    independent startup ``kitsu.sync`` ran in the meantime, and prevents
+    expired source requests from keeping ``Sync now`` permanently disabled.
+
+    Args:
+        sync_row: Latest ``kitsu.sync`` event for the project (manual or
+            startup).
+        req_row: Latest ``kitsu.sync_request`` event for the project.
+        manual_sync_row: ``kitsu.sync`` child job linked to ``req_row``, if
+            already enrolled.
+        now_utc: Current UTC timestamp.
+
+    Returns:
+        Resolved ``SyncEventInfoModel`` or None if never synced.
+    """
+    req_expired = (
+        _is_request_expired(req_row, now_utc) if req_row is not None else False
+    )
+
+    # 1. Unenrolled manual request: keep it visible while unexpired so a
+    #    newer startup kitsu.sync never masks the queued manual request.
+    if req_row is not None and manual_sync_row is None:
+        if not req_expired:
+            return _row_to_event_info(
+                req_row,
+                status_override="pending",
+                description_override=(
+                    "Sync queued, waiting for Kitsu processor..."
+                ),
+            )
+        # Request expired without enrollment: show a newer startup sync if one
+        # ran after the request, otherwise mark the request expired/retryable.
+        req_ts = _to_utc_datetime(req_row["updated_at"])
+        sync_ts = (
+            _to_utc_datetime(sync_row["updated_at"])
+            if sync_row is not None
+            else None
+        )
+        if sync_row is not None and (
+            req_ts is None or (sync_ts is not None and sync_ts > req_ts)
+        ):
+            return _row_to_event_info(sync_row, check_retryable=True)
+        return _row_to_event_info(
+            req_row,
+            status_override="expired",
+            description_override=(
+                "Sync request expired before processor enrolled it; "
+                "click Sync now to retry."
+            ),
+        )
+
+    # 2. Enrolled manual job still active (queued, restarted, in progress, or
+    #    retrying): keep it visible over any independent startup sync.
+    if manual_sync_row is not None and _is_manual_child_active(
+        manual_sync_row, req_expired
+    ):
+        return _row_to_event_info(
+            manual_sync_row,
+            check_retryable=True,
+            source_expired=req_expired,
+        )
+
+    # 3. Otherwise show the latest kitsu.sync row (manual or startup),
+    #    accounting for whether its parent sync_request has expired.
+    chosen = sync_row if sync_row is not None else manual_sync_row
+    if chosen is None:
+        return None
+    chosen_source_expired = bool(
+        req_row is not None
+        and req_expired
+        and str(_row_get(chosen, "depends_on") or "") == str(req_row["id"])
+    )
+    return _row_to_event_info(
+        chosen,
+        check_retryable=True,
+        source_expired=chosen_source_expired,
+    )
+
+
+async def get_sync_status(addon: "KitsuAddon") -> SyncStatusResponseModel:
     """Collect current Kitsu sync status for paired projects and processor.
 
     Args:
         addon: Active Kitsu server addon instance.
-        include_settings: When True, resolve per-project ``two_way_sync``
-            settings. Callers on fast polling loops may set this to False to
-            avoid redundant settings queries.
 
     Returns:
-        Aggregated status response containing per-project full/outbound/inbound
-        sync states and processor health.
+        Aggregated status response containing per-project full/inbound sync
+        states and processor health.
     """
     now_utc = datetime.now(timezone.utc)
     projects: dict[str, ProjectSyncStatusModel] = {}
 
-    # Fetch paired projects into memory first so the DB connection is released
-    # before any per-project settings lookups run.
     project_rows = await Postgres.fetch(
         """
         SELECT
@@ -281,29 +392,15 @@ async def get_sync_status(
 
     for row in project_rows:
         project_name = row["name"]
-        two_way_enabled = False
-        if include_settings:
-            try:
-                proj_settings = await addon.get_project_settings(project_name)
-                sync_settings = getattr(proj_settings, "sync_settings", None)
-                two_way = getattr(sync_settings, "two_way_sync", None)
-                two_way_enabled = bool(getattr(two_way, "enabled", False))
-            except Exception as exc:
-                logging.debug(
-                    f"Unable to read two-way sync setting for "
-                    f"{project_name}: {exc}"
-                )
-
         projects[project_name] = ProjectSyncStatusModel(
             project_name=project_name,
             kitsu_project_id=row["kitsu_project_id"],
-            two_way_sync_enabled=two_way_enabled,
         )
 
     if projects:
         project_names = list(projects.keys())
 
-        # Latest kitsu.sync job per project
+        # Latest kitsu.sync job per project (manual or startup)
         sync_rows = await Postgres.fetch(
             """
             SELECT DISTINCT ON (project_name)
@@ -318,8 +415,7 @@ async def get_sync_status(
         )
         sync_by_project = {row["project_name"]: row for row in sync_rows}
 
-        # Latest kitsu.sync_request per project (covers newly queued syncs
-        # before the processor enrolls a kitsu.sync child job)
+        # Latest kitsu.sync_request per project
         req_rows = await Postgres.fetch(
             """
             SELECT DISTINCT ON (project_name)
@@ -334,63 +430,38 @@ async def get_sync_status(
         )
         req_by_project = {row["project_name"]: row for row in req_rows}
 
+        # Child kitsu.sync jobs matching the latest kitsu.sync_request per
+        # project, so startup syncs cannot mask queued manual requests.
+        manual_by_project: dict[str, Any] = {}
+        req_ids = [str(row["id"]) for row in req_rows]
+        if req_ids:
+            child_rows = await Postgres.fetch(
+                """
+                SELECT DISTINCT ON (depends_on)
+                    id, topic, project_name, depends_on, status, retries,
+                    description, payload, updated_at
+                FROM events
+                WHERE topic = 'kitsu.sync'
+                  AND depends_on = ANY($1)
+                ORDER BY depends_on, updated_at DESC
+                """,
+                req_ids,
+            )
+            child_by_req_id = {
+                str(row["depends_on"]): row for row in child_rows
+            }
+            for project_name, req_row in req_by_project.items():
+                child = child_by_req_id.get(str(req_row["id"]))
+                if child is not None:
+                    manual_by_project[project_name] = child
+
         for project_name, model in projects.items():
-            sync_row = sync_by_project.get(project_name)
-            req_row = req_by_project.get(project_name)
-
-            use_request_row = False
-            if sync_row is not None and req_row is not None:
-                req_ts = _to_utc_datetime(req_row["updated_at"])
-                sync_ts = _to_utc_datetime(sync_row["updated_at"])
-                use_request_row = (
-                    str(sync_row["depends_on"] or "") != str(req_row["id"])
-                    and req_ts is not None
-                    and sync_ts is not None
-                    and req_ts > sync_ts
-                )
-            elif sync_row is None and req_row is not None:
-                use_request_row = True
-
-            if use_request_row and req_row is not None:
-                if _is_request_expired(req_row, now_utc):
-                    model.full_sync = _row_to_event_info(
-                        req_row,
-                        status_override="expired",
-                        description_override=(
-                            "Sync request expired before processor enrolled "
-                            "it; click Sync now to retry."
-                        ),
-                    )
-                else:
-                    model.full_sync = _row_to_event_info(
-                        req_row,
-                        status_override="pending",
-                        description_override=(
-                            "Sync queued, waiting for Kitsu processor..."
-                        ),
-                    )
-            elif sync_row is not None:
-                model.full_sync = _row_to_event_info(
-                    sync_row, check_retryable=True
-                )
-
-        # Latest outbound sync job per project
-        outbound_rows = await Postgres.fetch(
-            """
-            SELECT DISTINCT ON (project_name)
-                id, topic, project_name, status,
-                description, payload, updated_at
-            FROM events
-            WHERE topic = 'kitsu.outbound_sync'
-              AND project_name = ANY($1)
-            ORDER BY project_name, updated_at DESC
-            """,
-            project_names,
-        )
-        for row in outbound_rows:
-            model = projects.get(row["project_name"])
-            if model is not None:
-                model.last_outbound = _row_to_event_info(row)
+            model.full_sync = _resolve_project_full_sync(
+                sync_by_project.get(project_name),
+                req_by_project.get(project_name),
+                manual_by_project.get(project_name),
+                now_utc,
+            )
 
         # Latest failed inbound event per project
         inbound_err_rows = await Postgres.fetch(

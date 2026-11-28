@@ -604,7 +604,7 @@ def test_server_sync_request_returns_event_ids_and_validates_pairing(
 def test_server_get_sync_status_aggregates_project_and_service_state(
     monkeypatch,
 ):
-    """get_sync_status handles retries, expiry, heartbeats, and settings."""
+    """get_sync_status handles retries, expiry, startup precedence, health."""
     now = datetime.now(timezone.utc)
     stale_req = now - timedelta(days=4)
     stale_hb = now - timedelta(minutes=10)
@@ -620,6 +620,50 @@ def test_server_get_sync_status_aggregates_project_and_service_state(
                     {"name": "proj_a", "kitsu_project_id": "kp-a"},
                     {"name": "proj_b", "kitsu_project_id": "kp-b"},
                     {"name": "proj_c", "kitsu_project_id": "kp-c"},
+                    {"name": "proj_d", "kitsu_project_id": "kp-d"},
+                    {"name": "proj_e", "kitsu_project_id": "kp-e"},
+                ]
+            if (
+                "WHERE topic = 'kitsu.sync'" in query
+                and "depends_on = ANY" in query
+            ):
+                return [
+                    # proj_a: active retryable manual job with fresh request
+                    {
+                        "id": "ev-sync-a",
+                        "topic": "kitsu.sync",
+                        "project_name": "proj_a",
+                        "depends_on": "ev-req-a",
+                        "status": "failed",
+                        "retries": 1,
+                        "description": "Sync failed: timeout",
+                        "payload": {"error": "Kitsu HTTP 504"},
+                        "updated_at": now,
+                    },
+                    # proj_d: restarted child job whose parent request expired
+                    {
+                        "id": "ev-sync-d",
+                        "topic": "kitsu.sync",
+                        "project_name": "proj_d",
+                        "depends_on": "ev-req-d",
+                        "status": "restarted",
+                        "retries": 0,
+                        "description": "Sync queued",
+                        "payload": {},
+                        "updated_at": stale_req,
+                    },
+                    # proj_e: failed child job (retries=1) whose parent expired
+                    {
+                        "id": "ev-sync-e",
+                        "topic": "kitsu.sync",
+                        "project_name": "proj_e",
+                        "depends_on": "ev-req-e",
+                        "status": "failed",
+                        "retries": 1,
+                        "description": "Sync failed",
+                        "payload": {"error": "Old transient error"},
+                        "updated_at": stale_req,
+                    },
                 ]
             if "WHERE topic = 'kitsu.sync'" in query:
                 return [
@@ -633,10 +677,53 @@ def test_server_get_sync_status_aggregates_project_and_service_state(
                         "description": "Sync failed: timeout",
                         "payload": {"error": "Kitsu HTTP 504"},
                         "updated_at": now,
-                    }
+                    },
+                    # proj_b: newer startup sync MUST NOT mask unenrolled req
+                    {
+                        "id": "ev-startup-b",
+                        "topic": "kitsu.sync",
+                        "project_name": "proj_b",
+                        "depends_on": None,
+                        "status": "finished",
+                        "retries": 0,
+                        "description": "Kitsu startup sync finished",
+                        "payload": {},
+                        "updated_at": now + timedelta(seconds=10),
+                    },
+                    {
+                        "id": "ev-sync-d",
+                        "topic": "kitsu.sync",
+                        "project_name": "proj_d",
+                        "depends_on": "ev-req-d",
+                        "status": "restarted",
+                        "retries": 0,
+                        "description": "Sync queued",
+                        "payload": {},
+                        "updated_at": stale_req,
+                    },
+                    {
+                        "id": "ev-sync-e",
+                        "topic": "kitsu.sync",
+                        "project_name": "proj_e",
+                        "depends_on": "ev-req-e",
+                        "status": "failed",
+                        "retries": 1,
+                        "description": "Sync failed",
+                        "payload": {"error": "Old transient error"},
+                        "updated_at": stale_req,
+                    },
                 ]
             if "WHERE topic = 'kitsu.sync_request'" in query:
                 return [
+                    {
+                        "id": "ev-req-a",
+                        "topic": "kitsu.sync_request",
+                        "project_name": "proj_a",
+                        "status": "finished",
+                        "description": "Sync request from Kitsu",
+                        "payload": {},
+                        "updated_at": now,
+                    },
                     {
                         "id": "ev-req-b",
                         "topic": "kitsu.sync_request",
@@ -655,18 +742,24 @@ def test_server_get_sync_status_aggregates_project_and_service_state(
                         "payload": {},
                         "updated_at": stale_req,
                     },
-                ]
-            if "WHERE topic = 'kitsu.outbound_sync'" in query:
-                return [
                     {
-                        "id": "ev-out-a",
-                        "topic": "kitsu.outbound_sync",
-                        "project_name": "proj_a",
+                        "id": "ev-req-d",
+                        "topic": "kitsu.sync_request",
+                        "project_name": "proj_d",
                         "status": "finished",
-                        "description": "Applied: task status updated",
+                        "description": "Sync request from Kitsu",
                         "payload": {},
-                        "updated_at": now,
-                    }
+                        "updated_at": stale_req,
+                    },
+                    {
+                        "id": "ev-req-e",
+                        "topic": "kitsu.sync_request",
+                        "project_name": "proj_e",
+                        "status": "finished",
+                        "description": "Sync request from Kitsu",
+                        "payload": {},
+                        "updated_at": stale_req,
+                    },
                 ]
             if "WHERE topic = 'kitsu.inbound_sync'" in query:
                 return []
@@ -699,57 +792,47 @@ def test_server_get_sync_status_aggregates_project_and_service_state(
         REPO_ROOT / "server" / "kitsu" / "sync_status.py",
     )
 
-    settings_calls = []
-
     class FakeAddon:
         name = "kitsu"
-
-        async def get_project_settings(self, project_name: str) -> Any:
-            settings_calls.append(project_name)
-            return SimpleNamespace(
-                sync_settings=SimpleNamespace(
-                    two_way_sync=SimpleNamespace(
-                        enabled=(project_name == "proj_a")
-                    )
-                )
-            )
 
     # 1. Stale heartbeat -> processor_running is False
     result = _run_coro(mod.get_sync_status(FakeAddon()))
     assert result.processor_running is False
     assert result.last_service_error.error == "Kitsu login failed"
-    assert len(settings_calls) == 3
 
     proj_a = result.projects["proj_a"]
-    assert proj_a.two_way_sync_enabled is True
     assert proj_a.full_sync.status == "failed"
     assert proj_a.full_sync.retryable is True
     assert proj_a.full_sync.error == "Kitsu HTTP 504"
-    assert proj_a.last_outbound.status == "finished"
 
+    # proj_b: unenrolled manual request stays pending despite newer startup
     proj_b = result.projects["proj_b"]
-    assert proj_b.two_way_sync_enabled is False
     assert proj_b.full_sync.status == "pending"
     assert "waiting for Kitsu processor" in proj_b.full_sync.description
 
-    # >3-day unenrolled request is reported as expired (retryable via Sync now)
+    # proj_c: >3-day unenrolled request is expired (retryable via Sync now)
     proj_c = result.projects["proj_c"]
     assert proj_c.full_sync.status == "expired"
+    assert proj_c.full_sync.retryable is False
 
-    # 2. Fresh heartbeat + include_settings=False skips settings queries
-    settings_calls.clear()
+    # proj_d: restarted child job whose parent expired -> expired/retryable
+    proj_d = result.projects["proj_d"]
+    assert proj_d.full_sync.status == "expired"
+    assert proj_d.full_sync.retryable is False
+
+    # proj_e: failed child job whose parent expired -> terminal failed
+    proj_e = result.projects["proj_e"]
+    assert proj_e.full_sync.status == "failed"
+    assert proj_e.full_sync.retryable is False
+
+    # 2. Fresh heartbeat -> processor_running is True
     FakePostgres.service_rows = [{"is_running": True, "last_seen": fresh_hb}]
-    result_fast = _run_coro(
-        mod.get_sync_status(FakeAddon(), include_settings=False)
-    )
-    assert result_fast.processor_running is True
-    assert settings_calls == []
+    result_live = _run_coro(mod.get_sync_status(FakeAddon()))
+    assert result_live.processor_running is True
 
     # 3. No managed service rows -> processor_running is None (unknown)
     FakePostgres.service_rows = []
-    result_unmanaged = _run_coro(
-        mod.get_sync_status(FakeAddon(), include_settings=False)
-    )
+    result_unmanaged = _run_coro(mod.get_sync_status(FakeAddon()))
     assert result_unmanaged.processor_running is None
 
 
@@ -820,8 +903,8 @@ def test_server_sync_status_endpoint_requires_manager(monkeypatch):
         sys.modules, f"{pkg_name}.kitsu.pairing_list", pairing_list_mod
     )
 
-    async def fake_get_sync_status(_addon, *, include_settings: bool = True):
-        called.append(include_settings)
+    async def fake_get_sync_status(_addon):
+        called.append(True)
         return {"ok": True}
 
     sync_status_mod = types.ModuleType(f"{pkg_name}.kitsu.sync_status")
@@ -866,6 +949,6 @@ def test_server_sync_status_endpoint_requires_manager(monkeypatch):
         _run_coro(addon.sync_status(artist))
     assert called == []
 
-    res = _run_coro(addon.sync_status(manager, include_settings=False))
+    res = _run_coro(addon.sync_status(manager))
     assert res == {"ok": True}
-    assert called == [False]
+    assert called == [True]
