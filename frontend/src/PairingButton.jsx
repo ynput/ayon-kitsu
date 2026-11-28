@@ -3,45 +3,55 @@ import addonData from '/src/common'
 
 import { useState, useEffect } from 'react'
 
-import { FormLayout, FormRow, Button, InputText } from '@ynput/ayon-react-components'
-import Dialog from '/src/components/Dialog'
+import {
+  FormLayout,
+  FormRow,
+  Button,
+  InputText,
+  Dialog,
+} from '@ynput/ayon-react-components'
 import styled from 'styled-components'
 
-
-const ErrorContainer = styled.div`
-  color: red;
-  font-weight: bold;
-  margin-top: 1rem;
+const ErrorText = styled.div`
+  color: var(--md-sys-color-error);
+  margin-top: 0.75rem;
+  font-size: 13px;
   max-width: 400px;
-
 `
 
 const ActionButton = styled(Button)`
-  width: 120px;
+  min-width: 116px;
 `
 
+const extractErrorMessage = (error, fallback = 'Request failed') => {
+  const detail = error?.response?.data?.detail
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail
+  }
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail.map((item) => item?.msg || JSON.stringify(item)).join('; ')
+  }
+  if (error?.message) {
+    return error.message
+  }
+  return fallback
+}
 
-const PairingDialog = ({ pairing, onHide }) => {
-  const [ayonProjectName, setAyonProjectName] = useState()
-  const [ayonProjectCode, setAyonProjectCode] = useState()
+const PairingDialog = ({ pairing, onHide, onPaired }) => {
+  const [ayonProjectName, setAyonProjectName] = useState('')
+  const [ayonProjectCode, setAyonProjectCode] = useState('')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  //create a default name
   useEffect(() => {
-    // create a ayon name and ayon code
-    // based on pairing.kitsuProjectName
-    // ayon project names can only contain alphanumeric characters and underscores
-    // ayon project codes can only contain alphanumeric characters and must be 3-6 characters long
-
-    let name = pairing.kitsuProjectName
+    let name = pairing.kitsuProjectName || ''
     name = name.replace(/[^a-zA-Z0-9_]/g, '_')
     name = name.replace(/_+/g, '_')
     name = name.replace(/^_/, '')
     name = name.replace(/_$/, '')
     setAyonProjectName(name)
 
-    let code = pairing.kitsuProjectCode || pairing.kitsuProjectName
+    let code = pairing.kitsuProjectCode || pairing.kitsuProjectName || ''
     code = code.replace(/[^a-zA-Z0-9]/g, '')
     code = code.replace(/_+/g, '')
     code = code.replace(/^_/, '')
@@ -49,26 +59,27 @@ const PairingDialog = ({ pairing, onHide }) => {
     code = code.toLowerCase()
     code = code.substring(0, 6)
     setAyonProjectCode(code)
-
   }, [pairing])
-
 
   const onPair = () => {
     setLoading(true)
+    setError(null)
     axios
-      .post(
-        `${addonData.baseUrl}/pairing`, {
+      .post(`${addonData.baseUrl}/pairing`, {
         kitsuProjectId: pairing.kitsuProjectId,
-        ayonProjectName: ayonProjectName,
-        ayonProjectCode: ayonProjectCode,
+        ayonProjectName,
+        ayonProjectCode,
       })
       .then((response) => {
         setError(null)
+        if (onPaired) {
+          onPaired(ayonProjectName, response.data)
+        }
         onHide()
       })
-      .catch((error) => {
-        console.log(error)
-        setError(error.response.data?.detail || "error")
+      .catch((err) => {
+        console.error('Failed to pair Kitsu project:', err)
+        setError(extractErrorMessage(err, 'Unable to pair project'))
       })
       .finally(() => {
         setLoading(false)
@@ -76,92 +87,127 @@ const PairingDialog = ({ pairing, onHide }) => {
   }
 
   return (
-    <Dialog visible={true} onHide={onHide}>
-      <h1>Pair Kitsu project {pairing.kitsuProjectName}</h1>
-
+    <Dialog
+      visible={true}
+      onHide={onHide}
+      header={`Pair ${pairing.kitsuProjectName}`}
+      footer={
+        <>
+          <Button label="Cancel" disabled={loading} onClick={onHide} />
+          <Button
+            variant="filled"
+            label={loading ? 'Pairing...' : 'Pair'}
+            disabled={loading}
+            onClick={onPair}
+          />
+        </>
+      }
+    >
       <FormLayout>
-        <FormRow label="Ayon project name">
+        <FormRow label="AYON project name">
           <InputText
             value={ayonProjectName}
+            disabled={loading}
             onChange={(e) => setAyonProjectName(e.target.value)}
           />
         </FormRow>
-        <FormRow label="Ayon project code">
+        <FormRow label="AYON project code">
           <InputText
             value={ayonProjectCode}
+            disabled={loading}
             onChange={(e) => setAyonProjectCode(e.target.value)}
           />
         </FormRow>
-        <FormRow>
-          <Button label="Pair" onClick={onPair} />
-        </FormRow>
       </FormLayout>
-      {error && (
-        <ErrorContainer>
-          {error}
-        </ErrorContainer>
-      )}
-      {loading && "Please wait..."}
+      {error && <ErrorText>{error}</ErrorText>}
     </Dialog>
   )
 }
 
-
-const PairingButton = ({ onPair, pairing }) => {
+const PairingButton = ({
+  onPair,
+  onPaired,
+  onSyncTriggered,
+  onSyncError,
+  pairing,
+  syncState,
+}) => {
   const [showPairingDialog, setShowPairingDialog] = useState(false)
-  const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
 
+  const syncStatus = syncState?.fullSync?.status
+  const isQueued = syncStatus === 'pending' || syncStatus === 'restarted'
+  const isInProgress = syncStatus === 'in_progress'
+  const isBusy = loading || isQueued || isInProgress
+
   const onSync = () => {
+    if (isBusy) {
+      return
+    }
+    setLoading(true)
     axios
       .post(`${addonData.baseUrl}/sync/${pairing.ayonProjectName}`)
       .then((response) => {
-        setError(null)
-        onPair()
+        if (onSyncTriggered) {
+          onSyncTriggered(pairing.ayonProjectName, response.data)
+        }
+        if (onPair) {
+          onPair()
+        }
       })
-      .catch((error) => {
-        console.log(error)
-        setError(error.response.data?.detail || "error")
+      .catch((err) => {
+        console.error('Failed to trigger Kitsu sync:', err)
+        if (onSyncError) {
+          onSyncError(
+            pairing.ayonProjectName,
+            extractErrorMessage(err, 'Failed to queue sync')
+          )
+        }
       })
       .finally(() => {
         setLoading(false)
       })
   }
 
-  // project is not paired yet show pairing button
   if (!pairing.ayonProjectName) {
     return (
       <>
         {showPairingDialog && (
           <PairingDialog
             pairing={pairing}
+            onPaired={onPaired}
             onHide={() => {
               setShowPairingDialog(false)
-              onPair()
+              if (onPair) {
+                onPair()
+              }
             }}
           />
         )}
         <ActionButton
-          label={`Pair project`}
+          label="Pair project"
           icon="link"
-          onClick={() => {
-            setShowPairingDialog(true)
-          }}
+          onClick={() => setShowPairingDialog(true)}
         />
       </>
     )
   }
 
+  let label = 'Sync now'
+  if (loading || isQueued) {
+    label = 'Queued'
+  } else if (isInProgress) {
+    label = 'Syncing'
+  }
 
   return (
     <ActionButton
-      label={`Sync now`}
+      label={label}
       icon="sync"
+      disabled={isBusy}
       onClick={onSync}
     />
   )
-
 }
-
 
 export default PairingButton

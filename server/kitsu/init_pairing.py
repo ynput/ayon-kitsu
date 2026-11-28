@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 from ayon_server.entities import UserEntity
 from ayon_server.events import dispatch_event, update_event
-from ayon_server.exceptions import ConflictException
+from ayon_server.exceptions import BadRequestException, ConflictException
 from ayon_server.helpers.deploy_project import create_project_from_anatomy
 from ayon_server.lib.postgres import Postgres
 from ayon_server.types import (
@@ -34,6 +34,16 @@ class InitPairingRequest(OPModel):
     # anatomy_preset: str | None = Field(None, title="Anatomy preset")
 
 
+class SyncRequestResponseModel(OPModel):
+    """Response payload returned when a Kitsu full sync is queued."""
+
+    event_id: str = Field(..., title="Sync request event ID")
+    sync_event_id: str | None = Field(None, title="Sync job event ID")
+    project_name: str = Field(..., title="AYON project name")
+    kitsu_project_id: str = Field(..., title="Kitsu project ID")
+    status: str = Field(..., title="Sync request status")
+
+
 async def ensure_ayon_project_not_exists(project_name: str, project_code: str):
     async for _ in Postgres.iterate(
         "SELECT name FROM projects WHERE name = $1 OR code = $2",
@@ -48,7 +58,22 @@ async def sync_request(
     project_name: str,
     user: UserEntity,
     kitsu_project_id: str | None = None,
-):
+) -> SyncRequestResponseModel:
+    """Queue or restart a Kitsu full-sync job for a paired AYON project.
+
+    Args:
+        project_name: Name of the AYON project to sync.
+        user: Authenticated AYON user initiating the sync.
+        kitsu_project_id: Optional Kitsu project ID; resolved from project
+            metadata when omitted.
+
+    Returns:
+        Structured metadata containing the queued event IDs and status.
+
+    Raises:
+        BadRequestException: If the AYON project does not exist or is not
+            paired with a Kitsu project.
+    """
     if kitsu_project_id is None:
         async for res in Postgres.iterate(
             "SELECT data->>'kitsuProjectId' as kitsu_project_id "
@@ -56,6 +81,11 @@ async def sync_request(
             project_name,
         ):
             kitsu_project_id = res["kitsu_project_id"]
+
+    if not kitsu_project_id:
+        raise BadRequestException(
+            f"Project '{project_name}' is not paired with a Kitsu project"
+        )
 
     hash = hashlib.sha256(
         f"kitsu_sync_{project_name}_{kitsu_project_id}".encode("utf-8")
@@ -69,42 +99,71 @@ async def sync_request(
     res = await Postgres.fetch(query, hash)
 
     if res:
+        event_id = str(res[0][0])
         await update_event(
-            res[0][0],
+            event_id,
             description="Sync request from Kitsu",
             project=project_name,
             user=user.name,
         )
 
-        await Postgres.execute(
+        sync_rows = await Postgres.fetch(
             """
             UPDATE events SET
                 updated_at = NOW(),
                 status = 'restarted',
-                retries = 0
+                retries = 0,
+                description = 'Sync queued, waiting for Kitsu processor...',
+                payload = '{}'::jsonb
             WHERE topic = 'kitsu.sync'
             AND depends_on = $1
+            RETURNING id
             """,
-            res[0][0],
+            event_id,
         )
-    else:
-        await dispatch_event(
-            "kitsu.sync_request",
-            hash=hash,
-            description="Sync request from Kitsu",
-            project=project_name,
-            user=user.name,
-            summary={
-                "kitsuProjectId": kitsu_project_id,
-            },
+        sync_event_id = str(sync_rows[0][0]) if sync_rows else None
+        return SyncRequestResponseModel(
+            event_id=event_id,
+            sync_event_id=sync_event_id,
+            project_name=project_name,
+            kitsu_project_id=kitsu_project_id,
+            status="restarted" if sync_event_id else "pending",
         )
+
+    event_id = await dispatch_event(
+        "kitsu.sync_request",
+        hash=hash,
+        description="Sync request from Kitsu",
+        project=project_name,
+        user=user.name,
+        summary={
+            "kitsuProjectId": kitsu_project_id,
+        },
+    )
+    return SyncRequestResponseModel(
+        event_id=str(event_id),
+        sync_event_id=None,
+        project_name=project_name,
+        kitsu_project_id=kitsu_project_id,
+        status="pending",
+    )
 
 
 async def init_pairing(
     addon: "KitsuAddon",
     user: "UserEntity",
     request: InitPairingRequest,
-):
+) -> SyncRequestResponseModel:
+    """Create and pair an AYON project with a Kitsu project, then queue sync.
+
+    Args:
+        addon: Active Kitsu server addon instance.
+        user: Authenticated AYON user creating the pairing.
+        request: Pairing payload with Kitsu project ID and AYON name/code.
+
+    Returns:
+        Structured metadata for the initial queued full-sync event.
+    """
     await ensure_ayon_project_not_exists(
         request.ayon_project_name,
         request.ayon_project_code,
@@ -129,7 +188,7 @@ async def init_pairing(
         request.ayon_project_name,
     )
 
-    await sync_request(
+    return await sync_request(
         project_name=request.ayon_project_name,
         user=user,
         kitsu_project_id=request.kitsu_project_id,
