@@ -19,6 +19,13 @@ const ErrorText = styled.div`
   max-width: 400px;
 `
 
+const DialogActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+`
+
 const ActionButton = styled(Button)`
   min-width: 116px;
 `
@@ -86,22 +93,14 @@ const PairingDialog = ({ pairing, onHide, onPaired }) => {
       })
   }
 
+  // Render submit actions inside the body instead of Dialog's `footer` prop:
+  // @ynput/ayon-react-components@0.4.18 memoizes `footer` solely on `header`,
+  // which would otherwise capture a stale `onPair` closure with empty values.
   return (
     <Dialog
       visible={true}
       onHide={onHide}
       header={`Pair ${pairing.kitsuProjectName}`}
-      footer={
-        <>
-          <Button label="Cancel" disabled={loading} onClick={onHide} />
-          <Button
-            variant="filled"
-            label={loading ? 'Pairing...' : 'Pair'}
-            disabled={loading}
-            onClick={onPair}
-          />
-        </>
-      }
     >
       <FormLayout>
         <FormRow label="AYON project name">
@@ -120,6 +119,15 @@ const PairingDialog = ({ pairing, onHide, onPaired }) => {
         </FormRow>
       </FormLayout>
       {error && <ErrorText>{error}</ErrorText>}
+      <DialogActions>
+        <Button label="Cancel" disabled={loading} onClick={onHide} />
+        <Button
+          variant="filled"
+          label={loading ? 'Pairing...' : 'Pair'}
+          disabled={loading}
+          onClick={onPair}
+        />
+      </DialogActions>
     </Dialog>
   )
 }
@@ -135,10 +143,12 @@ const PairingButton = ({
   const [showPairingDialog, setShowPairingDialog] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const syncStatus = syncState?.fullSync?.status
+  const fullSync = syncState?.fullSync
+  const syncStatus = fullSync?.status
   const isQueued = syncStatus === 'pending' || syncStatus === 'restarted'
   const isInProgress = syncStatus === 'in_progress'
-  const isBusy = loading || isQueued || isInProgress
+  const isRetrying = syncStatus === 'failed' && Boolean(fullSync?.retryable)
+  const isBusy = loading || isQueued || isInProgress || isRetrying
 
   const onSync = () => {
     if (isBusy) {
@@ -198,6 +208,8 @@ const PairingButton = ({
     label = 'Queued'
   } else if (isInProgress) {
     label = 'Syncing'
+  } else if (isRetrying) {
+    label = 'Retrying'
   }
 
   return (

@@ -107,21 +107,18 @@ class KitsuProcessor:
                     f"Password secret `{password_secret}` not set"
                 )
 
-            try:
-                self.kitsu_login_email = (
-                    ayon_api.get_secret(email_secret)["value"]
-                )
-                self.kitsu_login_password = (
-                    ayon_api.get_secret(password_secret)["value"]
-                )
-            except KeyError as e:
-                err_msg = f"Kitsu secret `{e}` not found in AYON secrets"
-                self._dispatch_service_error(err_msg)
-                raise KitsuSettingsError(err_msg) from e
+            self.kitsu_login_email = self._read_kitsu_secret(
+                email_secret, "email"
+            )
+            self.kitsu_login_password = self._read_kitsu_secret(
+                password_secret, "password"
+            )
 
             assert self.kitsu_login_password, "Kitsu password not set"
             assert self.kitsu_server_url, "Kitsu server not set"
             assert self.kitsu_login_email, "Kitsu email not set"
+        except KitsuSettingsError:
+            raise
         except (AssertionError, ValueError, AttributeError) as e:
             err_msg = f"KitsuProcessor failed to initialize: {e}"
             logging.error(err_msg)
@@ -269,6 +266,60 @@ class KitsuProcessor:
                     log_traceback()
                 disconnected_since = None
 
+    def _read_kitsu_secret(self, secret_name: str, label: str) -> str:
+        """Fetch a named AYON secret and report lookup failures to AYON.
+
+        Args:
+            secret_name: Secret key configured in Kitsu addon settings.
+            label: Human-readable role of the secret (e.g. ``email``).
+
+        Returns:
+            Secret string value.
+
+        Raises:
+            KitsuSettingsError: When the secret cannot be fetched or is empty.
+        """
+        client = getattr(self, "ayon_api", ayon_api)
+        try:
+            secret = client.get_secret(secret_name)
+            value = secret["value"] if isinstance(secret, dict) else None
+        except Exception as exc:
+            err_msg = (
+                f"Unable to read Kitsu {label} secret `{secret_name}`: {exc}"
+            )
+            logging.error(err_msg)
+            self._dispatch_service_error(err_msg)
+            raise KitsuSettingsError(err_msg) from exc
+
+        if not value:
+            err_msg = (
+                f"Kitsu {label} secret `{secret_name}` is missing or empty"
+            )
+            logging.error(err_msg)
+            self._dispatch_service_error(err_msg)
+            raise KitsuSettingsError(err_msg)
+        return value
+
+    def _extract_event_id(self, res: Any) -> str | None:
+        """Extract an AYON event ID from a ``dispatch_event`` response.
+
+        Args:
+            res: Response returned by ``ayon_api.dispatch_event``.
+
+        Returns:
+            Event ID string when present, else None.
+        """
+        if isinstance(res, str):
+            return res
+        if isinstance(res, dict):
+            return res.get("id")
+        res_data = getattr(res, "data", None)
+        if isinstance(res_data, dict):
+            return res_data.get("id")
+        if isinstance(res_data, str):
+            return res_data
+        return None
+
     def _redact_error_text(self, text: str) -> str:
         """Strip configured Kitsu credentials from error text before storing.
 
@@ -365,17 +416,7 @@ class KitsuProcessor:
                 finished=False,
                 store=True,
             )
-            event_id = None
-            if isinstance(res, str):
-                event_id = res
-            elif isinstance(res, dict):
-                event_id = res.get("id")
-            else:
-                res_data = getattr(res, "data", None)
-                if isinstance(res_data, dict):
-                    event_id = res_data.get("id")
-                elif isinstance(res_data, str):
-                    event_id = res_data
+            event_id = self._extract_event_id(res)
             if event_id and hasattr(client, "update_event"):
                 client.update_event(
                     event_id,
@@ -403,8 +444,9 @@ class KitsuProcessor:
         Returns:
             Handler return value on success, or ``None`` on failure.
         """
+        event_data = dict(data) if isinstance(data, dict) else data
         try:
-            result = handler(self, data)
+            result = handler(self, event_data)
             if result is not None:
                 status_code = getattr(result, "status_code", None)
                 if isinstance(status_code, int) and status_code >= 400:
@@ -421,7 +463,7 @@ class KitsuProcessor:
         except Exception as exc:
             tb_text = traceback.format_exc()
             log_traceback(f"Inbound Kitsu event '{event_name}' failed")
-            self._dispatch_inbound_error(event_name, data, exc, tb_text)
+            self._dispatch_inbound_error(event_name, event_data, exc, tb_text)
             return None
 
     def add_gazu_listeners(self):
@@ -569,6 +611,101 @@ class KitsuProcessor:
             )
         return True
 
+    def _run_startup_full_sync(
+        self, project_id: str, project_name: str
+    ) -> bool:
+        """Run startup full sync and record outcome in ``kitsu.sync`` events.
+
+        Args:
+            project_id: Kitsu project ID.
+            project_name: Paired AYON project name.
+
+        Returns:
+            True on success, False on failure.
+        """
+        client = getattr(self, "ayon_api", ayon_api)
+        event_id = None
+        if hasattr(client, "dispatch_event"):
+            try:
+                res = client.dispatch_event(
+                    "kitsu.sync",
+                    sender=SENDER,
+                    project_name=project_name,
+                    description="Startup syncing Kitsu project...",
+                    finished=False,
+                    store=True,
+                )
+                event_id = self._extract_event_id(res)
+                if event_id and hasattr(client, "update_event"):
+                    client.update_event(
+                        event_id,
+                        sender=SENDER,
+                        status="in_progress",
+                        project_name=project_name,
+                        description="Startup syncing Kitsu project...",
+                    )
+            except Exception:
+                log_traceback(
+                    f"Unable to record startup kitsu.sync event for "
+                    f"{project_name}"
+                )
+
+        try:
+            project_full_sync(self, project_id, project_name)
+        except Exception as exc:
+            tb_text = traceback.format_exc()
+            log_traceback(f"Unable to sync kitsu project {project_name}")
+            error_text = self._redact_error_text(
+                str(exc) or type(exc).__name__
+            )
+            safe_tb = self._redact_error_text(tb_text)
+            short_err = (
+                error_text[:200] + "..."
+                if len(error_text) > 200
+                else error_text
+            )
+            if event_id and hasattr(client, "update_event"):
+                try:
+                    client.update_event(
+                        event_id,
+                        sender=SENDER,
+                        status="failed",
+                        project_name=project_name,
+                        description=f"Startup sync failed: {short_err}",
+                        payload={
+                            "error": error_text,
+                            "message": safe_tb,
+                        },
+                    )
+                except Exception:
+                    log_traceback(
+                        f"Unable to update startup kitsu.sync failure for "
+                        f"{project_name}"
+                    )
+            self._dispatch_service_error(
+                f"Startup full sync failed for project {project_name}: {exc}",
+                traceback_text=tb_text,
+                project_name=project_name,
+            )
+            return False
+
+        if event_id and hasattr(client, "update_event"):
+            try:
+                client.update_event(
+                    event_id,
+                    sender=SENDER,
+                    status="finished",
+                    project_name=project_name,
+                    description="Kitsu startup sync finished",
+                    payload={},
+                )
+            except Exception:
+                log_traceback(
+                    f"Unable to update startup kitsu.sync completion for "
+                    f"{project_name}"
+                )
+        return True
+
     def start_processing(self):
         logging.info("KitsuProcessor started")
         startup = True
@@ -580,18 +717,7 @@ class KitsuProcessor:
                 for project_id, project_name in self.pairing_list.items():
                     if not project_id or not project_name:
                         continue
-                    try:
-                        project_full_sync(self, project_id, project_name)
-                    except Exception as exc:
-                        log_traceback(
-                            f"Unable to sync kitsu project {project_name}"
-                        )
-                        self._dispatch_service_error(
-                            "Startup full sync failed for project "
-                            f"{project_name}: {exc}",
-                            traceback_text=traceback.format_exc(),
-                            project_name=project_name,
-                        )
+                    self._run_startup_full_sync(project_id, project_name)
                 startup = False
 
             if not self._poll_sync_request_once():

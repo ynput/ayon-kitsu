@@ -3,7 +3,7 @@
 import importlib.util
 import sys
 import types
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -363,6 +363,91 @@ def test_dispatch_service_error_emits_redacted_log_error():
     assert "super-secret-password" not in ev["payload"]["traceback"]
 
 
+def test_read_kitsu_secret_reports_http_errors():
+    """HTTP 404/403 from get_secret dispatches log.error and raises."""
+    from processor.processor import KitsuSettingsError
+
+    client = _RecordingAyonClient()
+
+    def failing_get_secret(name: str):
+        raise RuntimeError(f"404 Not Found: secret {name}")
+
+    client.get_secret = failing_get_secret
+    proc = _make_processor(client)
+
+    with pytest.raises(KitsuSettingsError, match="kitsu_pwd_secret"):
+        proc._read_kitsu_secret("kitsu_pwd_secret", "password")
+
+    log_errors = [
+        ev for ev in client.events.values() if ev["topic"] == "log.error"
+    ]
+    assert len(log_errors) == 1
+    assert "kitsu_pwd_secret" in log_errors[0]["payload"]["message"]
+
+
+def test_startup_full_sync_records_kitsu_sync_status(monkeypatch):
+    """Startup full sync writes kitsu.sync finished/failed status."""
+    client = _RecordingAyonClient()
+    proc = _make_processor(client)
+
+    # 1. Success path
+    monkeypatch.setattr(
+        "processor.processor.project_full_sync", lambda *_a, **_k: None
+    )
+    assert proc._run_startup_full_sync("kitsu-p1", "proj1") is True
+    sync_events = [
+        ev for ev in client.events.values() if ev["topic"] == "kitsu.sync"
+    ]
+    assert len(sync_events) == 1
+    assert sync_events[0]["status"] == "finished"
+    assert sync_events[0]["project"] == "proj1"
+
+    # 2. Failure path
+    def boom(*_a, **_k):
+        raise RuntimeError("Push 500 with super-secret-password")
+
+    monkeypatch.setattr("processor.processor.project_full_sync", boom)
+    assert proc._run_startup_full_sync("kitsu-p1", "proj1") is False
+    sync_events = [
+        ev for ev in client.events.values() if ev["topic"] == "kitsu.sync"
+    ]
+    assert len(sync_events) == 2
+    assert sync_events[1]["status"] == "failed"
+    assert "super-secret-password" not in sync_events[1]["description"]
+    assert "super-secret-password" not in sync_events[1]["payload"]["error"]
+
+
+def test_inbound_handler_preserves_resolved_project_for_older_zou():
+    """Resolved project_id on task:update without project_id is recorded."""
+    client = _RecordingAyonClient()
+    proc = _make_processor(client)
+
+    original_data = {"task_id": "t-legacy"}
+
+    def legacy_task_handler(_proc, event_data):
+        # Simulate create_or_update_task resolving project_id from gazu
+        event_data["project_id"] = "kitsu-p1"
+        return _FakeHttpResponse(500, detail="Validation failed")
+
+    assert (
+        proc._run_inbound_handler(
+            "task:update", legacy_task_handler, original_data
+        )
+        is None
+    )
+    # Caller's original dict is not mutated
+    assert "project_id" not in original_data
+
+    inbound_events = [
+        ev
+        for ev in client.events.values()
+        if ev["topic"] == "kitsu.inbound_sync"
+    ]
+    assert len(inbound_events) == 1
+    assert inbound_events[0]["project"] == "proj1"
+    assert inbound_events[0]["status"] == "failed"
+
+
 # ---------------------------------------------------------------------------
 # Server endpoints helpers: init_pairing.sync_request & sync_status
 # ---------------------------------------------------------------------------
@@ -519,17 +604,23 @@ def test_server_sync_request_returns_event_ids_and_validates_pairing(
 def test_server_get_sync_status_aggregates_project_and_service_state(
     monkeypatch,
 ):
-    """get_sync_status returns per-project sync states and processor health."""
-    now = datetime(2026, 11, 28, 10, 0, 0, tzinfo=timezone.utc)
+    """get_sync_status handles retries, expiry, heartbeats, and settings."""
+    now = datetime.now(timezone.utc)
+    stale_req = now - timedelta(days=4)
+    stale_hb = now - timedelta(minutes=10)
+    fresh_hb = now - timedelta(seconds=30)
 
     class FakePostgres:
-        @classmethod
-        async def iterate(cls, _query, *_args):
-            yield {"name": "proj_a", "kitsu_project_id": "kp-a"}
-            yield {"name": "proj_b", "kitsu_project_id": "kp-b"}
+        service_rows = [{"is_running": True, "last_seen": stale_hb}]
 
         @classmethod
         async def fetch(cls, query, *_args):
+            if "FROM projects" in query:
+                return [
+                    {"name": "proj_a", "kitsu_project_id": "kp-a"},
+                    {"name": "proj_b", "kitsu_project_id": "kp-b"},
+                    {"name": "proj_c", "kitsu_project_id": "kp-c"},
+                ]
             if "WHERE topic = 'kitsu.sync'" in query:
                 return [
                     {
@@ -538,6 +629,7 @@ def test_server_get_sync_status_aggregates_project_and_service_state(
                         "project_name": "proj_a",
                         "depends_on": "ev-req-a",
                         "status": "failed",
+                        "retries": 1,
                         "description": "Sync failed: timeout",
                         "payload": {"error": "Kitsu HTTP 504"},
                         "updated_at": now,
@@ -553,7 +645,16 @@ def test_server_get_sync_status_aggregates_project_and_service_state(
                         "description": "Sync request from Kitsu",
                         "payload": {},
                         "updated_at": now,
-                    }
+                    },
+                    {
+                        "id": "ev-req-c",
+                        "topic": "kitsu.sync_request",
+                        "project_name": "proj_c",
+                        "status": "finished",
+                        "description": "Sync request from Kitsu",
+                        "payload": {},
+                        "updated_at": stale_req,
+                    },
                 ]
             if "WHERE topic = 'kitsu.outbound_sync'" in query:
                 return [
@@ -570,7 +671,7 @@ def test_server_get_sync_status_aggregates_project_and_service_state(
             if "WHERE topic = 'kitsu.inbound_sync'" in query:
                 return []
             if "FROM services" in query:
-                return [{"is_running": False}]
+                return cls.service_rows
             if "WHERE topic = 'log.error'" in query:
                 return [
                     {
@@ -598,10 +699,13 @@ def test_server_get_sync_status_aggregates_project_and_service_state(
         REPO_ROOT / "server" / "kitsu" / "sync_status.py",
     )
 
+    settings_calls = []
+
     class FakeAddon:
         name = "kitsu"
 
         async def get_project_settings(self, project_name: str) -> Any:
+            settings_calls.append(project_name)
             return SimpleNamespace(
                 sync_settings=SimpleNamespace(
                     two_way_sync=SimpleNamespace(
@@ -610,13 +714,16 @@ def test_server_get_sync_status_aggregates_project_and_service_state(
                 )
             )
 
+    # 1. Stale heartbeat -> processor_running is False
     result = _run_coro(mod.get_sync_status(FakeAddon()))
     assert result.processor_running is False
     assert result.last_service_error.error == "Kitsu login failed"
+    assert len(settings_calls) == 3
 
     proj_a = result.projects["proj_a"]
     assert proj_a.two_way_sync_enabled is True
     assert proj_a.full_sync.status == "failed"
+    assert proj_a.full_sync.retryable is True
     assert proj_a.full_sync.error == "Kitsu HTTP 504"
     assert proj_a.last_outbound.status == "finished"
 
@@ -624,3 +731,141 @@ def test_server_get_sync_status_aggregates_project_and_service_state(
     assert proj_b.two_way_sync_enabled is False
     assert proj_b.full_sync.status == "pending"
     assert "waiting for Kitsu processor" in proj_b.full_sync.description
+
+    # >3-day unenrolled request is reported as expired (retryable via Sync now)
+    proj_c = result.projects["proj_c"]
+    assert proj_c.full_sync.status == "expired"
+
+    # 2. Fresh heartbeat + include_settings=False skips settings queries
+    settings_calls.clear()
+    FakePostgres.service_rows = [{"is_running": True, "last_seen": fresh_hb}]
+    result_fast = _run_coro(
+        mod.get_sync_status(FakeAddon(), include_settings=False)
+    )
+    assert result_fast.processor_running is True
+    assert settings_calls == []
+
+    # 3. No managed service rows -> processor_running is None (unknown)
+    FakePostgres.service_rows = []
+    result_unmanaged = _run_coro(
+        mod.get_sync_status(FakeAddon(), include_settings=False)
+    )
+    assert result_unmanaged.processor_running is None
+
+
+def test_server_sync_status_endpoint_requires_manager(monkeypatch):
+    """KitsuAddon.sync_status rejects non-manager users."""
+    called = []
+
+    class _ForbiddenException(Exception):
+        pass
+
+    class _InvalidSettingsException(Exception):
+        pass
+
+    class _BaseServerAddon:
+        pass
+
+    fastapi_mod = types.ModuleType("fastapi")
+    fastapi_resp_mod = types.ModuleType("fastapi.responses")
+    fastapi_resp_mod.JSONResponse = dict
+    monkeypatch.setitem(sys.modules, "fastapi", fastapi_mod)
+    monkeypatch.setitem(sys.modules, "fastapi.responses", fastapi_resp_mod)
+
+    ayon_server_mod = types.ModuleType("ayon_server")
+    addons_mod = types.ModuleType("ayon_server.addons")
+    addons_mod.BaseServerAddon = _BaseServerAddon
+    api_mod = types.ModuleType("ayon_server.api")
+    deps_mod = types.ModuleType("ayon_server.api.dependencies")
+    deps_mod.CurrentUser = SimpleNamespace
+    exc_mod = types.ModuleType("ayon_server.exceptions")
+    exc_mod.ForbiddenException = _ForbiddenException
+    exc_mod.InvalidSettingsException = _InvalidSettingsException
+    secrets_mod = types.ModuleType("ayon_server.secrets")
+    secrets_mod.Secrets = SimpleNamespace
+
+    for name, mod in {
+        "ayon_server": ayon_server_mod,
+        "ayon_server.addons": addons_mod,
+        "ayon_server.api": api_mod,
+        "ayon_server.api.dependencies": deps_mod,
+        "ayon_server.exceptions": exc_mod,
+        "ayon_server.secrets": secrets_mod,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, mod)
+
+    pkg_name = "_test_kitsu_addon_pkg"
+    pkg_mod = types.ModuleType(pkg_name)
+    pkg_mod.__path__ = [str(REPO_ROOT / "server")]
+    monkeypatch.setitem(sys.modules, pkg_name, pkg_mod)
+
+    kitsu_pkg = types.ModuleType(f"{pkg_name}.kitsu")
+    kitsu_pkg.Kitsu = object
+    kitsu_pkg.KitsuMock = object
+    monkeypatch.setitem(sys.modules, f"{pkg_name}.kitsu", kitsu_pkg)
+
+    init_pairing_mod = types.ModuleType(f"{pkg_name}.kitsu.init_pairing")
+    init_pairing_mod.InitPairingRequest = object
+    init_pairing_mod.SyncRequestResponseModel = object
+    init_pairing_mod.init_pairing = None
+    init_pairing_mod.sync_request = None
+    monkeypatch.setitem(
+        sys.modules, f"{pkg_name}.kitsu.init_pairing", init_pairing_mod
+    )
+
+    pairing_list_mod = types.ModuleType(f"{pkg_name}.kitsu.pairing_list")
+    pairing_list_mod.PairingItemModel = object
+    pairing_list_mod.get_pairing_list = None
+    monkeypatch.setitem(
+        sys.modules, f"{pkg_name}.kitsu.pairing_list", pairing_list_mod
+    )
+
+    async def fake_get_sync_status(_addon, *, include_settings: bool = True):
+        called.append(include_settings)
+        return {"ok": True}
+
+    sync_status_mod = types.ModuleType(f"{pkg_name}.kitsu.sync_status")
+    sync_status_mod.SyncStatusResponseModel = object
+    sync_status_mod.get_sync_status = fake_get_sync_status
+    monkeypatch.setitem(
+        sys.modules, f"{pkg_name}.kitsu.sync_status", sync_status_mod
+    )
+
+    user_list_mod = types.ModuleType(f"{pkg_name}.kitsu.user_list")
+    user_list_mod.get_user_sync_list = None
+    monkeypatch.setitem(
+        sys.modules, f"{pkg_name}.kitsu.user_list", user_list_mod
+    )
+
+    push_mod = types.ModuleType(f"{pkg_name}.kitsu.push")
+    push_mod.PushEntitiesRequestModel = object
+    push_mod.RemoveEntitiesRequestModel = object
+    push_mod.push_entities = None
+    push_mod.remove_entities = None
+    monkeypatch.setitem(sys.modules, f"{pkg_name}.kitsu.push", push_mod)
+
+    settings_mod = types.ModuleType(f"{pkg_name}.settings")
+    settings_mod.KitsuSettings = object
+    settings_mod.DEFAULT_VALUES = {}
+    settings_mod.convert_settings_overrides = None
+    monkeypatch.setitem(sys.modules, f"{pkg_name}.settings", settings_mod)
+
+    spec = importlib.util.spec_from_file_location(
+        f"{pkg_name}.__init__", REPO_ROOT / "server" / "__init__.py"
+    )
+    addon_mod = importlib.util.module_from_spec(spec)
+    addon_mod.__package__ = pkg_name
+    monkeypatch.setitem(sys.modules, f"{pkg_name}.__init__", addon_mod)
+    spec.loader.exec_module(addon_mod)
+
+    addon = addon_mod.KitsuAddon()
+    artist = SimpleNamespace(is_manager=False)
+    manager = SimpleNamespace(is_manager=True)
+
+    with pytest.raises(_ForbiddenException, match="Only managers"):
+        _run_coro(addon.sync_status(artist))
+    assert called == []
+
+    res = _run_coro(addon.sync_status(manager, include_settings=False))
+    assert res == {"ok": True}
+    assert called == [False]

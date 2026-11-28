@@ -81,8 +81,15 @@ class KitsuAddon(BaseServerAddon):
     async def sync_status(
         self,
         user: CurrentUser,
+        include_settings: bool = True,
     ) -> SyncStatusResponseModel:
-        return await get_sync_status(self)
+        if not user.is_manager:
+            raise ForbiddenException(
+                "Only managers can view Kitsu sync status"
+            )
+        return await get_sync_status(
+            self, include_settings=include_settings
+        )
 
     async def push(
         self,

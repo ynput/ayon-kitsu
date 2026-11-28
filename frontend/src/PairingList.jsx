@@ -20,6 +20,12 @@ const ACTIVE_SYNC_STATUSES = new Set(['pending', 'restarted', 'in_progress'])
 const ACTIVE_POLL_MS = 2000
 const IDLE_POLL_MS = 15000
 
+const isSyncActive = (fullSync) => {
+  if (!fullSync) return false
+  if (ACTIVE_SYNC_STATUSES.has(fullSync.status)) return true
+  return fullSync.status === 'failed' && Boolean(fullSync.retryable)
+}
+
 const spin = keyframes`
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -33,6 +39,7 @@ const PageWrapper = styled(Section)`
   min-height: 360px;
   padding: 16px;
   gap: 8px;
+  box-sizing: border-box;
 `
 
 const TableContainer = styled(Panel)`
@@ -54,12 +61,6 @@ const StatusNotice = styled.span`
     if ($tone === 'success') return 'var(--color-hl-production)'
     return 'var(--md-sys-color-on-surface)'
   }};
-
-  a {
-    color: var(--md-sys-color-primary);
-    text-decoration: underline;
-    white-space: nowrap;
-  }
 `
 
 const NoticeText = styled.span`
@@ -183,6 +184,13 @@ const ErrorDetailBox = styled.pre`
   overflow: auto;
 `
 
+const DialogFooterRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+`
+
 const SpinningIcon = styled(Icon)`
   font-size: 16px;
   animation: ${({ $spinning }) => ($spinning ? spin : 'none')} 1.2s linear infinite;
@@ -200,6 +208,8 @@ const STATUS_META = {
   in_progress: { icon: 'sync', label: 'Syncing', tone: 'info', spin: true },
   pending: { icon: 'schedule', label: 'Queued', tone: 'warning' },
   restarted: { icon: 'schedule', label: 'Queued', tone: 'warning' },
+  retrying: { icon: 'sync', label: 'Retrying', tone: 'warning', spin: true },
+  expired: { icon: 'schedule', label: 'Expired', tone: 'warning' },
   failed: { icon: 'error', label: 'Failed', tone: 'error' },
 }
 
@@ -237,22 +247,26 @@ const PairingList = () => {
 
   const watchedSyncsRef = useRef(new Map())
   const syncStatusReqIdRef = useRef(0)
+  const inFlightPollRef = useRef(false)
 
-  const loadSyncStatus = useCallback(() => {
+  const loadSyncStatus = useCallback(({ includeSettings = false } = {}) => {
     if (!addonData.baseUrl) {
       return Promise.resolve()
     }
     const reqId = ++syncStatusReqIdRef.current
+    inFlightPollRef.current = true
     return axios
-      .get(`${addonData.baseUrl}/sync-status`)
+      .get(`${addonData.baseUrl}/sync-status`, {
+        params: { include_settings: includeSettings },
+      })
       .then((response) => {
         if (reqId !== syncStatusReqIdRef.current) {
           return
         }
         const data = response.data || {}
-        const projectsMap = data.projects || {}
+        const incomingProjects = data.projects || {}
 
-        Object.entries(projectsMap).forEach(([projectName, projStatus]) => {
+        Object.entries(incomingProjects).forEach(([projectName, projStatus]) => {
           const fullSync = projStatus?.fullSync
           if (!fullSync) {
             return
@@ -261,7 +275,7 @@ const PairingList = () => {
           if (!watched) {
             return
           }
-          if (ACTIVE_SYNC_STATUSES.has(fullSync.status)) {
+          if (isSyncActive(fullSync)) {
             watched.seenActive = true
             return
           }
@@ -289,15 +303,35 @@ const PairingList = () => {
           }
         })
 
-        setSyncStatusData({
-          projects: projectsMap,
-          processorRunning:
-            data.processorRunning !== undefined ? data.processorRunning : null,
-          lastServiceError: data.lastServiceError || null,
+        setSyncStatusData((prev) => {
+          const mergedProjects = {}
+          Object.entries(incomingProjects).forEach(([name, proj]) => {
+            mergedProjects[name] = includeSettings
+              ? proj
+              : {
+                  ...proj,
+                  twoWaySyncEnabled:
+                    prev.projects?.[name]?.twoWaySyncEnabled ??
+                    proj.twoWaySyncEnabled,
+                }
+          })
+          return {
+            projects: mergedProjects,
+            processorRunning:
+              data.processorRunning !== undefined
+                ? data.processorRunning
+                : null,
+            lastServiceError: data.lastServiceError || null,
+          }
         })
       })
       .catch((err) => {
         console.error('Failed to load Kitsu sync status:', err)
+      })
+      .finally(() => {
+        if (reqId === syncStatusReqIdRef.current) {
+          inFlightPollRef.current = false
+        }
       })
   }, [])
 
@@ -325,7 +359,7 @@ const PairingList = () => {
 
   const refreshAll = useCallback(() => {
     loadPairings()
-    loadSyncStatus()
+    loadSyncStatus({ includeSettings: true })
   }, [loadPairings, loadSyncStatus])
 
   useEffect(() => {
@@ -335,20 +369,41 @@ const PairingList = () => {
   const hasActiveSync =
     watchedSyncsRef.current.size > 0 ||
     Object.values(syncStatusData.projects || {}).some((proj) =>
-      ACTIVE_SYNC_STATUSES.has(proj?.fullSync?.status)
+      isSyncActive(proj?.fullSync)
     )
 
+  // Chain the next poll only after the current request settles so slow
+  // responses are never superseded and discarded by overlapping intervals.
   useEffect(() => {
-    const intervalMs = hasActiveSync ? ACTIVE_POLL_MS : IDLE_POLL_MS
-    const timer = setInterval(() => {
-      loadSyncStatus()
-    }, intervalMs)
-    return () => clearInterval(timer)
+    let cancelled = false
+    let timerId = null
+    const delayMs = hasActiveSync ? ACTIVE_POLL_MS : IDLE_POLL_MS
+
+    const scheduleNext = () => {
+      if (cancelled) return
+      timerId = setTimeout(() => {
+        if (cancelled) return
+        if (inFlightPollRef.current) {
+          scheduleNext()
+          return
+        }
+        loadSyncStatus({ includeSettings: false }).finally(scheduleNext)
+      }, delayMs)
+    }
+
+    scheduleNext()
+    return () => {
+      cancelled = true
+      if (timerId !== null) {
+        clearTimeout(timerId)
+      }
+    }
   }, [hasActiveSync, loadSyncStatus])
 
   const markProjectSyncQueued = useCallback(
     (projectName, syncResponse, { isPairing = false } = {}) => {
       syncStatusReqIdRef.current += 1
+      inFlightPollRef.current = false
       const prevFullSync = syncStatusData.projects?.[projectName]?.fullSync
       watchedSyncsRef.current.set(projectName, {
         initialUpdatedAt: prevFullSync?.updatedAt || null,
@@ -367,6 +422,7 @@ const PairingList = () => {
               status: syncResponse?.status || 'pending',
               description: 'Sync queued',
               error: null,
+              retryable: false,
               updatedAt: new Date().toISOString(),
             },
           },
@@ -389,7 +445,7 @@ const PairingList = () => {
         })
       }
 
-      loadSyncStatus()
+      loadSyncStatus({ includeSettings: isPairing })
     },
     [loadSyncStatus, syncStatusData.processorRunning, syncStatusData.projects]
   )
@@ -439,6 +495,28 @@ const PairingList = () => {
     }
 
     if (syncStatusData.processorRunning === false) {
+      const err = syncStatusData.lastServiceError
+      if (err) {
+        const errDetail =
+          err.error || err.description || 'Unknown processor error.'
+        return (
+          <StatusButton
+            type="button"
+            $tone="warning"
+            title="View processor error details"
+            onClick={() =>
+              setErrorModal({
+                title: 'Kitsu processor offline — recent error',
+                message: errDetail,
+                updatedAt: err.updatedAt,
+              })
+            }
+          >
+            <Icon icon="warning" />
+            <NoticeText>Kitsu processor offline · View error</NoticeText>
+          </StatusButton>
+        )
+      }
       return (
         <StatusNotice $tone="warning">
           <Icon icon="warning" />
@@ -508,14 +586,21 @@ const PairingList = () => {
     }
 
     const fullSync = projectStatus?.fullSync
-    const meta = fullSync ? STATUS_META[fullSync.status] : null
+    if (!fullSync) {
+      return <Muted>—</Muted>
+    }
+
+    const effectiveKey =
+      fullSync.status === 'failed' && fullSync.retryable
+        ? 'retrying'
+        : fullSync.status
+    const meta = STATUS_META[effectiveKey]
     if (!meta) {
       return <Muted>—</Muted>
     }
 
-    if (fullSync.status === 'failed') {
-      const errMsg =
-        fullSync.error || fullSync.description || 'Sync failed.'
+    if (effectiveKey === 'failed') {
+      const errMsg = fullSync.error || fullSync.description || 'Sync failed.'
       return (
         <StatusButton
           type="button"
@@ -536,7 +621,11 @@ const PairingList = () => {
     }
 
     const tooltipParts = []
-    if (fullSync.description) tooltipParts.push(fullSync.description)
+    if (effectiveKey === 'retrying' && fullSync.error) {
+      tooltipParts.push(`Retrying after error: ${fullSync.error}`)
+    } else if (fullSync.description) {
+      tooltipParts.push(fullSync.description)
+    }
     if (fullSync.updatedAt) tooltipParts.push(formatTimestamp(fullSync.updatedAt))
 
     return (
@@ -636,15 +725,6 @@ const PairingList = () => {
           visible={true}
           onHide={() => setErrorModal(null)}
           header={errorModal.title}
-          footer={
-            <>
-              <NavLink href="/events" target="_parent" rel="noreferrer">
-                Open Events
-              </NavLink>
-              <Spacer />
-              <Button label="Close" onClick={() => setErrorModal(null)} />
-            </>
-          }
         >
           {errorModal.updatedAt && (
             <ErrorDetailMeta>
@@ -652,6 +732,13 @@ const PairingList = () => {
             </ErrorDetailMeta>
           )}
           <ErrorDetailBox>{errorModal.message}</ErrorDetailBox>
+          <DialogFooterRow>
+            <NavLink href="/events" target="_parent" rel="noreferrer">
+              Open Events
+            </NavLink>
+            <Spacer />
+            <Button label="Close" onClick={() => setErrorModal(null)} />
+          </DialogFooterRow>
         </Dialog>
       )}
     </PageWrapper>
