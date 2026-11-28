@@ -8,6 +8,8 @@ import ayon_api
 import gazu
 from nxtools import logging, slugify
 
+from .outbound.inbound_mirror import match_assignees_by_email
+
 
 def get_ayon_folders_by_kitsu_ids(
     project_name: str,
@@ -258,9 +260,10 @@ def get_task_persons(
 
 def preprocess_task(
     task: dict[str, Any],
-    task_types: dict[str, str],
-    statuses: dict[str, str],
-    ayon_users_by_email: dict[str, str],
+    task_types: dict[str, str] | None = None,
+    statuses: dict[str, str] | None = None,
+    ayon_users_by_email: dict[str, str] | None = None,
+    kitsu_project_id: str | None = None,
 ) -> dict[str, Any]:
     """Add Kitsu type/status names and AYON usernames to a task.
 
@@ -269,7 +272,18 @@ def preprocess_task(
         task_types: Kitsu task type names keyed by type ID.
         statuses: Kitsu task status names keyed by status ID.
         ayon_users_by_email: AYON usernames keyed by email.
+        kitsu_project_id: Optional Kitsu project ID for legacy callers.
     """
+    if not task_types and kitsu_project_id:
+        task_types = get_task_types(kitsu_project_id)
+    else:
+        task_types = task_types or {}
+
+    if not statuses and kitsu_project_id:
+        statuses = get_statuses()
+    else:
+        statuses = statuses or {}
+
     if "task_type_id" in task and task["task_type_id"] in task_types:
         task["task_type_name"] = task_types[task["task_type_id"]]
 
@@ -279,16 +293,19 @@ def preprocess_task(
     if "name" in task and "task_type_name" in task and task["name"] == "main":
         task["name"] = task["task_type_name"].lower()
 
-    task_emails = {
+    person_emails = [
         email
         for person in task.get("persons", [])
         if (email := person.get("email"))
-    }
-    task["assignees"] = [
-        ayon_users_by_email[email]
-        for email in task_emails
-        if email in ayon_users_by_email
     ]
+    if ayon_users_by_email is None:
+        ayon_users = ayon_api.get_users()
+    else:
+        ayon_users = [
+            {"name": name, "attrib": {"email": email}}
+            for email, name in ayon_users_by_email.items()
+        ]
+    task["assignees"] = match_assignees_by_email(person_emails, ayon_users)
 
     return task
 
