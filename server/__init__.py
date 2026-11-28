@@ -1,16 +1,22 @@
 from typing import Type, Any
 
+from fastapi.responses import JSONResponse
 from nxtools import logging
 
 from ayon_server.addons import BaseServerAddon
 from ayon_server.api.dependencies import CurrentUser
-from ayon_server.api.responses import EmptyResponse
 from ayon_server.exceptions import ForbiddenException, InvalidSettingsException
 from ayon_server.secrets import Secrets
 
 from .kitsu import Kitsu, KitsuMock
-from .kitsu.init_pairing import InitPairingRequest, init_pairing, sync_request
+from .kitsu.init_pairing import (
+    InitPairingRequest,
+    SyncRequestResponseModel,
+    init_pairing,
+    sync_request,
+)
 from .kitsu.pairing_list import PairingItemModel, get_pairing_list
+from .kitsu.sync_status import SyncStatusResponseModel, get_sync_status
 from .kitsu.user_list import get_user_sync_list
 from .kitsu.push import (
     PushEntitiesRequestModel,
@@ -53,6 +59,7 @@ class KitsuAddon(BaseServerAddon):
         self.add_endpoint("/pairing", self.list_pairings, method="GET")
         self.add_endpoint("/pairing", self.init_pairing, method="POST")
         self.add_endpoint("/sync/{project_name}", self.sync, method="POST")
+        self.add_endpoint("/sync-status", self.sync_status, method="GET")
         self.add_endpoint("/push", self.push, method="POST")
         self.add_endpoint("/remove", self.remove, method="POST")
         self.add_endpoint("/users", self.list_users, method="GET")
@@ -67,9 +74,19 @@ class KitsuAddon(BaseServerAddon):
     async def sync(
         self,
         user: CurrentUser,
-        project_name: str
-    ) -> EmptyResponse:
-        await sync_request(project_name, user)
+        project_name: str,
+    ) -> SyncRequestResponseModel:
+        return await sync_request(project_name, user)
+
+    async def sync_status(
+        self,
+        user: CurrentUser,
+    ) -> SyncStatusResponseModel:
+        if not user.is_manager:
+            raise ForbiddenException(
+                "Only managers can view Kitsu sync status"
+            )
+        return await get_sync_status(self)
 
     async def push(
         self,
@@ -124,12 +141,20 @@ class KitsuAddon(BaseServerAddon):
         self,
         user: CurrentUser,
         request: InitPairingRequest,
-    ) -> EmptyResponse:
+    ) -> JSONResponse:
         if not user.is_manager:
             raise ForbiddenException("Only managers can pair Kitsu projects")
         await self.ensure_kitsu()
-        await init_pairing(self, user, request)
-        return EmptyResponse(status_code=201)
+        result = await init_pairing(self, user, request)
+        content = (
+            result.model_dump(by_alias=True)
+            if hasattr(result, "model_dump")
+            else result.dict(by_alias=True)
+        )
+        return JSONResponse(
+            status_code=201,
+            content=content,
+        )
 
     #
     # Helpers

@@ -217,6 +217,7 @@ def create_or_update_task(
         )
         entity = gazu.task.get_task(data["task_id"])
         project_id = entity["project_id"]
+        data["project_id"] = project_id
 
     project_name = parent.get_paired_ayon_project(project_id)
     if not project_name:

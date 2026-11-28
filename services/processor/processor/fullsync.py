@@ -161,6 +161,33 @@ def get_casting_links(
     return casting_entities
 
 
+def _raise_for_push_error(response: Any) -> None:
+    """Raise when an AYON ``/push`` response indicates an HTTP error.
+
+    Args:
+        response: Response returned by ``ayon_api.post``.
+
+    Raises:
+        RuntimeError: When ``response.status_code`` is an integer >= 400 and
+            ``raise_for_status`` did not already raise.
+    """
+    if response is None:
+        return
+    if hasattr(response, "raise_for_status"):
+        response.raise_for_status()
+    status_code = getattr(response, "status_code", None)
+    if isinstance(status_code, int) and status_code >= 400:
+        detail = (
+            getattr(response, "detail", None)
+            or getattr(response, "text", None)
+            or ""
+        )
+        suffix = f": {detail}" if detail else ""
+        raise RuntimeError(
+            f"Kitsu push failed with HTTP status {status_code}{suffix}"
+        )
+
+
 def project_full_sync(
     parent: "KitsuProcessor", kitsu_project_id: str, project_name: str
 ):
@@ -219,11 +246,12 @@ def project_full_sync(
     for entity in entities:
         entity["ayon_server_url"] = ayon_api.get_base_url()
 
-    ayon_api.post(
+    response = ayon_api.post(
         f"{parent.entrypoint}/push",
         project_name=project_name,
         entities=entities,
     )
+    _raise_for_push_error(response)
 
     # Re-parent assets whose type changed while the processor was offline
     move_folders_by_asset_type(project_name, assets)
