@@ -3,14 +3,18 @@ name = "ayon-kitsu"
 version = "1.2.4-dev.1"
 description = ""
 package-mode = false
-authors = ["Martastain <martas@imm.cz>", "Scott McDonnell <scott@jammedia.com", "Jacob Danell <jacob@emberlight.se>"]
+authors = [
+    "Martastain <martas@imm.cz>",
+    "Scott McDonnell <scott@jammedia.com",
+    "Jacob Danell <jacob@emberlight.se>",
+]
 
 [tool.poetry.dependencies]
 python = "^3.8"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0.1"
-gazu = "^0.9.17"
+gazu = "^1.0.0"
 ayon-python-api = "^1.0.0"
 requests = "^2.27.1"
 nxtools = "^1.6"
@@ -18,6 +22,7 @@ pytest-mock = "^3.12.0"
 python-dotenv = "^1.0.1"
 codenamize = "^1.2.3"
 httpx = "^0.27.2"
+hypothesis = "6.113.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

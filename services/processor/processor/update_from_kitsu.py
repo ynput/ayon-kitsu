@@ -47,6 +47,19 @@ def delete_project(parent: "KitsuProcessor", data: dict[str, str]):
 
 def create_or_update_asset(parent: "KitsuProcessor", data: dict[str, str]):
     logging.info(f"create_or_update_asset: {data}")
+    if hasattr(parent, "wait_for_in_flight_creation"):
+        if not parent.wait_for_in_flight_creation(data.get("asset_id", "")):
+            logging.warning(
+                "Timed out waiting for in-flight creation of asset %s; "
+                "deferring inbound push",
+                data.get("asset_id"),
+            )
+            if hasattr(parent, "defer_inbound_call"):
+                parent.defer_inbound_call(
+                    create_or_update_asset, parent, data
+                )
+            return None
+
     project_name = parent.get_paired_ayon_project(data["project_id"])
     if not project_name:
         return  # do nothing as this kitsu and ayon project are not paired
@@ -88,6 +101,21 @@ def delete_asset(parent: "KitsuProcessor", data: dict[str, str]):
 
 def create_or_update_episode(parent: "KitsuProcessor", data: dict[str, str]):
     logging.info(f"create_or_update_episode: {data}")
+    if hasattr(parent, "wait_for_in_flight_creation"):
+        if not parent.wait_for_in_flight_creation(
+            data.get("episode_id", "")
+        ):
+            logging.warning(
+                "Timed out waiting for in-flight creation of episode %s; "
+                "deferring inbound push",
+                data.get("episode_id"),
+            )
+            if hasattr(parent, "defer_inbound_call"):
+                parent.defer_inbound_call(
+                    create_or_update_episode, parent, data
+                )
+            return None
+
     project_name = parent.get_paired_ayon_project(data["project_id"])
     if not project_name:
         return  # do nothing as this kitsu and ayon project are not paired
@@ -124,6 +152,21 @@ def delete_episode(parent: "KitsuProcessor", data: dict[str, str]):
 
 def create_or_update_sequence(parent: "KitsuProcessor", data: dict[str, str]):
     logging.info(f"create_or_update_sequence: {data}")
+    if hasattr(parent, "wait_for_in_flight_creation"):
+        if not parent.wait_for_in_flight_creation(
+            data.get("sequence_id", "")
+        ):
+            logging.warning(
+                "Timed out waiting for in-flight creation of sequence %s; "
+                "deferring inbound push",
+                data.get("sequence_id"),
+            )
+            if hasattr(parent, "defer_inbound_call"):
+                parent.defer_inbound_call(
+                    create_or_update_sequence, parent, data
+                )
+            return None
+
     project_name = parent.get_paired_ayon_project(data["project_id"])
     if not project_name:
         return  # do nothing as this kitsu and ayon project are not paired
@@ -160,6 +203,21 @@ def delete_sequence(parent: "KitsuProcessor", data: dict[str, str]):
 
 def create_or_update_shot(parent: "KitsuProcessor", data: dict[str, str]):
     logging.info(f"create_or_update_shot: {data}")
+    if hasattr(parent, "wait_for_in_flight_creation"):
+        if not parent.wait_for_in_flight_creation(
+            data.get("shot_id", "")
+        ):
+            logging.warning(
+                "Timed out waiting for in-flight creation of shot %s; "
+                "deferring inbound push",
+                data.get("shot_id"),
+            )
+            if hasattr(parent, "defer_inbound_call"):
+                parent.defer_inbound_call(
+                    create_or_update_shot, parent, data
+                )
+            return None
+
     project_name = parent.get_paired_ayon_project(data["project_id"])
     if not project_name:
         return  # do nothing as this kitsu and ayon project are not paired
@@ -204,6 +262,21 @@ def create_or_update_task(
         data: Event payload containing the task ID and optional project ID.
     """
     logging.info(f"create_or_update_task: {data}")
+    if hasattr(parent, "wait_for_in_flight_creation"):
+        if not parent.wait_for_in_flight_creation(
+            data.get("task_id", "")
+        ):
+            logging.warning(
+                "Timed out waiting for in-flight creation of task %s; "
+                "deferring inbound push",
+                data.get("task_id"),
+            )
+            if hasattr(parent, "defer_inbound_call"):
+                parent.defer_inbound_call(
+                    create_or_update_task, parent, data
+                )
+            return None
+
     entity = None
     project_id = data.get("project_id")
     if not project_id:
